@@ -10,6 +10,11 @@ module Engine
           def select_entities
             @game.players
           end
+
+          def finished?
+            # Finished when all drafted OR all players passed
+            @game.all_entities_drafted? || entities.all?(&:passed?)
+          end
         end
       end
     end
