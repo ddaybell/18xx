@@ -5,6 +5,7 @@ require_relative '../base'
 require_relative 'map'
 require_relative 'entities'
 require_relative '../../round/operating'
+require_relative '../../round/stock'
 
 module Engine
   module Game
@@ -13,6 +14,12 @@ module Engine
         include_meta(G1835::Meta)
         include G1835::Entities
         include G1835::Map
+
+        # Enable player-to-player share purchases (nationalization)
+        BUY_SHARE_FROM_OTHER_PLAYER = true
+
+        # Minimum ownership percentage required to nationalize shares
+        NATIONALIZATION_THRESHOLD = 55
 
         register_colors(black: '#37383a',
                         seRed: '#f72d2d',
@@ -235,6 +242,23 @@ module Engine
             Engine::Step::DiscardTrain,
             Engine::Step::BuyTrain,
           ], round_num: round_num)
+        end
+
+        def stock_round
+          Engine::Round::Stock.new(self, [
+            Engine::Step::DiscardTrain,
+            Engine::Step::Exchange,
+            Engine::Step::SpecialTrack,
+            G1835::Step::BuySellParShares,
+          ])
+        end
+
+        # Nationalization: player can only buy shares from another player if they own >= 55% of the corporation
+        def can_gain_from_player?(entity, bundle)
+          return false unless entity.player?
+
+          corporation = bundle.corporation
+          entity.percent_of(corporation) >= self.class::NATIONALIZATION_THRESHOLD
         end
       end
     end
