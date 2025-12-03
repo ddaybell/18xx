@@ -4,6 +4,7 @@ module Engine
   module Game
     module G1835
       module Map
+        # defines the available tile set, by tile number and quantity.
         TILES = {
           '1' => 1,
           '2' => 1,
@@ -70,6 +71,7 @@ module Engine
           '221' => 1,
         }.freeze
 
+        # Defines the names of the cities, by hex location
         LOCATION_NAMES = {
           'A11' => 'Kiel',
           'C11' => 'Hamburg',
@@ -97,7 +99,9 @@ module Engine
           'M15' => 'Ostbayern',
         }.freeze
 
+        # defines the properties (color, cities, rivers, etc) for each hex on the map.
         HEXES = {
+          # Hexes with no tile
           white: {
             %w[B18
                C15
@@ -143,9 +147,13 @@ module Engine
                O11
                O13
                O17] => '',
+            # Kiel - location code looks like hexside 5, between 5 and 6
             ['A11'] => 'city=revenue:0,loc:5.5',
+            # Bremen - location in the middle, has an upgrade cost of 50M
             ['D8'] => 'city=revenue:0,loc:center;upgrade=cost:50',
+            # Hannover - location hexside 1, between 1 and 2
             ['F10'] => 'city=revenue:0,loc:1.5',
+            # Magdeburg - location in center of hex
             ['F14'] => 'city=revenue:0,loc:center',
             ['G5'] => 'city=revenue:0,loc:0',
             ['H2'] => 'city=revenue:0,loc:3.5;label=Y',
@@ -181,6 +189,7 @@ module Engine
             ['C9'] => 'border=edge:3,type:water',
             ['B10'] => 'border=edge:0,type:water',
           },
+          # offboards
           red: {
             ['C21'] => 'offboard=revenue:yellow_20|green_20|brown_40;path=a:1,b:_0',
             ['H22'] =>
@@ -192,6 +201,7 @@ module Engine
             ['N4'] =>
             'offboard=revenue:yellow_0|green_50|brown_0,hide:1,groups:Alsace;path=a:4,b:_0;border=edge:3',
           },
+          # Hexes with yellow tile
           yellow: {
             ['E19'] =>
                      'city=revenue:30,loc:1;city=revenue:30,loc:3;path=a:1,b:_0;path=a:2,b:_1',
@@ -200,6 +210,7 @@ module Engine
             ['J6'] => 'city=revenue:0;city=revenue:0;label=XX;upgrade=cost:50',
             ['L6'] => 'city=revenue:0,loc:5.5;city=revenue:0,loc:4;label=XX',
           },
+          # Hexes with green tile
           green: {
             ['C11'] =>
             'city=revenue:40;path=a:0,b:_0;city=revenue:40;path=a:2,b:_1;'\
@@ -210,6 +221,7 @@ module Engine
             'city=revenue:30,loc:2.5;path=a:3,b:_0;path=a:2,b:_0;'\
             'city=revenue:30,loc:5.5;path=a:5,b:_1;path=a:0,b:_1;label=XX',
           },
+          # Hexes with brown tile
           brown: {
             %w[A9 G1] => 'path=a:4,b:5',
             ['A17'] => 'town=revenue:10,loc:5;path=a:5,b:_0',
