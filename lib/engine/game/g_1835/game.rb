@@ -21,6 +21,9 @@ module Engine
         # Minimum ownership percentage required to nationalize shares
         NATIONALIZATION_THRESHOLD = 55
 
+        # Ownership threshold for certificate limit bonus
+        CERT_LIMIT_BONUS_THRESHOLD = 80
+
         register_colors(black: '#37383a',
                         seRed: '#f72d2d',
                         bePurple: '#2d0047',
@@ -259,6 +262,18 @@ module Engine
 
           corporation = bundle.corporation
           entity.percent_of(corporation) >= self.class::NATIONALIZATION_THRESHOLD
+        end
+
+        # Certificate limit with bonus for 80% ownership
+        # Players get +1 to their certificate limit for each corporation they own >= 80% of
+        def cert_limit(entity = nil)
+          return @cert_limit unless entity&.player?
+
+          bonus = @corporations.count do |corp|
+            corp.ipoed && entity.percent_of(corp) >= self.class::CERT_LIMIT_BONUS_THRESHOLD
+          end
+
+          @cert_limit + bonus
         end
       end
     end
