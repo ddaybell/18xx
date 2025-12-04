@@ -4,6 +4,8 @@ require_relative 'meta'
 require_relative '../base'
 require_relative 'map'
 require_relative 'entities'
+require_relative 'round/draft'
+require_relative 'step/draft'
 require_relative '../../round/operating'
 require_relative '../../round/stock'
 
@@ -228,9 +230,80 @@ module Engine
         end
 
         def init_round
-          G1835::Round::Draft.new(self,
-                                  [G1835::Step::Draft],
-                                  reverse_order: true)
+          @log << '-- Initial Draft Round --'
+          new_draft_round
+        end
+
+        def new_draft_round
+          G1835::Round::Draft.new(self, [G1835::Step::Draft], reverse_order: true)
+        end
+
+        def next_round!
+          @round =
+            case @round
+            when G1835::Round::Draft
+              if all_entities_drafted?
+                # All purchased, move to stock round
+                @log << '-- All entities purchased, starting stock round --'
+                new_stock_round
+              elsif @round.entities.all?(&:passed?)
+                # Everyone passed, go to operating round
+                @log << '-- Draft incomplete, moving to operating round --'
+                @operating_rounds = @phase.operating_rounds
+                new_operating_round
+              else
+                # Should not reach here during normal flow
+                raise GameError, 'Unexpected draft round state'
+              end
+            when Engine::Round::Stock
+              @operating_rounds = @phase.operating_rounds
+              reorder_players
+              new_operating_round
+            when Engine::Round::Operating
+              if @round.round_num < @operating_rounds
+                # Continue OR set
+                or_round_finished
+                new_operating_round(@round.round_num + 1)
+              elsif all_entities_drafted?
+                # Draft complete, normal flow
+                @turn += 1
+                or_round_finished
+                or_set_finished
+                new_stock_round
+              else
+                # Return to draft round
+                @log << '-- Returning to draft round --'
+                new_draft_round
+              end
+            end
+        end
+
+        def all_entities_drafted?
+          start_packet_entities.all? { |e| entity_drafted?(e) }
+        end
+
+        def start_packet_entities
+          @start_packet_entities ||= begin
+            entity_map = (companies + minors + corporations).to_h do |e|
+              sym = e.respond_to?(:sym) ? e.sym : e.name
+              [sym, e]
+            end
+            self.class::START_PACKET.map do |sym, _, _|
+              entity = entity_map[sym]
+              raise GameError, "START_PACKET references unknown entity: #{sym}" unless entity
+
+              entity
+            end
+          end
+        end
+
+        def entity_drafted?(entity)
+          if entity.corporation?
+            # Corporation is drafted when a player owns the president's share
+            entity.presidents_share.owner&.player?
+          else
+            entity.owner&.player?
+          end
         end
 
         def operating_round(round_num)

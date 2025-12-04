@@ -342,6 +342,24 @@ module Engine
             color: '#37383a',
           },
         ].freeze
+
+        # Start packet positions: [entity_symbol, row, column]
+        # Grid arrangement for draft system
+        START_PACKET = [
+          ['NF', 1, 1],
+          ['P1', 2, 1],
+          ['SX', 2, 2],
+          ['P2', 2, 3],
+          ['P3', 3, 1],
+          ['P4', 3, 2],
+          ['BY', 3, 3],
+          ['BB', 3, 4],
+          ['HB', 4, 1],
+          ['P5', 4, 2],
+          ['P6', 4, 3],
+          ['OBB', 4, 4],
+          ['PB', 4, 5],
+        ].freeze
       end
     end
   end
