@@ -95,7 +95,7 @@ module Engine
           end
 
           def entity_key(entity)
-            entity.sym || entity.id
+            entity.respond_to?(:sym) ? entity.sym : entity.id
           end
 
           def choice_name

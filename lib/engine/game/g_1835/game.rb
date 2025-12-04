@@ -415,11 +415,16 @@ module Engine
           return unless pr
           return unless @pr_formed
 
-          share_id = PR_SHARE_MAPPING[entity.sym || entity.id]
+          # Get entity identifier - companies have sym, minors have id/name
+          entity_id = entity.respond_to?(:sym) ? entity.sym : entity.id
+          share_id = PR_SHARE_MAPPING[entity_id]
           return unless share_id
 
           share_index = share_id.split('_').last.to_i
-          share = pr.shares[share_index]
+
+          # Find the share by its index attribute, not array position
+          # The shares array can shift after transfers, but share.index stays the same
+          share = pr.shares.find { |s| s.index == share_index }
           return unless share
 
           owner = entity.owner
@@ -470,6 +475,9 @@ module Engine
           return unless @pr_formed
 
           mergeable_pre_prussian_entities.each do |entity|
+            # Skip entities without player owners
+            next unless entity.owner&.player?
+
             merge_entity_to_prussian!(entity, operated_this_or: false)
           end
         end
