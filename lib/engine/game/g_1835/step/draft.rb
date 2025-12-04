@@ -24,6 +24,8 @@ module Engine
             # Create the grid structure
             @game.class::START_PACKET.map do |sym, row, col|
               entity = entity_map[sym]
+              raise GameError, "START_PACKET references unknown entity: #{sym}" unless entity
+
               { entity: entity, row: row, col: col, available: false }
             end
           end
@@ -172,9 +174,15 @@ module Engine
 
             if entity.corporation?
               # For corporations, use the president's share price (par price * president share percent / 10)
-              entity.par_price&.price.to_i * entity.presidents_share.percent / 10
-            else
+              par_price = entity.par_price&.price || 0
+              (par_price * entity.presidents_share.percent) / 10
+            elsif entity.respond_to?(:value)
               entity.value
+            elsif entity.minor?
+              # Minors without a value attribute - use default value of 0 (free)
+              0
+            else
+              0
             end
           end
         end

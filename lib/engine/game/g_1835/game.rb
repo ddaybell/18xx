@@ -288,7 +288,12 @@ module Engine
               sym = e.respond_to?(:sym) ? e.sym : e.name
               [sym, e]
             end
-            self.class::START_PACKET.map { |sym, _, _| entity_map[sym] }
+            self.class::START_PACKET.map do |sym, _, _|
+              entity = entity_map[sym]
+              raise GameError, "START_PACKET references unknown entity: #{sym}" unless entity
+
+              entity
+            end
           end
         end
 
