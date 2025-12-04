@@ -121,6 +121,18 @@ module Engine
             ],
             color: :oegray,
           },
+          {
+            name: 'Bayerische Eisenbahn Direktor',
+            sym: 'BYD',
+            value: 184,
+            revenue: 0,
+            desc: 'Bayerische Eisenbahn Direktor - 20% share of Bayrische Eisenbahn',
+            abilities: [
+              { type: 'shares', shares: 'BY_0' },
+              { type: 'no_buy' },
+            ],
+            color: :turquoise,
+          },
         ].freeze
 
         CORPORATIONS = [
@@ -230,6 +242,7 @@ module Engine
           {
             sym: 'P1',
             name: 'Bergisch Märkische Bahn',
+            value: 80
             logo: '1835/PR',
             simple_logo: '1835/PR.alt',
             tokens: [0],
@@ -249,6 +262,7 @@ module Engine
           {
             sym: 'P2',
             name: 'Berlin Potsdamer Bahn',
+            value: 170
             logo: '1835/PR',
             simple_logo: '1835/PR.alt',
             tokens: [0],
@@ -268,6 +282,7 @@ module Engine
           {
             sym: 'P3',
             name: 'Magdeburger-Bahn',
+            value: 80
             logo: '1835/PR',
             simple_logo: '1835/PR.alt',
             tokens: [0],
@@ -287,6 +302,7 @@ module Engine
           {
             sym: 'P4',
             name: 'Köln-Mindener Bahn',
+            value: 160
             logo: '1835/PR',
             simple_logo: '1835/PR.alt',
             tokens: [0],
@@ -306,6 +322,7 @@ module Engine
           {
             sym: 'P5',
             name: 'Berlin Stettiner Bahn',
+            value: 80
             logo: '1835/PR',
             simple_logo: '1835/PR.alt',
             tokens: [0],
@@ -325,6 +342,7 @@ module Engine
           {
             sym: 'P6',
             name: 'Altona Kiel Bahn',
+            value: 80
             logo: '1835/PR',
             simple_logo: '1835/PR.alt',
             tokens: [0],
@@ -348,11 +366,11 @@ module Engine
         START_PACKET = [
           ['NF', 1, 1],
           ['P1', 2, 1],
-          ['SX', 2, 2],
+          ['LD', 2, 2],
           ['P2', 2, 3],
           ['P3', 3, 1],
           ['P4', 3, 2],
-          ['BY', 3, 3],
+          ['BYD', 3, 3],
           ['BB', 3, 4],
           ['HB', 4, 1],
           ['P5', 4, 2],

@@ -125,12 +125,15 @@ module Engine
             if entity.company?
               entity.owner = player
               player.companies << entity
+
+              # Close BYD immediately after purchase (it auto-converts to BY president's share)
+              if entity.sym == 'BYD'
+               @log << "#{entity.name} is exchanged for the president's share of Bayrische Eisenbahn and closes"
+               entity.close! 
+              end
             elsif entity.minor?
               entity.owner = player
               entity.float!
-            elsif entity.corporation?
-              # For corporations like SX and BY, the player becomes the director
-              buy_director_share(player, entity, price)
             end
 
             player.spend(price, @game.bank)
@@ -141,11 +144,6 @@ module Engine
             entities.each(&:unpass!)
             @round.next_entity_index!
             action_finalized
-          end
-
-          def buy_director_share(player, corporation, _price)
-            share = corporation.presidents_share
-            @game.share_pool.buy_shares(player, share.to_bundle)
           end
 
           def process_pass(action)
@@ -171,18 +169,7 @@ module Engine
 
           def min_bid(entity)
             return unless entity
-
-            if entity.corporation?
-              # For corporations, use the president's share price (par price * president share percent / 10)
-              par_price = entity.par_price&.price || 0
-              (par_price * entity.presidents_share.percent) / 10
-            elsif entity.respond_to?(:value)
               entity.value
-            elsif entity.minor?
-              # Minors without a value attribute - use default value of 0 (free)
-              0
-            else
-              0
             end
           end
         end
