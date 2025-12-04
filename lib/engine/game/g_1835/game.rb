@@ -42,7 +42,7 @@ module Engine
           'P3' => 'PR_10', # 5% share at index 10
           'P4' => 'PR_3',  # 10% share at index 3
           'P5' => 'PR_11', # 5% share at index 11
-          'P6' => 'PR_8',  # 5% share at index 8 (corrected from entities.rb which had PR_12)
+          'P6' => 'PR_8',  # 5% share at index 8
           'BB' => 'PR_2',  # 10% share at index 2
           'HB' => 'PR_1',  # 10% share at index 1
         }.freeze

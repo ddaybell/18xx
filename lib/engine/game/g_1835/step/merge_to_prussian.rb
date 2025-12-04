@@ -161,7 +161,7 @@ module Engine
           end
 
           def find_entity_by_key(key)
-            @game.minors.find { |m| m.sym == key } ||
+            @game.minors.find { |m| m.id == key } ||
               @game.companies.find { |c| c.id == key || c.sym == key }
           end
 
