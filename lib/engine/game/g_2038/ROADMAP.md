@@ -89,10 +89,17 @@ g_2038/
 
 **Goal:** Implement the OR sequence and independent/corporation turn flow.
 
+**Status: PR posted — tobymao/18xx#12762**
+
 - [x] **3a. OR entity ordering** — `operating_order` in `game.rb` returns independents in MINOR_OPERATING_ORDER (FB→IF→DH→OC→TH→LY), then floated corporations sorted via `Corporation#sort_order_key` (descending price, then top-to-bottom within same price box — matches the 2038 rule exactly). TSI probe deferred to Phase 6.
 - [x] **3b. Private company income** — `payout_companies` (called in base `Round::Operating#setup`) handles all private revenues. `G2038::Round::Operating#setup` calls `super` then adds Fast Buck's $15 to its minor treasury separately (FB has `revenue: 0` so it's skipped by the base payout).
-- [x] **3c/3d. Turn sequence scaffolding** — `operating_round` in `game.rb` uses `G2038::Round::Operating` with a step stack: `Bankrupt`, `DiscardTrain`, `BuyTrain` (placeholder), `BuyCompany` (blocks, for corps buying privates). TODO stubs for Route, Dividend, PlaceBase, PlaceRefuelingStation, PlaceClaim are in place with Phase labels.
-- [x] **3e. OR cleanup hook** — `or_round_finished` overrides the base no-op; TODO Phase 5 stubs for Used Mine removal and Claim marker flip are in place.
+- [x] **3c/3d. Turn sequence scaffolding** — `operating_round` in `game.rb` uses `G2038::Round::Operating` with a step stack: `Bankrupt`, `DiscardTrain`, `Route` (stub), `Dividend`, `BuyTrain`, `BuyCompany`.
+- [x] **3e. OR cleanup hook** — `or_round_finished` resets mine `:used` flags each OR.
+- [x] **3f. Route step stub** — `step/route.rb` wired in; `can_run_route?` returns true for entities with runnable trains; `skip_route_track_type :broad` prevents path-walk explosion on fully-connected blue hex graph; `check_distance`/`check_connected` are no-op stubs pending Phase 4.
+- [x] **3g. Mine state infrastructure** — `@mine_state` hash, `explore_hex!`, `mark_mines_used!`, `pickable_stops`, `pickup_value`, `cargo_holds_for_train` — data plumbing for Phase 4/5.
+- [x] **3h. Probe wiring** — removed from depot in `setup`, `buyable=false`, assigned to TSI via `float_corporation` override.
+- [x] **3i. Home base hexes** — gray home hexes restored to `junction;city=revenue:0;BX6`; `HOME_TOKEN_TIMING :never` removed; tokens placed at `:operate` time.
+- [x] **3j. Blue hex traversal** — unexplored blue hexes restored to `junction;BX6` (broad-gauge Lawson track, all 6 edges); `HIDE_TILE_TRACK = true` hides track visually without engine changes.
 
 ---
 
