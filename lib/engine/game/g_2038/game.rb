@@ -344,7 +344,6 @@ module Engine
           end
         end
 
-
         def setup
           @mine_state = {}
 
