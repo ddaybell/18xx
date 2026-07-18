@@ -299,15 +299,68 @@ module Engine
           route.hexes.map(&:id).join(' - ')
         end
 
-        # TODO: Phase 4 — enforce hex count <= movement points and pickup count <= cargo holds
-        def check_distance(route, _entity); end
+        def hex_edge_cost(conn)
+          conn[:paths].each_cons(2).sum { |a, b| a.hex == b.hex ? 0 : 1 }
+        end
 
-        # TODO: Phase 4 — validate route starts at a base and ends at a base or transshipment point
-        def check_connected(route, _entity); end
+        def route_distance(route)
+          route.chains.sum { |conn| hex_edge_cost(conn) }
+        end
+
+        def route_distance_str(route)
+          "#{route_distance(route)}H"
+        end
+
+        def check_distance(route, _visits)
+          limit = route.train.distance
+          distance = route_distance(route)
+          raise GameError, "#{distance}H exceeds #{route.train.name} movement of #{limit}H" if distance > limit
+
+          holds = cargo_holds_for_train(route.train)
+          pickups = route.respond_to?(:pickups) ? route.pickups.size : 0
+          return unless pickups > holds
+
+          raise GameError, "#{pickups} pickups exceeds #{route.train.name} cargo holds of #{holds}"
+        end
+
+        def check_connected(route, corporation)
+          base_hexes = corporation.tokens.filter_map { |t| t.city&.hex&.id }.to_set
+          return if route.stops.any? { |stop| base_hexes.include?(stop.hex.id) }
+
+          raise GameError, "#{corporation.name} route must include one of its bases"
+        end
 
         def explore_hex!(hex_id)
-          @mine_state[hex_id] ||= { mines: [] }
-          @log << "#{hex_id} explored"
+          hex = hex_by_id(hex_id)
+          mines = self.class::MINE_DATA.fetch(hex.tile.name, [])
+          @mine_state[hex_id] = {
+            mines: mines.map { |m| m.merge(owner: nil, used: false) },
+          }
+          mine_count = mines.size
+          @log << "#{hex_id} explored (#{mine_count} #{mine_count == 1 ? 'mine' : 'mines'})"
+        end
+
+        def revenue_for(route, stops)
+          entity = route.corporation
+          holds = cargo_holds_for_train(route.train)
+          mine_values = []
+          standard_revenue = 0
+
+          stops.each do |stop|
+            state = @mine_state[stop.hex.id]
+            if state
+              mine_idx = stop.hex.tile.cities.index(stop) || 0
+              mine = state[:mines][mine_idx]
+              if mine && !mine[:used] && (!mine[:owner] || mine[:owner] == entity.id)
+                value = mine[:owner] == entity.id ? mine[:claimed] : mine[:unclaimed]
+                mine_values << value
+              end
+            else
+              standard_revenue += stop.route_revenue(route.phase, route.train)
+            end
+          end
+
+          standard_revenue + mine_values.sort.reverse.first(holds).sum
         end
 
         def pickup_value(entity, hex_id, mine_idx)

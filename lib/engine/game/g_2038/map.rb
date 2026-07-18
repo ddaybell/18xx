@@ -203,6 +203,37 @@ module Engine
         }.freeze
 
         LAYOUT = :pointy
+
+        # Gray hexes that serve as delivery destinations (transshipment points).
+        TRANSSHIPMENT_HEXES = %w[A13 D2 H10 O11 H18].freeze
+
+        # Maps each asteroid tile number to its mine definitions.
+        # Each entry is an array of hashes (one per mine), ordered to match
+        # the city= declarations in the tile code (city 0, city 1, ...).
+        MINE_DATA = {
+          '2001' => [{ ore: :n, unclaimed: 10, claimed: 50 }],
+          '2002' => [{ ore: :n, unclaimed: 20, claimed: 60 }],
+          '2003' => [{ ore: :i, unclaimed: 30, claimed: 40 }],
+          '2004' => [{ ore: :i, unclaimed: 40, claimed: 50 }],
+          '2005' => [{ ore: :i, unclaimed: 50, claimed: 60 }],
+          '2006' => [{ ore: :r, unclaimed: 20, claimed: 50 }],
+          '2007' => [{ ore: :r, unclaimed: 30, claimed: 60 }],
+          '2008' => [{ ore: :r, unclaimed: 40, claimed: 70 }],
+          '2009' => [{ ore: :n, unclaimed: 20, claimed: 60 }, { ore: :n, unclaimed: 10, claimed: 50 }],
+          '2010' => [{ ore: :n, unclaimed: 20, claimed: 60 }, { ore: :n, unclaimed: 20, claimed: 60 }],
+          '2011' => [{ ore: :i, unclaimed: 30, claimed: 40 }, { ore: :n, unclaimed: 10, claimed: 50 }],
+          '2012' => [{ ore: :i, unclaimed: 30, claimed: 40 }, { ore: :n, unclaimed: 20, claimed: 60 }],
+          '2013' => [{ ore: :i, unclaimed: 40, claimed: 50 }, { ore: :n, unclaimed: 10, claimed: 50 }],
+          '2014' => [{ ore: :i, unclaimed: 40, claimed: 50 }, { ore: :n, unclaimed: 20, claimed: 60 }],
+          '2015' => [{ ore: :r, unclaimed: 20, claimed: 50 }, { ore: :n, unclaimed: 10, claimed: 50 }],
+          '2016' => [{ ore: :r, unclaimed: 20, claimed: 50 }, { ore: :n, unclaimed: 20, claimed: 60 }],
+          '2017' => [{ ore: :r, unclaimed: 30, claimed: 60 }, { ore: :n, unclaimed: 10, claimed: 50 }],
+          '2018' => [{ ore: :r, unclaimed: 30, claimed: 60 }, { ore: :n, unclaimed: 20, claimed: 60 }],
+          '2019' => [{ ore: :r, unclaimed: 20, claimed: 50 }, { ore: :i, unclaimed: 30, claimed: 40 }],
+          '2020' => [{ ore: :r, unclaimed: 20, claimed: 50 }, { ore: :i, unclaimed: 40, claimed: 50 }],
+          '2021' => [{ ore: :r, unclaimed: 30, claimed: 60 }, { ore: :i, unclaimed: 30, claimed: 40 }],
+          '2022' => [{ ore: :r, unclaimed: 30, claimed: 60 }, { ore: :i, unclaimed: 40, claimed: 50 }],
+        }.freeze
       end
     end
   end
