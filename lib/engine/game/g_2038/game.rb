@@ -324,10 +324,19 @@ module Engine
         end
 
         def check_connected(route, corporation)
-          base_hexes = corporation.tokens.filter_map { |t| t.city&.hex&.id }.to_set
-          return if route.stops.any? { |stop| base_hexes.include?(stop.hex.id) }
+          own_base_ids = corporation.tokens.filter_map { |t| t.city&.hex&.id }.to_set
+          start_id = route.hexes.first&.id
+          return if own_base_ids.include?(start_id)
 
-          raise GameError, "#{corporation.name} route must include one of its bases"
+          raise GameError, "#{corporation.name} route must start at one of its own bases"
+        end
+
+        # A hex counts as a deliverable destination if it is a transshipment
+        # point or contains any placed base token (any company/corp).
+        def deliverable_destination?(hex)
+          return true if self.class::TRANSSHIPMENT_HEXES.include?(hex.id)
+
+          hex.tile.cities.any? { |c| c.tokens.any? }
         end
 
         def explore_hex!(hex_id)
@@ -343,12 +352,20 @@ module Engine
         def revenue_for(route, stops)
           entity = route.corporation
           holds = cargo_holds_for_train(route.train)
+
+          # Mine pickups are only worth money when the route is "delivered" —
+          # i.e. ends at any base or a transshipment point (§7.1).
+          end_hex = route.hexes.last
+          can_deliver = end_hex && deliverable_destination?(end_hex)
+
           mine_values = []
           standard_revenue = 0
 
           stops.each do |stop|
             state = @mine_state[stop.hex.id]
             if state
+              next unless can_deliver
+
               mine_idx = stop.hex.tile.cities.index(stop) || 0
               mine = state[:mines][mine_idx]
               if mine && !mine[:used] && (!mine[:owner] || mine[:owner] == entity.id)
