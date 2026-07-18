@@ -32,7 +32,7 @@ module Engine
 
             action.routes.each do |route|
               @game.check_distance(route, nil)
-              @game.check_connected(route, nil)
+              @game.check_connected(route, entity)
               @game.mark_mines_used!(route)
             end
 
