@@ -4,6 +4,7 @@ require '../lib/storage'
 require '../lib/settings'
 require 'view/game/axis'
 require 'view/game/hex'
+require 'view/game/hex_choice_popup'
 require 'view/game/map_legend'
 require 'view/game/tile_confirmation'
 require 'view/game/tile_selector'
@@ -62,8 +63,8 @@ module View
         # Move the selected hex to the back so they render highest in z space
         @hexes << @hexes.delete(selected_hex) if @hexes.include?(selected_hex)
 
-        routes = @routes
-        routes = @historical_routes if routes.none?
+        @active_routes = @routes
+        @active_routes = @historical_routes if @active_routes.none?
 
         @hexes.map! do |hex|
           clickable = @show_starting_map ? false : step&.available_hex(entity_or_entities, hex)
@@ -75,7 +76,7 @@ module View
             entity: current_entity,
             clickable: clickable,
             actions: actions,
-            routes: routes,
+            routes: @active_routes,
             start_pos: @start_pos,
             highlight: laid_hexes.include?(hex),
           )
@@ -91,6 +92,21 @@ module View
             if @tile_selector.is_a?(Lib::TokenSelector)
               # 1882
               h(TokenSelector, zoom: map_zoom)
+            elsif @tile_selector.is_a?(Lib::HexChoicePopup)
+              width, = map_size
+              # Same edge-proximity idea TileSelector already uses below
+              # (right_col/top_row) so the popup flips to extend toward
+              # the opposite side instead of overflowing past the map's
+              # own boundary -- found live in browser: hexes near the
+              # right edge (e.g. column G/H) had their buttons clipped by
+              # the map's own scrolling container, since the popup always
+              # extended rightward (and upward) from its anchor with no
+              # edge awareness. Checked against the *top* edge, not the
+              # bottom -- the popup always extends upward from its hex, so
+              # that's the direction that can run out of room.
+              h(HexChoicePopup, zoom: map_zoom,
+                                 near_right_edge: width - left < HexChoicePopup::EDGE_MARGIN,
+                                 near_top_edge: top < HexChoicePopup::EDGE_MARGIN)
             elsif @tile_selector.role != :map
               # Tile selector not for the map
             elsif @tile_selector.hex.tile != @tile_selector.tile
@@ -188,6 +204,8 @@ module View
         h(:svg, props, [
           h(:g, { attrs: { transform: "scale(#{@scale})" } }, [
             h(:g, { attrs: { id: 'map-hexes', transform: "translate(#{map_x} #{map_y})" } }, @hexes),
+            h(:g, { attrs: { transform: "translate(#{map_x} #{map_y})" } }, render_route_lines),
+            h(:g, { attrs: { transform: "translate(#{map_x} #{map_y})" } }, render_ship_marker),
             h(Axis,
               cols: @cols,
               rows: @rows,
@@ -200,6 +218,108 @@ module View
               start_pos: @start_pos),
           ]),
         ])
+      end
+
+      # Draws a colored polyline hex-center to hex-center for routes that
+      # aren't track/path-based (route.paths.empty? with 2+ stops) -- e.g.
+      # G2038's hex-list spaceship routes, which have no tile paths for
+      # Part::Track to color. Reuses the same ROUTE_COLORS palette as track
+      # highlighting so the look is consistent with standard train routes.
+      # Also draws the current entity's in-progress trace live, before it's
+      # finished into a real route, via the optional `live_route_hexes` hook,
+      # and any of the current entity's already-finished routes still
+      # pending for this OR turn via the optional `current_turn_routes`
+      # hook, so a multi-ship corp's earlier flights don't vanish from the
+      # map the instant each one lands. Looked up by scanning `round.steps`
+      # rather than `round.active_step`, since the step offering these hooks
+      # (Route) may no longer be the *active* one -- it stops blocking once
+      # done, while later steps in the same turn (Dividend, BuyTrain, ...)
+      # become active in its place -- but its already-finished routes
+      # should stay visible until the turn actually ends. Both hooks are
+      # gated the same opt-in way (only G2038's Route step defines them
+      # today), matching the convention used by ShipSelector/HexChoicePopup.
+      def render_route_lines
+        step = @game.round.steps.find { |s| s.respond_to?(:live_route_hexes) }
+        return [] unless step
+
+        lines = []
+        (@active_routes || []).each_with_index do |route, index|
+          next unless route.hexes.size > 1 && route.paths.empty?
+
+          lines << hex_route_polyline(route.hexes, index)
+        end
+
+        if step.respond_to?(:current_turn_routes)
+          step.current_turn_routes(@game.round.current_entity).each do |route|
+            next unless route.hexes.size > 1 && route.paths.empty?
+
+            lines << hex_route_polyline(route.hexes, lines.size)
+          end
+        end
+
+        live_hexes = step.live_route_hexes(@game.round.current_entity)
+        lines << hex_route_polyline(live_hexes, lines.size) if live_hexes && live_hexes.size > 1
+
+        lines
+      end
+
+      def hex_route_polyline(hexes, index)
+        points = hexes.map { |hex| Hex.coordinates(hex, @start_pos) }
+
+        h(:polyline, attrs: {
+            points: points.map { |x, y| "#{x},#{y}" }.join(' '),
+            fill: 'none',
+            stroke: route_prop(index, :color),
+            'stroke-width': route_prop(index, :width),
+            'stroke-linecap': 'round',
+            'stroke-linejoin': 'round',
+          })
+      end
+
+      # Deliberately bigger than a per-hex small-icon slot would allow.
+      SHIP_MARKER_SIZE = 90
+
+      # Opt-in hook (currently only G2038's Route step defines
+      # `ship_marker`): draws the currently-flying ship's marker as its
+      # own top-level overlay, in the same painted-last-so-it's-on-top
+      # spot as the route lines above, using the hex's real center
+      # coordinates (Hex.coordinates) rather than a per-hex icon slot.
+      # Confirmed with the user: since the marker is transient, it's fine
+      # for it to spill into a neighboring hex or cover part of its own --
+      # that's the whole point of rendering it here instead of through the
+      # small-icon system, which used to clip/shrink/reposition it to
+      # avoid overlapping other icons and could get visually covered by a
+      # later-drawn neighboring hex.
+      # A bit below the hex's dead center by default -- leaves the top
+      # (standardized location-name position, see Part::LocationName) and
+      # the single mine circle clear. A double-mine hex instead centers
+      # the marker exactly (both mine circles already sit symmetrically
+      # around center, so there's no single-mine position to favor).
+      SHIP_MARKER_Y_OFFSET = 40
+
+      def render_ship_marker
+        step = @game.round.steps.find { |s| s.respond_to?(:ship_marker) }
+        return [] unless step
+
+        marker = step.ship_marker(@game.round.current_entity)
+        return [] unless marker
+
+        hex, icon_name, position = marker
+        cx, cy = Hex.coordinates(hex, @start_pos)
+        half = SHIP_MARKER_SIZE / 2.0
+        y_offset = position == :center ? 0 : SHIP_MARKER_Y_OFFSET
+
+        # pointer-events: none -- the marker is purely a transient visual
+        # indicator; a click on its hex should reach whatever's underneath
+        # (the hex itself, a mine circle, a token) exactly as if the
+        # marker weren't there. Confirmed with the user.
+        [h(:image, attrs: {
+             href: "/icons/#{icon_name}.svg",
+             x: (cx - half).round(2),
+             y: (cy - half + y_offset).round(2),
+             width: SHIP_MARKER_SIZE,
+             height: SHIP_MARKER_SIZE,
+           }, style: { pointerEvents: 'none' })]
       end
 
       def map_zoom

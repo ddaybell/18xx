@@ -11,6 +11,10 @@ module Engine
             value: 50,
             revenue: 10,
             desc: 'No special abilities',
+            # A corp may buy this for $1-$50 (its printed value), not the
+            # engine's generic half-to-double-value default (§7.4).
+            min_price: 1,
+            max_price: 50,
             color: nil,
           },
           {
@@ -21,8 +25,6 @@ module Engine
             desc: 'May form a Growth Corporation OR join the Asteroid League for 1 share.'\
                   ' Earns $15/round into company treasury.',
             # TODO: Phase 7: add custom ability type for $15/round treasury income
-            # TODO Phase 2: remove exchange ability; private transfers immediately to minor FB at purchase.
-            #   The merge into AL is handled by the minor's own mechanics (Phase 9), not this private.
             abilities: [
               { type: 'no_buy' },
             ],
@@ -37,7 +39,6 @@ module Engine
                   ' $10 bonus per Ice ore delivered. Must draw a second tile if first drawn has no Ice mines.',
             delivery_bonus: :I,
             # TODO: Phase 7: add custom ability type for second-tile-draw-if-no-ice exploration rule
-            # TODO Phase 2: remove exchange ability; private transfers immediately to minor IF at purchase.
             abilities: [
               { type: 'no_buy' },
             ],
@@ -52,7 +53,6 @@ module Engine
                   ' $10 bonus per Rare ore delivered. Must draw a second tile if first drawn has no Rare mines.',
             delivery_bonus: :R,
             # TODO: Phase 7: add custom ability type for second-tile-draw-if-no-rare exploration rule
-            # TODO Phase 2: remove exchange ability; private transfers immediately to minor DH at purchase.
             abilities: [
               { type: 'no_buy' },
             ],
@@ -66,7 +66,6 @@ module Engine
             desc: 'May form a Growth Corporation OR join the Asteroid League for 1 share.'\
                   ' $10 bonus per Nickel ore delivered.',
             delivery_bonus: :N,
-            # TODO: Phase 2: remove exchange ability; private transfers immediately to minor OC at purchase.
             abilities: [
               { type: 'no_buy' },
             ],
@@ -80,7 +79,6 @@ module Engine
             desc: 'May form a Growth Corporation OR join the Asteroid League for 1 share.'\
                   ' All spaceships operated by this company get +1 movement point.',
             # TODO: Phase 7: add custom ability type for +1 MP bonus
-            # TODO Phase 2: remove exchange ability; private transfers immediately to minor TH at purchase.
             abilities: [
               { type: 'no_buy' },
             ],
@@ -94,7 +92,6 @@ module Engine
             desc: 'May form a Growth Corporation OR join the Asteroid League for 1 share.'\
                   ' When exploring, draw 2 tiles and choose which to place (discard the other).',
             # TODO: Phase 7: add custom ability type for draw-2-choose-1 exploration rule
-            # TODO Phase 2: remove exchange ability; private transfers immediately to minor LY at purchase.
             abilities: [
               { type: 'no_buy' },
             ],
@@ -107,9 +104,14 @@ module Engine
             revenue: 5,
             desc: 'Buyer receives a TSI Share. If owned by a corporation, may place 1 free Base on ANY'\
                   ' explored and unclaimed tile.',
+            # A corp may buy this for $1-$120 (its printed value), not the
+            # engine's generic half-to-double-value default (§7.4).
+            min_price: 1,
+            max_price: 120,
             abilities: [
               { type: 'shares', shares: 'TSI_3' },
-              # TODO: Phase 10: replace with custom base-placement ability (owning_corp_or_turn, free, anywhere)
+              { type: 'generic', subtype: 'free_base', description: 'Free base, any explored hex',
+                when: 'owning_corp_or_turn', count: 1, remove: '5' },
             ],
             color: '#40b1b9',
           },
@@ -120,9 +122,12 @@ module Engine
             revenue: 10,
             desc: 'Buyer receives a TSI Share. If owned by a corporation, may place 1 free'\
                   ' Refueling Station within range.',
+            min_price: 1,
+            max_price: 140,
             abilities: [
               { type: 'shares', shares: 'TSI_2' },
-              # TODO: Phase 10: replace with custom refueling-station ability (owning_corp_or_turn, free, in range)
+              { type: 'generic', subtype: 'free_station', description: 'Free refueling station, in range',
+                when: 'owning_corp_or_turn', count: 1, remove: '5' },
             ],
             color: '#40b1b9',
           },
@@ -132,9 +137,12 @@ module Engine
             value: 160,
             revenue: 15,
             desc: 'Buyer receives a TSI Share. If owned by a corporation, may place 1 free Claim within range.',
+            min_price: 1,
+            max_price: 160,
             abilities: [
               { type: 'shares', shares: 'TSI_1' },
-              # TODO: Phase 10: replace with custom claim ability (owning_corp_or_turn, free, in range)
+              { type: 'generic', subtype: 'free_claim', description: 'Free claim, in range',
+                when: 'owning_corp_or_turn', count: 1, remove: '5' },
             ],
             color: '#40b1b9',
           },
@@ -143,7 +151,7 @@ module Engine
             sym: 'ST',
             value: 180,
             revenue: 20,
-            desc: "Buyer receives TSI president's Share and flies probe if TSI isn't active. May not be owned"\
+            desc: "Buyer receives TSI president's Share and flies the Probe if TSI isn't active. May not be owned"\
                   ' by a corporation. Remove from the game after TSI buys a spaceship.',
             abilities: [
               { type: 'shares', shares: 'TSI_0' },
@@ -162,12 +170,15 @@ module Engine
             abilities: [
               { type: 'close', when: 'bought_train', corporation: 'AL' },
               { type: 'no_buy' },
-              {
-                type: 'shares',
-                shares: 'AL_0',
-                when: %w[3 4],
-              },
             ],
+            # Formation is a player-forced choice (Phase 3-4), not an
+            # automatic share grant -- see G2038::Step::FormAsteroidLeague
+            # and Game#form_asteroid_league!. Forced unconditionally by
+            # Phase 5 if not yet used (event_independents_must_join_league!
+            # implies AL already exists by then via the Phase 4 event).
+            # No longer modeled as a choose_ability (that mechanism can
+            # only ever be a non-blocking side option -- confirmed with the
+            # user this must interrupt play and force a real yes/no).
             color: '#fa3d58',
           },
         ].freeze
@@ -178,34 +189,29 @@ module Engine
             name: 'Fast Buck',
             value: 100,
             coordinates: 'G7',
-            logo: '18_eu/1',
+            logo: 'g_2038/FB',
+            simple_logo: 'g_2038/FB.alt',
             tokens: [0],
-            color: 'black',
+            color: '#1f3a5f',
             text_color: 'white',
-            abilities: [
-              {
-                type: 'exchange',
-                corporations: %w[RU VP MM LE OPC RCC AL],
-                owner_type: 'player',
-                from: 'ipo',
-              },
-            ],
+            type: 'independent',
+            abilities: [],
           },
           {
             sym: 'IF',
             name: 'Ice Finder',
             value: 100,
             coordinates: 'M13',
-            logo: '18_eu/2',
+            logo: 'g_2038/IF',
+            simple_logo: 'g_2038/IF.alt',
             tokens: [0],
-            color: 'black',
+            color: '#6a3d9a',
             text_color: 'white',
+            type: 'independent',
             abilities: [
               {
-                type: 'exchange',
-                corporations: %w[RU VP MM LE OPC RCC AL],
-                owner_type: 'player',
-                from: 'ipo',
+                type: 'description',
+                description: '+$10 per Ice delivered',
               },
             ],
           },
@@ -214,16 +220,16 @@ module Engine
             name: 'Drill Hound',
             value: 100,
             coordinates: 'D14',
-            logo: '18_eu/3',
+            logo: 'g_2038/DH',
+            simple_logo: 'g_2038/DH.alt',
             tokens: [0],
-            color: 'black',
+            color: '#8b5a2b',
             text_color: 'white',
+            type: 'independent',
             abilities: [
               {
-                type: 'exchange',
-                corporations: %w[RU VP MM LE OPC RCC AL],
-                owner_type: 'player',
-                from: 'ipo',
+                type: 'description',
+                description: '+$10 per Rare delivered',
               },
             ],
           },
@@ -232,16 +238,16 @@ module Engine
             name: 'Ore Crusher',
             value: 100,
             coordinates: 'M5',
-            logo: '18_eu/4',
+            logo: 'g_2038/OC',
+            simple_logo: 'g_2038/OC.alt',
             tokens: [0],
-            color: 'black',
+            color: '#556b2f',
             text_color: 'white',
+            type: 'independent',
             abilities: [
               {
-                type: 'exchange',
-                corporations: %w[RU VP MM LE OPC RCC AL],
-                owner_type: 'player',
-                from: 'ipo',
+                type: 'description',
+                description: '+$10 per Nickel delivered',
               },
             ],
           },
@@ -250,36 +256,26 @@ module Engine
             name: 'Torch',
             value: 100,
             coordinates: 'B6',
-            logo: '18_eu/5',
+            logo: 'g_2038/TH',
+            simple_logo: 'g_2038/TH.alt',
             tokens: [0],
-            color: 'black',
+            color: '#7f1d1d',
             text_color: 'white',
-            abilities: [
-              {
-                type: 'exchange',
-                corporations: %w[RU VP MM LE OPC RCC AL],
-                owner_type: 'player',
-                from: 'ipo',
-              },
-            ],
+            type: 'independent',
+            abilities: [],
           },
           {
             sym: 'LY',
             name: 'Lucky',
             value: 100,
             coordinates: 'H14',
-            logo: '18_eu/6',
+            logo: 'g_2038/LY',
+            simple_logo: 'g_2038/LY.alt',
             tokens: [0],
-            color: 'black',
+            color: '#374151',
             text_color: 'white',
-            abilities: [
-              {
-                type: 'exchange',
-                corporations: %w[RU VP MM LE OPC RCC AL],
-                owner_type: 'player',
-                from: 'ipo',
-              },
-            ],
+            type: 'independent',
+            abilities: [],
           },
         ].freeze
 
@@ -296,6 +292,7 @@ module Engine
             tokens: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             bases: [50],
             stations: [50, 50, 50],
+            claim_limit: 10,
             coordinates: 'K9',
             color: '#40b1b9',
             type: :group_a,
@@ -309,6 +306,7 @@ module Engine
             bases: [50],
             stations: [50],
             claim_costs: [0, 100],
+            claim_limit: 12,
             coordinates: 'D8',
             color: '#d57e59',
             type: :group_a,
@@ -321,10 +319,16 @@ module Engine
             tokens: [0, 0, 0, 0, 0],
             bases: [50, 50, 50],
             stations: [25, 25, 25, 25],
-            delivery_bonus: :R,
+            claim_limit: 5,
+            delivery_bonus: :r,
+            delivery_bonus_amount: 20,
             coordinates: 'J2',
             color: '#3eb75b',
             type: :group_b,
+            abilities: [
+              { type: 'description',
+                description: '+$10 per Rare delivered' },
+            ],
           },
           {
             sym: 'LE',
@@ -334,10 +338,16 @@ module Engine
             tokens: [0, 0, 0, 0, 0, 0, 0, 0, 0],
             bases: [50],
             stations: [50, 50],
-            delivery_bonus: :N,
+            claim_limit: 9,
+            delivery_bonus: :n,
+            delivery_bonus_amount: 20,
             coordinates: 'O1',
             color: '#fefc5d',
             type: :group_b,
+            abilities: [
+              { type: 'description',
+                description: '+$10 per Nickel delivered' },
+            ],
           },
           {
             sym: 'MM',
@@ -347,10 +357,16 @@ module Engine
             tokens: [0, 0, 0, 0, 0, 0],
             bases: [25, 25, 25],
             stations: [50, 50, 50],
-            delivery_bonus: :I,
+            claim_limit: 6,
+            delivery_bonus: :i,
+            delivery_bonus_amount: 20,
             coordinates: 'A1',
             color: '#f66936',
             type: :group_b,
+            abilities: [
+              { type: 'description',
+                description: '+$10 per Ice delivered' },
+            ],
           },
           {
             sym: 'OPC',
@@ -360,11 +376,17 @@ module Engine
             tokens: [0, 0, 0, 0, 0, 0, 0],
             bases: [50, 50],
             stations: [0, 50, 50],
-            delivery_bonus: :N,
+            claim_limit: 7,
+            delivery_bonus: :i,
+            delivery_bonus_amount: 10,
             coordinates: 'J18',
             color: '#cc4f8c',
             text_color: 'black',
             type: :group_c,
+            abilities: [
+              { type: 'description',
+                description: '+$10 per Nickel delivered' },
+            ],
           },
           {
             sym: 'RCC',
@@ -374,11 +396,17 @@ module Engine
             tokens: [0, 0, 0, 0, 0, 0, 0, 0],
             bases: [50, 50],
             stations: [50, 50],
-            delivery_bonus: :N,
+            claim_limit: 8,
+            delivery_bonus: :n,
+            delivery_bonus_amount: 10,
             coordinates: 'F18',
             color: '#f8b34b',
             text_color: 'black',
             type: :group_c,
+            abilities: [
+              { type: 'description',
+                description: '+$10 per Nickel delivered' },
+            ],
           },
           {
             sym: 'AL',
@@ -389,6 +417,7 @@ module Engine
             bases: [50, 50, 50, 50, 50, 50, 50],
             stations: [50, 50, 50, 50],
             claim_costs: [60, 75, 100],
+            claim_limit: 15,
             coordinates: 'H10',
             color: '#fa3d58',
             type: :group_d,

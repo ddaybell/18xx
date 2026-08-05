@@ -334,10 +334,20 @@ module View
           children << render_pass if @city.pass?
           children << render_box(slots.size) if slots.size.between?(2, 9)
           children.concat(slots)
+          children << render_mine_color if mine_ore
 
-          if @show_revenue && @city&.paths&.any? && (revenue = render_revenue)
+          claim_owner = mine_claim_owner
+          children << render_claim_ring(claim_owner) if claim_owner
+
+          if @show_revenue && (@city&.paths&.any? || trackless_game?) && (revenue = render_revenue)
             children << revenue
           end
+
+          overlays = []
+          ore_letter = mine_ore_letter
+          overlays << render_ore_letter(ore_letter) if ore_letter
+          overlays << render_used_marker if mine_used?
+          children << upright(overlays) if overlays.any?
 
           props = @city.solo? ? {} : { on: { click: -> { touch_node(@city) } } }
 
@@ -347,11 +357,27 @@ module View
         end
 
         def render_revenue
-          revenues = @city.uniq_revenues
-          return if revenues.size > 1
+          bonus_ore, bonus_amount = delivery_bonus
 
-          revenue = revenues.first
-          return if revenue.zero? && (!@city.pass? || @tile.paths.empty?)
+          revenue = nil
+          unless bonus_ore
+            revenues = @city.uniq_revenues
+            revenue =
+              if revenues.size > 1
+                # Normal games route this case to the tile-level Part::Revenue/
+                # MultiRevenue (stacked "30/60"-style display), gated on
+                # Tile#stops -- which is itself derived from @paths and so is
+                # always empty here (see trackless_game?). Show just the
+                # current phase's number instead of stacking every phase, same
+                # visual language as every other G2038 revenue circle.
+                return unless trackless_game?
+
+                current_phase_revenue
+              else
+                revenues.first
+              end
+            return if revenue.zero? && (!@city.pass? || @tile.paths.empty?)
+          end
 
           regions = []
 
@@ -393,19 +419,190 @@ module View
           end
 
           revert_angle = render_location[:angle] + rotation
+          content = if bonus_ore
+                      render_delivery_bonus(bonus_ore, bonus_amount)
+                    else
+                      h(Part::SingleRevenue,
+                        revenue: revenue,
+                        transform: rotation_for_layout,
+                        force: @city.pass?)
+                    end
+
           h(:g, { attrs: { transform: "rotate(#{rotation})" } }, [
-            h(:g, { attrs: { transform: "translate(#{displacement} 0) rotate(#{-revert_angle})" } }, [
-              h(Part::SingleRevenue,
-                revenue: revenue,
-                transform: rotation_for_layout,
-                force: @city.pass?),
-            ]),
+            h(:g, { attrs: { transform: "translate(#{displacement} 0) rotate(#{-revert_angle})" } }, [content]),
           ])
+        end
+
+        # This hex's [ore, amount] home-base delivery bonus (Phase 7b), if
+        # any -- a corp's *fixed* home coordinates pay a flat bonus to
+        # whoever delivers the matching ore there, so this is read straight
+        # off Game#home_delivery_bonuses (keyed by hex id) rather than any
+        # per-tile data; most gray home-base hexes have none.
+        #
+        # Detached preview tiles (e.g. Lucky's tile-choice popup, and the
+        # standard TileSelector fan) are wrapped in a throwaway Engine::Hex
+        # always named 'A1' (see hex_choice_popup.rb/tile_selector.rb) --
+        # which coincidentally collides with a real corp's home coordinate
+        # in this game (Mars Mining). The same identity check the shared
+        # engine already uses to detect a fake preview hex (Game::Base
+        # #update_tile_lists's own "TileSelector creates fake A1 hexes"
+        # comment) rules that out here too, so a preview tile never shows a
+        # real hex's delivery bonus badge in place of its mine value.
+        def delivery_bonus
+          return nil unless @game.respond_to?(:home_delivery_bonuses)
+          return nil unless @tile.hex == @game.hex_by_id(@tile.hex.id)
+
+          @game.home_delivery_bonuses[@tile.hex.id]
+        end
+
+        # Same colored-circle language as a mine's ore tint (Nickel red/Ice
+        # blue/Rare green -- see MINE_ORE_COLOR/mine_color above), always at
+        # the same shade since there's no per-hex value scale here, just a
+        # flat bonus amount.
+        DELIVERY_BONUS_TINT = 0.6
+        DELIVERY_BONUS_RADIUS = 18
+        DELIVERY_BONUS_FONT_SIZE = '15px'
+
+        def render_delivery_bonus(ore, amount)
+          base = MINE_ORE_COLOR[ore]
+          r, g, b = base.map { |c| ((c * (1 - DELIVERY_BONUS_TINT)) + (255 * DELIVERY_BONUS_TINT)).round.clamp(0, 255) }
+          fill = format('#%02x%02x%02x', r, g, b)
+
+          h(:g, { attrs: { transform: rotation_for_layout } }, [
+            h(:circle, attrs: { r: DELIVERY_BONUS_RADIUS, fill: fill, stroke: '#777777' }),
+            h(:text, {
+                attrs: {
+                  fill: 'black',
+                  'font-size': DELIVERY_BONUS_FONT_SIZE,
+                  'text-anchor': 'middle',
+                  'dominant-baseline': 'central',
+                  transform: 'translate(0 -1)',
+                },
+              }, "+#{amount}"),
+          ])
+        end
+
+        # Mirrors RevenueCenter#route_base_revenue's phase lookup, so the
+        # displayed number always matches what a route would actually pay.
+        def current_phase_revenue
+          @game.phase.tiles.reverse_each { |color| return @city.revenue[color] if @city.revenue[color] }
+          @city.revenue.values.first
         end
 
         def render_box(slots)
           element, attrs = BOX_ATTRS[slots]
           h(element, attrs: attrs)
+        end
+
+        # G2038's cities carry no track by design (see HIDE_TILE_TRACK in
+        # track.rb) -- the revenue-display gate above otherwise requires
+        # @city.paths.any?, a proxy for "connected to the track network"
+        # that's meaningless here and would hide every mine's revenue.
+        def trackless_game?
+          @game&.class&.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
+        end
+
+        # This city's index within its tile's cities array -- shared by all
+        # the mine-overlay lookups below, so it's only ever scanned once.
+        def mine_index
+          @mine_index ||= @tile.cities.index(@city)
+        end
+
+        def mine_used?
+          @game.respond_to?(:mine_used?) && @game.mine_used?(@tile.hex.id, mine_index)
+        end
+
+        # This city's mine ore type (:n/:i/:r), if any. Reads MINE_DATA
+        # (keyed by tile name, always available) rather than mine_state
+        # (keyed by hex id, only populated for hexes actually on the map)
+        # so this also works for a detached preview tile -- e.g. Lucky's
+        # tile-choice popup, which renders a tile that was never laid
+        # anywhere.
+        def mine_ore
+          return nil unless @game.class.const_defined?(:MINE_DATA)
+
+          @game.class::MINE_DATA.dig(@tile.name, mine_index, :ore)
+        end
+
+        # Shown inside the city circle itself rather than as a generic
+        # tile-level label, since a double-mine tile can hold two
+        # different ore types.
+        def mine_ore_letter
+          mine_ore&.to_s&.upcase
+        end
+
+        MINE_ORE_COLOR = { n: [200, 40, 40], i: [40, 100, 210], r: [40, 150, 70] }.freeze
+        MINE_VALUE_RANGE = (10..70)
+
+        # Tints the mine circle by ore type (Nickel red, Ice blue, Rare
+        # green), darker for a higher unclaimed value -- capped so even the
+        # darkest mines stay light enough for the ore letter to read
+        # clearly on top. Always keyed off the unclaimed value (from
+        # MINE_DATA, not the city's live revenue) so a mine's color doesn't
+        # change once claimed -- place_claim! swaps @city.revenue to the
+        # (higher) claimed rate, which would otherwise darken the circle.
+        def mine_color
+          base = MINE_ORE_COLOR[mine_ore]
+          return nil unless base
+
+          value = @game.class::MINE_DATA.dig(@tile.name, mine_index, :unclaimed) || MINE_VALUE_RANGE.min
+          span = MINE_VALUE_RANGE.max - MINE_VALUE_RANGE.min
+          t = ((value - MINE_VALUE_RANGE.min).to_f / span).clamp(0.0, 1.0)
+          white_blend = 0.82 - (0.42 * t)
+
+          r, g, b = base.map { |c| ((c * (1 - white_blend)) + (255 * white_blend)).round.clamp(0, 255) }
+          format('#%02x%02x%02x', r, g, b)
+        end
+
+        def render_mine_color
+          h(:circle, attrs: { r: SLOT_RADIUS - 1, fill: mine_color })
+        end
+
+        def render_ore_letter(letter)
+          h(:text, {
+              attrs: {
+                fill: 'black',
+                'font-size': '28px',
+                'text-anchor': 'middle',
+                'dominant-baseline': 'central',
+              },
+            }, letter)
+        end
+
+        def render_used_marker
+          r = 14
+          h(:g, [
+            h(:line, attrs: { x1: -r, y1: -r, x2: r, y2: r, stroke: 'white', 'stroke-width': 5, 'stroke-linecap': 'round' }),
+            h(:line, attrs: { x1: -r, y1: r, x2: r, y2: -r, stroke: 'white', 'stroke-width': 5, 'stroke-linecap': 'round' }),
+          ])
+        end
+
+        # render_part wraps all children in a rotate(render_location[:angle])
+        # transform (to orient edge-attached cities). Location names (base and
+        # transshipment labels) intentionally land at rotate(angle_for_layout)
+        # -- -30 deg for pointy hexes, vertex-aligned rather than edge-aligned
+        # -- via Part::LocationName's own rotation_for_layout wrapper. Adjust
+        # from whatever angle this city happens to render at back to that
+        # same target angle, so mine overlays match that convention exactly.
+        def upright(elements)
+          adjustment = angle_for_layout - (render_location[:angle] || 0)
+          h(:g, { attrs: { transform: "rotate(#{adjustment})" } }, elements)
+        end
+
+        # The corporation/independent holding a claim on this mine, if any.
+        def mine_claim_owner
+          return nil unless @game.respond_to?(:mine_claim_owner)
+
+          @game.mine_claim_owner(@tile.hex.id, mine_index)
+        end
+
+        def render_claim_ring(owner)
+          h(:circle, attrs: {
+              r: SLOT_RADIUS + 5,
+              fill: 'none',
+              stroke: owner.color,
+              'stroke-width': 8,
+            })
         end
 
         def triangle_points(radius, yoffset = 0)

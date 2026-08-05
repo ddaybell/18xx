@@ -101,6 +101,22 @@ module View
           children << h('table.center', props, [h(:tbody, extras)])
         end
 
+        # Never push a bare nil into `children` -- render_claims_display/
+        # render_pilot_info both legitimately return nil for most corps
+        # (no finite claim limit / not a Growth Corp), and a real nil vnode
+        # child reaching snabbdom's createElm crashed with "Cannot add
+        # property elm, object is not extensible" (only surfaced once
+        # render_pilot_info's nil-path started actually firing -- every
+        # corp in this ruleset has a finite claim_limit, so
+        # render_claims_display's own nil-path was apparently never
+        # exercised before).
+        if @game.respond_to?(:claim_hexes) && (claims_display = render_claims_display)
+          children << claims_display
+        end
+        if @game.respond_to?(:growth_corp_pilots) && (pilot_info = render_pilot_info)
+          children << pilot_info
+        end
+
         if @corporation.owner
           props = {
             style: {
@@ -321,13 +337,23 @@ module View
             overflow: 'auto',
           },
         }
-        token_column_props = {
-          attrs: {},
-          style: {
-            grid: '1fr auto / 1fr',
-          },
-        }
 
+        tokens_body =
+          if @game.respond_to?(:base_hexes) && @corporation.corporation?
+            infrastructure_tokens_body
+          else
+            default_tokens_body
+          end
+
+        @corporation.assignments.each do |assignment, _active|
+          img = @game.assignment_tokens(assignment)
+          tokens_body << [img, true, assignment]
+        end
+
+        h(:div, token_list_props, tokens_body.map { |logo, used, text| render_token_column(logo, used, text) })
+      end
+
+      def default_tokens_body
         tokens_body = @corporation.tokens.map.with_index do |token, i|
           token_text =
             if i.zero? && @corporation.coordinates
@@ -338,29 +364,118 @@ module View
           [logo_for_user(token), token.used, token_text]
         end
         tokens_body.sort_by! { |t| t[1] ? 1 : -1 }
+      end
 
-        @corporation.assignments.each do |assignment, _active|
-          img = @game.assignment_tokens(assignment)
-          tokens_body << [img, true, assignment]
+      # G2038-only: bases and refueling stations are drawn from the same
+      # pre-allocated $0-cost token pool (see Game#place_base!/
+      # #place_station!), so a placed token's own price/hex can't tell you
+      # its *type* -- Game#base_hexes/#station_hexes track placement order
+      # and location separately, which is what this builds the whole strip
+      # from instead (home token aside), so cost and base-vs-station type
+      # are both always right regardless of placement order or skipped
+      # sub-phases. Stations get their own logo (Game#station_logo, a
+      # per-corp static SVG under public/logos/g_2038/) so they read
+      # distinctly from bases in the same strip.
+      def infrastructure_tokens_body
+        home = @corporation.tokens.first
+        tokens_body = [[logo_for_user(@corporation), home&.used, @corporation.coordinates]]
+        tokens_body.concat(infra_entries(:bases, @game.base_hexes(@corporation), logo_for_user(@corporation),
+                                          reserved: @game.reserved_base_count(@corporation)))
+        # Extra bases beyond the corp's own lifetime allotment -- inherited
+        # from a Growth Corp conversion or an AL merger (Phase 8/9), or
+        # granted by Tunnel Systems' free-base ability (Phase 10). Always
+        # already placed (never a future cost placeholder), at the
+        # original independent's home hex (or wherever TS's ability was
+        # used) -- previously invisible on the charter entirely, since
+        # they're deliberately excluded from base_hexes/base_limit.
+        tokens_body.concat(@game.extra_base_hexes(@corporation).map { |hex_id| [logo_for_user(@corporation), true, hex_id] })
+        tokens_body.concat(infra_entries(:stations, @game.station_hexes(@corporation), @game.station_logo(@corporation)))
+        tokens_body.sort_by! { |t| t[1] ? 1 : -1 }
+      end
+
+      # `reserved` (AL only, bases only -- see Game#reserved_base_count)
+      # counts how many of the not-yet-placed slots below are actually
+      # held back for independents still outside the League, marked
+      # "Res." instead of looking like any other open, unclaimed slot.
+      def infra_entries(cost_key, placed_hexes, logo, reserved: 0)
+        schedule = @game.corp_data(@corporation)&.dig(cost_key) || []
+        schedule.each_index.map do |i|
+          hex_id = placed_hexes[i]
+          next [logo, true, hex_id] if hex_id
+
+          if reserved.positive?
+            reserved -= 1
+            [logo, true, 'Res.']
+          else
+            [logo, false, @game.format_currency(schedule[i])]
+          end
         end
+      end
 
-        h(:div, token_list_props, tokens_body.map do |logo, used, text|
-          token_column_props[:attrs][:title] = "token #{used ? 'location: ' : 'cost: '}#{text}"
-          img_props = {
-            attrs: {
-              src: logo,
-            },
-            style: {
-              width: '1.5rem',
-            },
-          }
-          img_props[:style][:filter] = 'contrast(50%) grayscale(100%)' if used
+      def render_token_column(logo, used, text)
+        props = {
+          attrs: { title: "token #{used ? 'location: ' : 'cost: '}#{text}" },
+          style: { grid: '1fr auto / 1fr' },
+        }
+        img_props = { attrs: { src: logo }, style: { width: '1.5rem' } }
+        img_props[:style][:filter] = 'contrast(50%) grayscale(100%)' if used
 
-          h(:div, token_column_props, [
-            h(:img, img_props),
-            h(:div, text),
-          ])
-        end)
+        h(:div, props, [h(:img, img_props), h(:div, text)])
+      end
+
+      # One flag-icon column per lifetime claim slot (@game.claim_limit),
+      # same look as the base/station strip in render_tokens -- placed
+      # slots show their hex, unplaced slots are left blank (unlike bases/
+      # stations, a claim's cost isn't fixed per lifetime slot, it's set by
+      # this round's tier, already spelled out in the header text above).
+      def render_claims_display
+        limit = @game.claim_limit(@corporation)
+        return if limit.infinite?
+
+        schedule = @game.claim_cost_schedule(@corporation)
+        header = "Claims: #{schedule.map { |c| @game.format_currency(c) }.join('/')} per turn"
+
+        placed_hexes = @game.claim_hexes(@corporation)
+        logo = @game.claim_logo(@corporation)
+        reserved = @game.reserved_claim_count(@corporation)
+        entries = limit.to_i.times.map do |i|
+          hex_id = placed_hexes[i]
+          next [logo, true, hex_id] if hex_id
+
+          if reserved.positive?
+            reserved -= 1
+            [logo, true, 'Res.']
+          else
+            [logo, false, '']
+          end
+        end
+        entries.sort_by! { |t| t[1] ? 1 : -1 }
+
+        token_list_props = {
+          style: {
+            grid: '1fr / auto-flow',
+            justifyContent: 'start',
+            gap: '0 0.2rem',
+            width: '100%',
+            overflow: 'auto',
+          },
+        }
+
+        h(:div, [
+          h(:div, header),
+          h(:div, token_list_props, entries.map { |logo_, used, text| render_token_column(logo_, used, text) }),
+        ])
+      end
+
+      # Growth Corp conversion (Phase 8) inherits an independent's special
+      # ability, assignable to one ship per OR via Step::Route's own choose
+      # UI -- nil (no display) for a normally-floated corp or an
+      # unconverted independent.
+      def render_pilot_info
+        description = @game.pilot_description(@corporation)
+        return nil unless description
+
+        h(:div, "#{description} (assignable to one ship per OR)")
       end
 
       def share_price_str(share_price)

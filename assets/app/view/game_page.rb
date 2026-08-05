@@ -446,6 +446,19 @@ module View
       when Engine::Round::Stock
         if !(%w[place_token lay_tile remove_token] & current_entity_actions).empty?
           h(Game::Map, game: @game)
+        elsif current_entity_actions.include?('bid')
+          # A Stock round can have a company-bidding step (e.g. G2038's
+          # WaterfallAuction) blocking alongside the ordinary share-buying
+          # one, same as the existing Operating-round 'bid' branch just
+          # below already handles for that round type -- Round::Stock's
+          # `when Engine::Round::Stock` case just never had the equivalent
+          # hook. Game::Round::Auction is what actually knows how to
+          # render that step's own company list/bid UI (round/auction.rb's
+          # `render_companies`, keyed off `@step.available`); the generic
+          # Game::Round::Stock view has no rendering path for it at all,
+          # and once nothing's left blocking on 'bid' this falls through
+          # to the ordinary share-buying view below as normal.
+          h(Game::Round::Auction, game: @game, user: @user)
         else
           h(Game::Round::Stock, game: @game)
         end

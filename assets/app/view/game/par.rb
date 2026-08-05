@@ -104,6 +104,33 @@ module View
         end
       end
 
+      # Opt-in hook (G2038 Phase 8): an alternate way to start this
+      # corporation by trading in an owned independent instead of paying
+      # cash -- one button per eligible independent, shown alongside the
+      # normal par-price buttons above.
+      def render_growth_exchange
+        return [] unless @step.respond_to?(:growth_exchange_choices)
+
+        choices = @step.growth_exchange_choices(@current_entity, @corporation)
+        return [] if choices.empty?
+
+        buttons = choices.map do |choice, label|
+          props = {
+            style: {
+              width: 'calc(17.5rem/6)',
+              padding: '0.2rem',
+            },
+            on: { click: -> { process_action(Engine::Action::Choose.new(@current_entity, choice: choice)) } },
+          }
+          h('button.small.par_price', props, label)
+        end
+
+        [h(:div, [
+          h('div.inline', { style: { marginTop: '0.5rem' } }, 'Exchange Independent: '),
+          *buttons,
+        ])]
+      end
+
       def render
         @step = @game.round.active_step
         @current_entity = @step.current_entity
@@ -111,6 +138,7 @@ module View
         children = []
         children.concat(render_par)
         children.concat(render_par_for_others)
+        children.concat(render_growth_exchange)
         return h(:div, children) unless children.empty?
 
         nil

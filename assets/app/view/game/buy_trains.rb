@@ -218,22 +218,22 @@ module View
            @must_buy_train
           if @must_buy_train
             children << if @step.must_issue_before_ebuy?(@corporation)
-                          h(:div, "#{@corporation.name} must buy a train from another corporation, "\
-                                  'or issue shares and then buy an available train ')
+                          h(:div, "#{@corporation.name} must buy a #{@game.train_word} from another corporation, "\
+                                  "or issue shares and then buy an available #{@game.train_word} ")
                         else
-                          h(:div, "#{@corporation.name} must buy an available train")
+                          h(:div, "#{@corporation.name} must buy an available #{@game.train_word}")
                         end
           end
 
           case @should_buy_train
           when :liquidation
-            children << h(:div, "#{@corporation.name} must buy a train or it will be liquidated")
+            children << h(:div, "#{@corporation.name} must buy a #{@game.train_word} or it will be liquidated")
           when :close_corp
-            children << h(:div, "#{@corporation.name}'s president must either sell shares to afford train, "\
-                                'or close the corporation without compensation.')
+            children << h(:div, "#{@corporation.name}'s president must either sell shares to afford "\
+                                "#{@game.train_word}, or close the corporation without compensation.")
           end
 
-          children << h(:h3, 'Available Trains')
+          children << h(:h3, "Available #{@game.train_word.capitalize}s")
           children << h(:div, div_props, [
             *from_depot(depot_trains, @corporation),
             *render_warranty(depot_trains),
@@ -243,7 +243,7 @@ module View
 
         if @step.respond_to?(:sellable_trains) && !@step.sellable_trains(@corporation).empty?
           corp_trains = @step.sellable_trains(@corporation)
-          children << h(:h3, 'Sellable Trains')
+          children << h(:h3, "Sellable #{@game.train_word.capitalize}s")
           children << h(:div, div_props, [
             *sell_corp_trains(corp_trains, @corporation),
           ])
@@ -260,7 +260,7 @@ module View
         discountable_trains = @game.discountable_trains_for(@corporation)
 
         if discountable_trains.any? && @step.discountable_trains_allowed?(@corporation)
-          children << h(:h3, 'Exchange Trains')
+          children << h(:h3, "Exchange #{@game.train_word.capitalize}s")
 
           discountable_trains.each do |train, discount_train, variant, price|
             exchange_train = lambda do
@@ -283,7 +283,7 @@ module View
           end
         end
 
-        children << h(:h3, 'Remaining Trains')
+        children << h(:h3, "Remaining #{@game.train_word.capitalize}s")
         children << remaining_trains
 
         children << h(:div, "#{@corporation.name} has #{available_cash_str(@corporation)}.")
@@ -311,7 +311,7 @@ module View
         end
 
         if @must_buy_train && @step.respond_to?(:must_take_loan?) && @step.must_take_loan?(@corporation)
-          issue_str = "#{@corporation.name} must take loans until it is able to buy a train"
+          issue_str = "#{@corporation.name} must take loans until it is able to buy a #{@game.train_word}"
           issue_str += ' or goes into receivership' if @game.class::EBUY_CORP_LOANS_RECEIVERSHIP
           children << h(:div, issue_str)
         end
@@ -566,11 +566,11 @@ module View
         if hidden_trains
           trains_to_buy << h('button.no_margin',
                              { on: { click: -> { store(:show_other_players, true) } }, **button_props },
-                             'Show trains from other players')
+                             "Show #{@game.train_word}s from other players")
         elsif @show_other_players
           trains_to_buy << h('button.no_margin',
                              { on: { click: -> { store(:show_other_players, false) } }, **button_props },
-                             'Hide trains from other players')
+                             "Hide #{@game.train_word}s from other players")
         end
         trains_to_buy
       end
@@ -634,7 +634,7 @@ module View
         end
 
         h(:div, div_props, [
-          h('div.bold', 'Train'),
+          h('div.bold', @game.train_word.capitalize),
           h('div.bold', 'Cost'),
           h('div.bold', 'Qty'),
           *rows,

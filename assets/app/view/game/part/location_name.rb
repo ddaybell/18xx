@@ -6,6 +6,8 @@ module View
   module Game
     module Part
       class LocationName < Base
+        needs :game, store: true, default: nil
+
         LINE_HEIGHT = 15
         CHARACTER_WIDTH = 8
         BACKGROUND_COLOR = '#FFFFFF'
@@ -25,6 +27,25 @@ module View
           return [l_center, l_up40, l_down40] if @tile.towns.one? && @tile.cities.empty?
 
           if @tile.cities.one? && @tile.towns.empty?
+            # Trackless games (e.g. G2038): standardize every single-city
+            # hex's printed name near the top, regardless of how many
+            # token slots that city has -- the slots-based cases below
+            # otherwise produce inconsistent top/bottom/center placement
+            # per corp (each home base's own token-slot count picks a
+            # different branch), which reads as a bug on a map with no
+            # track to explain the difference. Confirmed with the user.
+            # A single forced choice, not a preference list: offering
+            # [l_top, l_bottom, ...] still lets render_location's own
+            # cost-based arbitration reject l_top in favor of a fallback
+            # when something else on that hex already "costs" the top
+            # region -- found live in browser, corp hexes with extra
+            # content kept landing on l_bottom regardless of the ordering
+            # here. l_up40 (not the more extreme l_top, whose ~70px offset
+            # -- scaled 1.1x by render_part -- ran past the hex's own
+            # edge and clipped) is the same tuned-and-proven position
+            # already used as a safe non-center fallback below.
+            return [l_up40] if hide_tile_track?
+
             return case @tile.cities.first.slots
                    when 3
                      [l_down50, l_top]
@@ -188,6 +209,10 @@ module View
         end
 
         private
+
+        def hide_tile_track?
+          @game&.class&.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
+        end
 
         def l_top
           case layout

@@ -299,9 +299,11 @@ module Engine
         # new city, but if they are no tokens anyway this is nothing to worry
         # about
         if new_city.nil?
-          next if tokens.empty?
+          old_tokens = old_city.tokens.compact
+          next if old_tokens.empty?
 
-          raise GameError, "No city found on new tile #{tile.id} for #{token.corporation.id}'s token from #{@tile}"
+          raise GameError, "No city found on new tile #{tile.id} for "\
+                           "#{old_tokens.first.corporation.id}'s token from #{@tile}"
         end
 
         tokens[new_city].concat(old_city.tokens.compact)

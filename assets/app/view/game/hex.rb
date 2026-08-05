@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'lib/hex'
+require 'lib/hex_choice_popup'
 require 'lib/settings'
 require 'lib/tile_selector'
 require 'view/game/actionable'
@@ -230,10 +231,20 @@ module View
             ))
           end
           if @actions.include?('choose') && step.choices.include?(@hex.id)
-            return process_action(Engine::Action::Choose.new(
-                @entity,
-                choice: @hex.id,
-              ))
+            if step.respond_to?(:hex_choice_popup) && @entity && (popup = step.hex_choice_popup(@entity, @hex))
+              return store(:tile_selector, Lib::HexChoicePopup.new(@hex, popup, coordinates, root, @entity, @role))
+            end
+
+            choice = @hex.id
+            dispatch = lambda do
+              process_action(Engine::Action::Choose.new(@entity, choice: choice))
+            end
+
+            if (consenter = @game.consenter_for_choice(@entity, choice, step.choices[choice]))
+              return check_consent(@entity, consenter, dispatch)
+            end
+
+            return dispatch.call
           end
           return unless @actions.include?('lay_tile')
 

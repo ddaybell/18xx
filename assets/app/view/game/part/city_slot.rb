@@ -161,6 +161,18 @@ module View
 
           return unless step.available_hex(entity, @tile.hex)
 
+          if step.respond_to?(:city_choice) && (choice = step.city_choice(entity, @city))
+            event.JS.stopPropagation
+            process_action(Engine::Action::Choose.new(entity, choice: choice))
+            return
+          end
+
+          if step.respond_to?(:mine_pickup_blocked_reason) && (msg = step.mine_pickup_blocked_reason(entity, @city))
+            event.JS.stopPropagation
+            store(:flash_opts, msg)
+            return
+          end
+
           assign_step = @game.round.step_for(entity, 'assign')
           if assign_step.respond_to?(:available_city) && assign_step&.available_city(entity, @city, @tile.hex)
             event.JS.stopPropagation

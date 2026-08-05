@@ -29,6 +29,12 @@ module Engine
             short_name: 'Variant Start Packet',
             desc: 'The Variant Start Packet portion of the Expansion set.  See Expansion Set rules for details.',
           },
+          {
+            sym: :disable_autorouter,
+            short_name: 'Disable Autorouter',
+            desc: 'Turns off the "Suggest Route"/"Accept Route" ship-routing assistant. '\
+                  'It is enabled by default; select this to remove it for players who don\'t want the assist.',
+          },
         ].freeze
       end
     end

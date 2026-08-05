@@ -71,6 +71,20 @@ module View
       def route_controls
         return '' unless @game
 
+        # "Show Last Route and Tile" draws colored segments along printed
+        # track lanes (Engine::Route#connection_hexes/#halts, both
+        # track-connectivity concepts) -- meaningless for a trackless game
+        # (HIDE_TILE_TRACK), which has no lanes to draw along at all.
+        # G2038's own routes are built from a plain hex list (no
+        # connection_hexes/routes/nodes ever passed in), so this silently
+        # degrades to empty data and draws nothing rather than erroring --
+        # hiding the control entirely is more honest than leaving a
+        # control that quietly does nothing. Parked in ROADMAP.md
+        # (Phase 12) for a proper G2038-specific replacement later,
+        # reusing the existing live-flight hex-highlight overlay instead
+        # of this track-based one.
+        return '' if @game.class.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
+
         step = @game.round.active_step
         actions = step&.actions(step&.current_entity) || []
         # Route controls are disabled during dividend and run routes step

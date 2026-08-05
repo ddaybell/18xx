@@ -34,6 +34,20 @@ module View
         end
 
         def render_part
+          # A lone icon with its own explicit `radius` (opt-in, see
+          # Part::Icon) renders at that size instead of the shared
+          # ICON_RADIUS default, centered on its own translate -- every
+          # other case (multiple icons, or no custom radius set) renders
+          # exactly as before.
+          if @icons.one? && @icons.first.radius
+            radius = @icons.first.radius
+            return h(:g, { attrs: { transform: "#{rotation_for_layout} translate(#{-radius} #{-radius})" } }, [
+                h(:g, { attrs: { transform: translate } }, [
+                  h(:image, attrs: { href: @icons.first.image, width: "#{radius * 2}px", height: "#{radius * 2}px" }),
+                ]),
+              ])
+          end
+
           children = @icons.map.with_index do |icon, index|
             h(:image,
               attrs: {

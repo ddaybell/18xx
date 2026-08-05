@@ -3560,6 +3560,14 @@ module Engine
         train.name
       end
 
+      # Vocabulary hook: the generic word for a "train" in this game's own
+      # terminology (e.g. g_2038 overrides this to 'ship', since its trains
+      # are spaceships) -- used by shared train-buying/Info-tab UI wherever
+      # it needs to say the word itself, not a specific train's own name.
+      def train_word
+        'train'
+      end
+
       # If a game overrides this to true, then if the possible actions for the current entity include any of
       #   buy_train, scrap_train, or reassign_train then
       # the Operating view will be used instead of the Merger round view for train actiosn in a merger round.

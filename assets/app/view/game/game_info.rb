@@ -313,7 +313,7 @@ module View
         upcoming_train_header << h(:th, 'Events') unless event_text.empty?
 
         [
-          h(:h3, 'Trains'),
+          h(:h3, "#{@game.train_word.capitalize}s"),
           h(:div, { style: { overflowX: 'auto' } }, [
             h(:table, [
               h(:thead, [
@@ -383,11 +383,11 @@ module View
 
         if @layout == :discarded_trains
           h(:div, { style: { display: 'grid', justifyItems: 'center' } }, [
-            h(:div, 'Trains in Bank Pool'),
+            h(:div, "#{@game.train_word.capitalize}s in Bank Pool"),
             table,
           ])
         else
-          [h(:h3, 'Trains in Bank Pool'), table]
+          [h(:h3, "#{@game.train_word.capitalize}s in Bank Pool"), table]
         end
       end
 

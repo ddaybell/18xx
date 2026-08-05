@@ -26,6 +26,64 @@ module Engine
             process_dividend(action)
           end
 
+          # Half payout needs shareholders paid before the corporation, not
+          # after -- the base engine's process_dividend always pays the
+          # corporation first off a pre-computed split, but half's split is
+          # only a naive floor(revenue/2) target; the real per-holder ceil
+          # in payout_shares can push shareholders' actual total above
+          # that. Computing the corporation's share as whatever's left of
+          # revenue *after* the real shareholder payout (using the same
+          # revenue split, so both agree on the same per_share) makes the
+          # corporation absorb the ceil rounding instead of over-paying
+          # total revenue. Full duplication of process_dividend is needed
+          # since the base method hardcodes corporation-then-shares with no
+          # smaller override point; every other kind (payout, withhold,
+          # split, retain) behaves identically to the base version.
+          def process_dividend(action)
+            entity = action.entity
+            revenue = total_revenue
+            subsidy = total_subsidy
+            kind = action.kind.to_sym
+            payout = dividend_options(entity)[kind]
+
+            entity.operating_history[[@game.turn, @round.round_num]] =
+              OperatingInfo.new(routes, action, revenue, @round.laid_hexes)
+
+            @game.close_companies_on_event!(entity, 'ran_train') unless @round.routes.empty?
+            entity.trains.each { |train| train.operated = true }
+            rust_obsolete_trains!(entity)
+            @round.routes = []
+            @round.extra_revenue = 0
+
+            shareholder_revenue = revenue - payout[:corporation]
+            if kind == :half && payout[:per_share].positive?
+              paid = shareholder_payout_total(entity, shareholder_revenue)
+              payout = payout.merge(corporation: revenue - paid)
+            end
+
+            log_run_payout(entity, kind, revenue, subsidy, action, payout)
+
+            payout_corporation(payout[:corporation] + subsidy, entity)
+            # shareholder_revenue (not revenue - payout[:corporation]) --
+            # for :half, payout[:corporation] has already been adjusted
+            # above, so re-deriving it from that would silently swap in a
+            # different, already-rounded revenue figure and recompute a
+            # different per_share than shareholder_payout_total just used.
+            payout_shares(entity, shareholder_revenue) if payout[:per_share].positive?
+
+            change_share_price(entity, payout)
+            pass!
+          end
+
+          # Mirrors what payout_shares is about to actually disburse (same
+          # per_share math, via the same dividends_for_entity ceil-per-
+          # holder logic) without paying anyone yet -- used only to figure
+          # out how much the corporation should be left holding.
+          def shareholder_payout_total(entity, revenue)
+            per_share = payout_per_share(entity, revenue)
+            (@game.players + @game.corporations).sum { |payee| dividends_for_entity(entity, payee, per_share) }
+          end
+
           def round_state
             super.merge(laid_hexes: [])
           end
@@ -41,6 +99,14 @@ module Engine
           end
 
           # Half payout: half to shareholders, half retained. Stock moves right 1.
+          #
+          # dividends_for_entity ceils *per holder*, so fragmented ownership
+          # can push shareholders' actual total above a naive floor(revenue/2)
+          # (confirmed with the user: a $150 half-pay gives $8/share -- ceil
+          # of $7.50 -- to shareholders, and the remaining $70, not a flat
+          # $75, to the corporation). process_dividend below pays
+          # shareholders first off this same revenue split, then gives the
+          # corporation whatever's actually left over.
           def half(entity, revenue)
             corp = revenue / 2
             { corporation: corp, per_share: payout_per_share(entity, revenue - corp) }

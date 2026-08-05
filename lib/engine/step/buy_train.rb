@@ -28,7 +28,8 @@ module Engine
       end
 
       def pass_description
-        @acted ? 'Done (Trains)' : 'Skip (Trains)'
+        word = "#{@game.train_word.capitalize}s"
+        @acted ? "Done (#{word})" : "Skip (#{word})"
       end
 
       def pass!

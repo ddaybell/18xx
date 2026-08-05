@@ -15,6 +15,7 @@ require 'view/game/dividend'
 require 'view/game/issue_shares'
 require 'view/game/corporate_buy_shares'
 require 'view/game/map'
+require 'view/game/ship_selector'
 require 'view/game/buy_corporation'
 require 'view/game/route_selector'
 require 'view/game/cash_crisis'
@@ -58,6 +59,7 @@ module View
           left << h(ReassignTrains) if @current_actions.include?('reassign_trains')
           left << h(DoubleHeadTrains) if @current_actions.include?('double_head_trains')
           left << h(CombinedTrains) if @current_actions.include?('combined_trains')
+          left << h(ShipSelector) if @current_actions.include?('choose')
           left << h(Choose) if @current_actions.include?('choose')
           left << h(BuyToken, entity: entity) if @current_actions.include?('buy_token')
 
