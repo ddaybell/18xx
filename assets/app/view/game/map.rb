@@ -93,20 +93,24 @@ module View
               # 1882
               h(TokenSelector, zoom: map_zoom)
             elsif @tile_selector.is_a?(Lib::HexChoicePopup)
-              width, = map_size
+              width, height = map_size
               # Same edge-proximity idea TileSelector already uses below
-              # (right_col/top_row) so the popup flips to extend toward
-              # the opposite side instead of overflowing past the map's
-              # own boundary -- found live in browser: hexes near the
-              # right edge (e.g. column G/H) had their buttons clipped by
-              # the map's own scrolling container, since the popup always
-              # extended rightward (and upward) from its anchor with no
-              # edge awareness. Checked against the *top* edge, not the
-              # bottom -- the popup always extends upward from its hex, so
-              # that's the direction that can run out of room.
+              # (right_col/top_row/bottom_row) so the popup flips to
+              # extend toward the opposite side instead of overflowing
+              # past the map's own boundary -- found live in browser:
+              # hexes near the right edge (e.g. column G/H) had their
+              # buttons clipped by the map's own scrolling container,
+              # since the popup always extended rightward (and upward)
+              # from its anchor with no edge awareness. near_bottom_edge
+              # uses a wider margin than the others -- a popup's *width*
+              # is capped (POPUP_MAX_WIDTH), but wrapping means its
+              # height grows with however many choices there are, so a
+              # hex near the bottom needs more headroom to reliably avoid
+              # clipping than one near the top/right ever does.
               h(HexChoicePopup, zoom: map_zoom,
                                  near_right_edge: width - left < HexChoicePopup::EDGE_MARGIN,
-                                 near_top_edge: top < HexChoicePopup::EDGE_MARGIN)
+                                 near_top_edge: top < HexChoicePopup::EDGE_MARGIN,
+                                 near_bottom_edge: height - top < HexChoicePopup::BOTTOM_EDGE_MARGIN)
             elsif @tile_selector.role != :map
               # Tile selector not for the map
             elsif @tile_selector.hex.tile != @tile_selector.tile
@@ -242,38 +246,207 @@ module View
         step = @game.round.steps.find { |s| s.respond_to?(:live_route_hexes) }
         return [] unless step
 
-        lines = []
-        (@active_routes || []).each_with_index do |route, index|
-          next unless route.hexes.size > 1 && route.paths.empty?
+        routes_hexes = []
 
-          lines << hex_route_polyline(route.hexes, index)
-        end
-
+        # Not @active_routes -- that's the generic engine's own :routes/
+        # :historical_routes store, meant for the standard path-based
+        # RouteSelector. G2038's routes are always paths.empty? (a plain
+        # hex list, see hex_route_elements' own comment), so the only real
+        # way they'd show up there is a leak, and there is one:
+        # View::Game::Dividend#render unconditionally does
+        # `store(:routes, @step.routes)`, and Engine::Step::Dividend#routes
+        # just returns @round.routes -- the exact same array
+        # current_turn_routes below already reads. That put every G2038
+        # route in @active_routes AND current_turn_routes at once, each
+        # under a different color index, which made a route look bordered
+        # by a color that had nothing to do with the other real route --
+        # found live in browser as an unexplained "border" on ships whose
+        # paths didn't actually overlap. current_turn_routes is already
+        # the complete, authoritative source for this entity's routes this
+        # turn; @active_routes has never had anything to add for a
+        # G2038-style step (this whole method is unreachable for any other
+        # game -- see the live_route_hexes guard above).
         if step.respond_to?(:current_turn_routes)
           step.current_turn_routes(@game.round.current_entity).each do |route|
-            next unless route.hexes.size > 1 && route.paths.empty?
-
-            lines << hex_route_polyline(route.hexes, lines.size)
+            routes_hexes << route.hexes if route.hexes.size > 1 && route.paths.empty?
           end
         end
 
         live_hexes = step.live_route_hexes(@game.round.current_entity)
-        lines << hex_route_polyline(live_hexes, lines.size) if live_hexes && live_hexes.size > 1
+        routes_hexes << live_hexes if live_hexes && live_hexes.size > 1
 
-        lines
+        # Side-by-side lanes, not stacked widths -- a ship can double back
+        # over the very edge it just flew (out to a mine, home to refuel,
+        # back out the same way), so the same route can share an edge with
+        # *itself* more than once, on top of however many other ships also
+        # cross it. Nesting reads fine for two lines but has no way to show
+        # three-plus distinct passes; a hex is wide enough to hold several
+        # equal-width lanes side by side instead. Confirmed with the user
+        # via a worked triple-back/double-back example before building
+        # this.
+        edge_routes = hex_route_edge_indexes(routes_hexes)
+
+        routes_hexes.flat_map.with_index { |hexes, index| hex_route_elements(hexes, index, edge_routes) }
       end
 
-      def hex_route_polyline(hexes, index)
-        points = hexes.map { |hex| Hex.coordinates(hex, @start_pos) }
+      # {edge_key => [route_index, route_index, ...]} for every hex-to-hex
+      # hop across all routes being drawn this pass, one entry per
+      # traversal -- direction-independent (A-B and B-A are the same
+      # physical edge) and in strict processing order (every one of route
+      # 0's own hops before any of route 1's), so a route's own repeated
+      # crossings of the same edge (a backtrack) always land in adjacent
+      # lanes rather than interleaved with another route's.
+      def hex_route_edge_indexes(routes_hexes)
+        edges = Hash.new { |h, k| h[k] = [] }
+        routes_hexes.each_with_index do |hexes, index|
+          hexes.each_cons(2) { |a, b| edges[edge_key(a, b)] << index }
+        end
+        edges
+      end
 
+      def edge_key(hex_a, hex_b)
+        [hex_a.id, hex_b.id].sort.join('-')
+      end
+
+      # One polyline (plus one direction arrow) per hop, offset into its
+      # own lane whenever this edge sees more than one crossing -- from
+      # this route backtracking over itself, a different route sharing the
+      # same edge, or both at once (see hex_route_segment_offset). `index`
+      # is a per-*route* counter here, not a count of SVG elements already
+      # emitted, so route_prop's color cycling stays in sync with
+      # render_route_lines' callers even though each route now contributes
+      # several elements (one line segment and one arrow per hop) instead
+      # of just one line. Also the only case (today) with no tile paths to
+      # already show a direction implicitly via tile orientation --
+      # confirmed with the user other games' station-to-station routes
+      # don't need arrows.
+      def hex_route_elements(hexes, index, edge_routes)
+        color = route_prop(index, :color)
+        width = route_prop(index, :width)
+        seen = Hash.new(0)
+
+        hexes.each_cons(2).flat_map do |hex_a, hex_b|
+          key = edge_key(hex_a, hex_b)
+          occurrence = seen[key]
+          seen[key] += 1
+
+          offset = hex_route_segment_offset(index, occurrence, edge_routes[key])
+          (ox1, oy1), (ox2, oy2) = offset_points(hex_a, hex_b, offset)
+
+          [hex_route_polyline(ox1, oy1, ox2, oy2, color, width),
+           hex_route_arrow(ox1, oy1, ox2, oy2, color)]
+        end
+      end
+
+      # Perpendicular distance (in the same coordinate units as
+      # Hex.coordinates) to shift this specific hop -- 0 unless this edge
+      # sees more than one crossing total. `occurrence` is which crossing
+      # *of this edge, by this route* this hop is (0 the first time this
+      # route touches it, 1 the second/backtrack, ...); combined with
+      # edge_routes' strict per-route ordering, nth_occurrence_index finds
+      # exactly which of the edge's N lanes this hop belongs in, and every
+      # lane gets spread evenly around the edge's own centerline. Direction
+      # is handled entirely in offset_points, not here -- this is a plain
+      # lane number, the same regardless of which way any particular hop
+      # happens to travel.
+      LANE_SPACING = 14
+
+      def hex_route_segment_offset(index, occurrence, sharing)
+        return 0 if sharing.size <= 1
+
+        lane = nth_occurrence_index(sharing, index, occurrence)
+        (lane - ((sharing.size - 1) / 2.0)) * LANE_SPACING
+      end
+
+      # Position of the (0-indexed) `n`th occurrence of `value` in `array`.
+      def nth_occurrence_index(array, value, n)
+        count = -1
+        array.each_with_index do |v, i|
+          next unless v == value
+
+          count += 1
+          return i if count == n
+        end
+        nil
+      end
+
+      # Shifts this hop's own two endpoints perpendicular to the edge by
+      # `offset` units. The perpendicular is computed from the edge's
+      # canonical direction (sorted hex-id order) rather than this hop's
+      # own travel direction, and applied identically either way -- using
+      # each hop's own direction instead would flip the perpendicular's
+      # sign for a reversed hop, silently cancelling out the very
+      # separation the lane number was supposed to produce. That's exactly
+      # what a backtrack does (out one way, back the other, same edge):
+      # with a direction-dependent perpendicular, the outbound and return
+      # passes collapsed onto the same offset instead of landing on
+      # opposite sides -- found by hand-checking the lane math against a
+      # real triple-back before wiring this into the renderer.
+      def offset_points(hex_a, hex_b, offset)
+        (x1, y1) = Hex.coordinates(hex_a, @start_pos)
+        (x2, y2) = Hex.coordinates(hex_b, @start_pos)
+        return [[x1, y1], [x2, y2]] if offset.zero?
+
+        canon_a, canon_b = hex_a.id <= hex_b.id ? [hex_a, hex_b] : [hex_b, hex_a]
+        (cx1, cy1) = Hex.coordinates(canon_a, @start_pos)
+        (cx2, cy2) = Hex.coordinates(canon_b, @start_pos)
+        dx = cx2 - cx1
+        dy = cy2 - cy1
+        length = Math.sqrt((dx * dx) + (dy * dy))
+        return [[x1, y1], [x2, y2]] if length.zero?
+
+        perp_x = -dy / length * offset
+        perp_y = dx / length * offset
+        [[x1 + perp_x, y1 + perp_y], [x2 + perp_x, y2 + perp_y]]
+      end
+
+      def hex_route_polyline(x1, y1, x2, y2, color, width)
         h(:polyline, attrs: {
-            points: points.map { |x, y| "#{x},#{y}" }.join(' '),
+            points: "#{x1},#{y1} #{x2},#{y2}",
             fill: 'none',
-            stroke: route_prop(index, :color),
-            'stroke-width': route_prop(index, :width),
+            stroke: color,
+            'stroke-width': width,
             'stroke-linecap': 'round',
             'stroke-linejoin': 'round',
           })
+      end
+
+      ROUTE_ARROW_POSITION = 0.4 # fraction along each hop, biased just short of the shared edge
+      # Hexes are drawn ~150-200 units wide (Hex::SIZE = 100) in this same
+      # coordinate space -- the original 12x9 arrow was under 10% of that
+      # and effectively invisible against a real map. Sized to be clearly
+      # readable at a normal zoom level without swallowing the hex it
+      # sits in. Fixed size regardless of lane count -- unlike the earlier
+      # stacked-width approach this replaced, every lane renders at the
+      # same width, so there's no per-hop scale to match anymore.
+      ROUTE_ARROW_LENGTH = 36
+      ROUTE_ARROW_WIDTH = 24
+
+      def hex_route_arrow(x1, y1, x2, y2, color)
+        cx = x1 + ((x2 - x1) * ROUTE_ARROW_POSITION)
+        cy = y1 + ((y2 - y1) * ROUTE_ARROW_POSITION)
+        angle = Math.atan2(y2 - y1, x2 - x1)
+
+        h(:polygon, attrs: { points: arrow_triangle_points(cx, cy, angle), fill: color })
+      end
+
+      # A small triangle pointing along +x by default (tip at
+      # +half-length, base centered on the origin), rotated to `angle`
+      # and translated to (cx, cy) -- standard 2D rotation matrix, done
+      # by hand since Snabberb/SVG has no built-in "rotate this shape"
+      # primitive for a plain polygon (unlike a `transform` on a whole
+      # group, which would also rotate anything else sharing it).
+      def arrow_triangle_points(cx, cy, angle)
+        cos_a = Math.cos(angle)
+        sin_a = Math.sin(angle)
+        half_len = ROUTE_ARROW_LENGTH / 2.0
+        half_width = ROUTE_ARROW_WIDTH / 2.0
+
+        [[half_len, 0], [-half_len, half_width], [-half_len, -half_width]].map do |x, y|
+          rx = ((x * cos_a) - (y * sin_a) + cx).round(2)
+          ry = ((x * sin_a) + (y * cos_a) + cy).round(2)
+          "#{rx},#{ry}"
+        end.join(' ')
       end
 
       # Deliberately bigger than a per-hex small-icon slot would allow.

@@ -2093,6 +2093,17 @@ module Engine
         'IPO'
       end
 
+      # Spreadsheet view column headers -- overridable per game for
+      # whatever it actually calls the thing corporations run/hold
+      # (e.g. G2038's ships and claims, not trains and city tokens).
+      def trains_label
+        'Trains'
+      end
+
+      def tokens_label
+        'Tokens'
+      end
+
       def ipo_verb(_entity = nil)
         'pars'
       end

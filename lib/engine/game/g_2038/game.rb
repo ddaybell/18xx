@@ -22,7 +22,7 @@ module Engine
         include Entities
 
         attr_reader :mine_state, :al_reserved_shares, :al_independents_ever_offered, :al_corporation,
-                    :fast_buck_income_recipient
+                    :fast_buck_income_recipient, :hex_assignments
 
         TILE_TYPE = :lawson
         TRACK_RESTRICTION = :permissive
@@ -294,13 +294,17 @@ module Engine
             cargo_holds: 7,
             price: 950,
             num: 9,
+            # Train#price subtracts this from the 9/7's own $950 -- a $250
+            # discount, landing at $700, not $700 charged outright (found
+            # live in browser charging $250: this was storing the
+            # post-discount price instead of the discount amount).
             discount: {
-              '5/4' => 700,
-              '7/3' => 700,
-              '6/5' => 700,
-              '8/4' => 700,
-              '7/6' => 700,
-              '9/5' => 700,
+              '5/4' => 250,
+              '7/3' => 250,
+              '6/5' => 250,
+              '8/4' => 250,
+              '7/6' => 250,
+              '9/5' => 250,
             },
           },
         ].freeze
@@ -629,7 +633,14 @@ module Engine
 
         EXPLORATION_BONUS = 10
 
-        def explore_hex!(hex_id, entity)
+        # `pay:` is false while G2038::Step::Route is still building a route
+        # locally, unsubmitted (see Step::Route#local_choose!/@committing) --
+        # the corp can't do anything with the bonus until the route step
+        # ends anyway, so there's no need to move real cash (and log it)
+        # for a flight that might still be discarded before it's ever
+        # submitted. The real payment happens once, when the submitted
+        # choice is actually replayed (live or on reload) with `pay: true`.
+        def explore_hex!(hex_id, entity, pay: true)
           hex = hex_by_id(hex_id)
           tile_name = @hex_assignments[hex_id]
 
@@ -641,6 +652,13 @@ module Engine
               # topologically symmetric under any rotation.
               tile.rotate!(rand % 6)
               hex.lay(tile)
+              # Not update_tile_lists -- that's built for a normal upgrade
+              # (new tile drawn from the pool, old one returned to it), but
+              # a revealed mine tile never goes back into circulation. Just
+              # remove it, so the Tile Manifest's count reflects what's
+              # left un-revealed (Step::Route#rollback_local_flight!
+              # reverses this if the exploring flight gets discarded).
+              @tiles.delete(tile)
               self.class::MINE_DATA.fetch(tile_name, [])
             else
               []
@@ -649,6 +667,8 @@ module Engine
           @mine_state[hex_id] = {
             mines: mines.map { |m| m.merge(owner: nil, used: false) },
           }
+
+          return unless pay
 
           recipient = probe_bonus_recipient(entity)
           bank.spend(EXPLORATION_BONUS, recipient)
@@ -1053,6 +1073,35 @@ module Engine
           }
         end
 
+        # Rollback counterpart to record_last_route! -- restores whatever
+        # was on file before a locally-finished, not-yet-submitted flight
+        # overwrote it (see Step::Route#rollback_local_flight!), rather
+        # than leaving a stale pointer at a route that never really
+        # happened.
+        def restore_last_route!(train, value)
+          if value
+            @last_route[train.id] = value
+          else
+            @last_route.delete(train.id)
+          end
+        end
+
+        # Read/write access to the seeded LCG's own state (a single
+        # integer -- see Game::Base#rand/#initialize_seed), so
+        # Step::Route can snapshot it before a local, unsubmitted flight
+        # consumes randomness (tile rotation, Lucky's second-draw borrow)
+        # and rewind precisely on discard. Rewinding this one integer is
+        # enough to make a later real replay draw identically to what the
+        # discarded local preview already showed -- no need to separately
+        # track which random calls happened or in what order.
+        def rand_state
+          @rand
+        end
+
+        def rand_state=(value)
+          @rand = value
+        end
+
         # Lifetime cap on total bases/stations a corp may ever place -- the
         # length of its own `bases:`/`stations:` cost array (base_cost/
         # station_cost fall back to the array's last entry past that count,
@@ -1115,6 +1164,28 @@ module Engine
           return limit unless entity == @al_corporation
 
           [limit - (remaining_independents.size * 2), 0].max
+        end
+
+        # Overrides Game::Base's own token-availability count/string --
+        # both used only by the Spreadsheet view's "Tokens" column.
+        # G2038's corp.tokens are bases, a small fixed count (1-3) that
+        # says little on its own; claims (lifetime-capped, escalating cost,
+        # the resource players actually track over a game) are what's
+        # meaningful there instead. Confirmed with the user.
+        def count_available_tokens(entity)
+          claim_limit(entity) - claims_placed_lifetime(entity)
+        end
+
+        def token_string(entity)
+          "#{count_available_tokens(entity)}/#{claim_limit(entity)}"
+        end
+
+        def trains_label
+          'Ships'
+        end
+
+        def tokens_label
+          'Claims'
         end
 
         # How many of AL's base/claim slots are currently held back for
@@ -1212,15 +1283,22 @@ module Engine
           raise GameError, 'No base tiles available' unless tile
 
           # '2023' is an 'unlimited'-count tile (init_tile only ever pools a
-          # single instance for those) -- update_tile_lists is the engine's
-          # existing mechanism for replenishing it (duplicates the tile back
-          # into @tiles) every time one is actually laid, same as any normal
-          # tile-laying step does via Tracker#lay_tile. Without this call,
-          # only the very first base placed in the whole game would ever
-          # find an unused '2023' instance; every later one would crash
-          # laying a nil tile.
-          old_tile = hex.tile
-          update_tile_lists(tile, old_tile)
+          # single instance for those) -- add_extra_tile is the engine's
+          # existing mechanism for replenishing it (duplicates a fresh
+          # instance back into @tiles) every time one is actually laid.
+          # Without this call, only the very first base placed in the whole
+          # game would ever find an unused '2023' instance; every later one
+          # would crash laying a nil tile.
+          #
+          # Not update_tile_lists (the normal tile-laying counterpart to
+          # this) -- that also returns the *replaced* tile to @tiles, which
+          # is right for an ordinary upgrade (the old tile goes back into
+          # circulation) but wrong here: the mine tile a base covers is
+          # gone for good, not available to be drawn again -- found live in
+          # browser inflating the Tile Manifest's remaining count for that
+          # tile type every time a base got placed over one.
+          add_extra_tile(tile) if tile.unlimited
+          @tiles.delete(tile)
           hex.lay(tile)
           tile.cities.first.place_token(entity, token, check_tokenable: false)
           add_station_slot_marker!(hex)
@@ -1364,6 +1442,9 @@ module Engine
         end
 
         def setup
+          @log << '2038 is a game of exploration, involving reveals of hidden tiles. Using Undo to revert '\
+                  'a revealed tile to its hidden state could give a player an unfair benefit. Please exercise '\
+                  'care in exploration, and refrain from undoing actions that have revealed tiles.'
           @mine_state = {}
           @refueling_stations = {}
           @base_hexes = Hash.new { |h, k| h[k] = [] }

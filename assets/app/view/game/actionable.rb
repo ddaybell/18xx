@@ -66,7 +66,42 @@ module View
         @game_data[:mode] == :hotseat
       end
 
+      # Opt-in escape hatch, checked before any of the real action pipeline
+      # below (network POST, hotseat storage, action-history growth):
+      # lets a step build up a multi-step move entirely client-side and
+      # only ever submit one self-contained action for the whole thing
+      # (see G2038::Step::Route's SUBMIT_FLIGHT/local_choose! for the
+      # motivating case -- a hand-flown route can touch a dozen hexes,
+      # and recording every click as its own permanent action bloats the
+      # history the same way Suggest Route's search preview used to,
+      # before it became a local computation too). A step that doesn't
+      # implement local_choose?/local_pass? is unaffected -- this whole
+      # branch is skipped and every action behaves exactly as before.
+      def process_local_action(action)
+        step = @game.round.active_step
+        return false unless step
+
+        case action
+        when Engine::Action::Choose
+          return false unless step.respond_to?(:local_choose?) && step.local_choose?(action.entity, action.choice)
+
+          step.local_choose!(action.entity, action.choice)
+        when Engine::Action::Pass
+          return false unless step.respond_to?(:local_pass?) && step.local_pass?(action.entity)
+
+          step.local_pass!(action.entity)
+        else
+          return false
+        end
+
+        clear_ui_state
+        store(:game, @game)
+        true
+      end
+
       def process_action(action)
+        return if process_local_action(action)
+
         if @game.exception
           msg = 'This game is broken and cannot accept any new actions. If '\
                 'this issue has not already been reported, please follow the '\

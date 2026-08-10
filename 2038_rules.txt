@@ -1,0 +1,1863 @@
+Let’s Play! |
+
+Rules Introduction for 2038: Tycoons of the Asteroid Belt
+
+Read this First
+
+In 2038, 3-6 tycoons compete to carn money and build the best stock
+portfolio by investing in companies to explore and mine the asteroid belt.
+§ Learning to play 2038:
+
+Tf you learn best “by doing”, read this sheet as you play out a Short
+Game. Refer to the full rules should problems arise. If you learn best by
+reading, skim this sheet and then read the full rules before starting play.
+The Short Game lasts 2-3 hours, once players are familiar with it. New
+Players may find it takes 3-5 hours to play the very first time. The Full
+Game’s length varies with a group’s playing style. Experienced players
+complete it in 5-9 hours. Newer players should allow more time.
+
+2038 is loosely derived from the railroad game 1829, with stock rounds
+surrounding company operations. Players familiar with it will find 2038
+rather different. Companies explore, mine and deliver ores (see Figures
+6, 8 & 9), instead of laying track to connect cities. Growth Corporations
+(see page 3) are also new. Page 4 lists many fine points to remember.
+Setup. Perform the following steps (see Figures 1 and 2):
+
+1. Mix one bid counter per player and draw to determine First Player
+and seating order. Hand out the First Player card and bid counters.
+
+2. Unfold the board, placing the Round and Phase chits and spaceships
+on it. Nearby, place the stock mat, bank and 10% stock shares. Put
+the Astervid League and 20% President certificates on the stock mat.
+
+3. Split $1,800 evenly among the players. If playing a Short Game,
+remove $6,000 and 2 Phase II ships from the game.
+
+4. Mix the asteroid tiles in the box lid asteroid side down. Set the lid,
+Company / Corporation mats and counters aside for later use.
+
+5. Lay out the 12 Private and Independent Company certificates in
+order (“0"—“11"), along with the associated TS] shares and Probe.
+Overview. Players are investors. The goal is to be the player with the
+
+most money (in stock and cash) at the game end. Each turn consists of:
+
+1. A stock trading round (when investors act).
+
+2. Two operating rounds (when Companies / active Corporations act).
+This cycle repeats until the bank runs out of money and the game ends.
+Earnings are produced during operating rounds by spaceships picking up
+and delivering ores from asteroid mines to bases or transshipment points.
+There are three types of business entitics in the game:
+
+¢ Private Companies. Until removed, Private COs pay income to their
+owners each operating round. They do not trade on the stock market
+and, except when Co. “10” runs the Prabe, never operate spaceships.
+Independent Companies. These buy and operate spaceships but are
+not traded on the stock market. Instead, each Independent either
+retains all of its earnings or splits them evenly with its owner.
+Corporations. Each Corporation buys and operates spaceships but is
+jointly owned by shareholders, who buy and scll its shares, affecting
+its stock price. Each Corporation has a President, the player owning
+the most stock in it, who directs it during Operating Rounds and can
+increase its stock price by paying out its earnings as dividends.
+
+§ Important: Each Independent Co. and Corporation has a treasury.
+Money in it is always kept separate from its owncr’s / President’s cash.
+Initial Auction. Play begins with players bidding for and buying the 12
+Private and Independent Companies. Each player, starting with the First
+Player and proceeding clockwise, either places a bid, passes or buys the
+lowest numbered certificate available (see Figure 2). A purchase may
+trigger auctions or purchases due to previously placed “pending” bids.
+To place a bid, the player puts a bid marker on the desired certificate and
+sets aside the amount named. This must equal or exceed the certificate’s
+printed bid value and be at least $5 greater than the last bid placed on it.
+Money set aside for a bid is allocated and cannot be spent until that
+certificate is either bought or has a higher bid placed on it.
+
+When a certificate is bought, the next one becomes available. If it has
+only one bid marker on it, it is sold to that player for the amount bid. If
+several bid counters are present, an auction is held among those players.
+Proceeding clockwise from the player with the highest pending bid, each
+player must either bid at least $5 more than the previous bid or drop out.
+The last player remaining buys the certificate. Note that several certifi-
+cates in succession might be sold in this manner (see Figure 3). Once a
+certificate with no pending bids becomes available, the next player (on
+the original buyer’s left) then takes a turn (buy, bid or pass) normally.
+As each Independent Co. is purchased, put $100 plus '/: of the amount, if
+any, over $100 for which it was bought (round down) into its treasury.
+
+e
+
+10% Shares
+UUUL OO
+|
+
+Board
+
+Player money
+= ued & bid markers
+
+dependent COs
+
+General Setup (takes up |
+
+850hid (Q) ; .
+Planetary ——— Private Co. “O
+Imports
+$100 bid (4)] [Sioobid (2) [Sioobid (B) | Sioobid )) [aon | | stooia
+| Fast Ice Drill__ Ore . “
+Buck Finder Houn Bid] Crusher Torch Lucky
+Bid Bid a2 I
+a) #4 Independent Companies “1”-“6” —
+SIDbid (Z| S140bid (B)] | Si6Obid (Q)| | Si8Oid AO) | SisObid 43
+Tunnel Vacuum Robot Space | | Asteroid
+Systems |{Associates|,| Smelters — Trans. C | Export Co.
+
+‘SI
+1 Share 1Share || 1 Share Presi¢ent
+
+oN 4/0 Probe
+Private Companies “7"-“11”
+
+Shown above is the layout of the 12 Private and Independent Companies.
+COs “7-10” come with TSI shares. Each of these is bid for and bought
+as a set; afterwards these certificates function completely separate from
+each other. Company “11”, the Asteroid Export Co., forms the Asteroid
+League in either Phase III or IV, receiving its President’s certificate then.
+In a 4-player game, Player 1 bids $100 on Fast Buck. Player 2 bids $120
+on Drill Hound (to put $10 extra into its treasury). Player 3 bids $100 on
+Lucky. Player 4 bids $110 on Fast Buck, putting pressure on Player 1...
+
+§ Playing Tip: During the initial auction, make sure you get at least one
+Independent Company (unless, possibly, you’re the TSI President in a
+six player game). When bidding on Independents, consider bidding $120
+or so since an extra $10 in the Company treasury can often prove useful.
+
+ure 2: Initial Company La
+
+Bought by
+
+$30 bid (0)
+Planetary Player 1
+Imports |
+
+GQ) | $100hid (4) | $100bid (GY) | s100bia
+Ore
+Crusher Torch Lucky
+$120bid (7)] | Si40bid (B)] Sl60bid (Q)] | $180bid GO] | s180bid 1)
+Tunnel Vacuum Robot raiqq | Asteroid
+i Si
+: =F
+
+1 Share 1 Share 1 Share resident |
+
+470 PTODEe
+
+Later in the bidding, Player 1 buys Company “0” for $50. Players 1 and
+4 then hold an auction for Fast Buck, Player 4 eventually buying it for
+$160 ($130 goes into Fast Buck’s treasury). Ice Finder and Drill Hound
+have pending bids on them and are sold to players 4 and 2. Player 2 may
+then purchase Ore Crusher, pass or place a bid on another company.
+
+TSI is a Public Corporation. TSI becomes active once 50% of its shares
+are held by players. This occurs when Private COs “7’—“10” have been
+bought. 7S/’s President takes its mat and counters, placing the Probe on
+the mat and TSI’s stock price and par value markers in the appropriate
+boxes of the stock chart: either $100 (Full Game) or $67 (Short Game).
+Put 10 times the par value ($1,000 or $670) into TS/’s treasury.
+Once all 12 initial companies have been bought, the auction is over. The
+five remaining TS/ shares become available at TS/’s par value. (The RU
+President’s ificate is also available but is rarely bought.) Each player
+either TSI share or passes (no sales are allowed in the first stock
+round) e player obtains more TS/ shares than its President has, then
+that player becomes President and swaps two shares for the President’s
+certificate. e stock round ends once all p pass in succession.
+Move TS/'s stock price up one space if play m all of its shares.
+If all players consecutively pass — thus € he first stock round —
+before the initial 12 companies are olve all pending bids as if
+those certificates, in order, had beco able for purchase.
+In either case, give the First Player card to the player on the left of the
+last player who made a non-pending purchase.
+Operating Rounds. Perform the following steps in sequence twice
+(once for each operating round) before starting the next stock round:
+
+I. Pay each Private Co.’s owner (and Fast Buck’s treasury) its income
+
+r)
+
+a.-Fly-spaceship routes, picking up
+
+b. Determine withholdings / divider Adj t
+
+c. Purchases (including new spaceships and claims).
+
+3. Remove Usep MINE markers placed earlier that round.
+
+Spaceships. Earnings are produced by using spaceships to deliver ores.
+Each spaceship has two numbers: its movement points and number of
+cargo holds (see Figure 4). The first dictates how many hexes it may
+travel each round, starting from any of its bases; the second, how many
+cargo pickups / deli t may make. Initially, only Phase I spaceships
+are available: the be bought from bank. There are two types
+available: 5/1 and 3/2 Tugs. One
+fixed. Note that types have the same pri
+Operations: Each spaceship is moved separa
+point to enter each hex. An unexplored hex 1 y
+ing an extra movement point to draw and place an a i ini
+each hex explored, the “Survey Board” (the bank) pays $10 u
+owning Company’s or Corporation’s treasury. Asteroids contai
+one or two mines. Each mine produces a type of ore, either N
+Ice (1) or Rare (R), in a grade worth a given amount (see Figure 5).
+During the first operating round, since the Independents don’t begin play
+owning any spaceships, their first round action will be to each purchase
+one. TS/ then operates the Probe (collecting its exploration payments)
+before moving its stock marker left one box since it has zero earnings.
+TS/ then buys up to 3 more spaceships and 2 claims (see below), placing
+them on mines that the Probe found. Note: If TS/ is not active, then the
+owner of the Space Transportation Co. (“10”) flies the Probe from the
+TSI base with the owner collecting the Probe’s exploration payments.
+Each round, only one pickup may be made at each unclaimed mine (by
+the first spaceship to do so). Place a USED MINE chit to mark this. The
+pickup is worth the lower of the mine’s two values. If an Independent
+Co. or Corporation buys and places a claim on a mine, then only its
+spaceships may make pickups there. Furthermore, that ore is now worth
+the mine’s higher value. Pickup values are earned by spaceships only if
+they end their movement at any base or a red transshipment point (a ship
+that is only exploring may end its route in space). A spaceship ending its
+route at a transshipment point with an empty cargo hold earns the lower
+value listed there ($20 or $30). Note that some Companies and
+Corporations earn bonuses for delivering certain ores; bonuses can also
+be carned by any ship for delivering ores to certain bases (see Figure 6).
+A Company or Corporation’s earnings are the total of all its spaceships’
+routes (but not its exploration payments). An Independent may cither
+keep all of its earnings or split them evenly with its owner. It may not
+choose to pay them all out. A Corporation may either retain its earnings
+or pay out dividends, either in the amount of '/2 its earnings or in full.
+This decision affects its stock price, moving it one box left, one box right
+or two boxes right (see Figure 7). ‘Treasury money may then be spent to
+buy more spaceships or claims (within certain limits, see charts).
+During the next operating round, the remaining Phase I ships and a Phase
+II ship might be bought. This triggers the start of Phase II immediately.
+
+Hold the initial auction and play through the first stock and
+operating rounds before reading on (unless Phase II begins).
+
+, Phase removed
+| Obsolete: Phase III (1) from the game. Phase rion
+I
+Obsolete: Phase III or)
+5/1 $100 |
+| | |
+| |
+Cargo Holds Price $100
+Movement
+
+Asteroid with
+
+Two Mines
+Mine
+Asteroid with
+Ore Type One Mine
+Unclaimed Claimed
+Mine Value
+—
+i,
+30/60 /,10/50/ })
+—_,. {a i
+A m SN
+LE « USED
+BSE MINE
+{NO REFUEL SLOT)
++10/NicKEL ea
+Delivered ees
+CRUSHER a
+~ & ~ Pa
+Sg al Si
+
+In the first operating round (OR 1), Ore Crusher buys a 5/1 Scout. In
+OR 2, the 5/1 moves to hex A and spends a second movement point to
+explore it, drawing the tile shown. Deciding not to make a pickup at
+either of these mines, the 5/1 moves to hex B and explores it, drawing a
+$20 Nickel mine and adding $20 to Ore Crusher’s treasury for the two
+explorations. The 5/1 makes a pickup there, placing a USED MINE chit,
+before spending its fifth and final movement point to reach the Lunar
+Enterprises basc for $40 ($20 ore plus the base and Ore Crusher bonuses
+for delivering Nickel ore).
+
+This $40 could be split $20-$20 between Ore Crusher’s treasury and its
+owner or fully retained. The owner chooses to retain the $40 in treasury
+and spends it, plus the $20 exploration payments, to claim the $20
+Nickel mine. In OR 3, after a stock round, the 5/1 will run again (from
+Ore Crusher’s base), exploring hex C (+510 treasury) before delivering
+ore from the claimed Nickel mine to the Lunar Enterprises base for $80.
+
+~
+
+OR1]68 [77 [87 |98 OR2 Jeg 177 [87 [98
+67 |76 |86 59 167 86
+58 |66 175 51 [58 |66 175
+
+In OR 1 of the short game, TS/ has no earnings (exploration payments
+don’t count) and its stock price slides left one space to $59. In OR 2,
+TSI has $170 earnings and pays out $17 per share, moving its stock price
+right two spaces to $76. Had TS/ instead paid out */2, it would have kept
+$80, paid $9 per share and moved its stock price right one space to $67.
+
+Phase II begins immediately when a Phase II ship is purchased:
+* The TSI Probe becomes obsolete and is removed from the game.
+* Companies and Corporations may buy spaceships from one another
+for any mutually agreeable price, at least $1.
+¢ Growth Corporations may now be launched during stock rounds.
+¢ Private Companies “0” and “7”—“9” may be bought by Corporations
+from players for at least $1 and no more than their printed bid values.
+Once held by Corporations, Private Companies “7’—“9” may be used
+to each place one extra black-edged counter (see Figure 8).
+* Corporations may buy Independent claims for $60 each, replacing
+them with their own and returning the Independents’ claims for reuse.
+° Corporations may buy and place bases and refueling stations.
+A refueling station adds 3 movement points to each of its Corporation’s
+ships that enters that hex (or refuels a ship back to its starting movement
+amount, whichever total is smaller). Only one refueling station may be
+placed per base; thus a base provides both an alternative starting point
+for routes and a single refueling station “slot” usable by any Corporation
+(whichever one places a station there first). Bases, refueling stations and
+claims must be placed within range of an existing base (see Rules 7.4).
+
+Stock Rounds. During stock rounds, players may both sell and buy
+stock shares in Corporations, possibly launching new ones. Each player,
+starting with the First Player and proceeding clockwise, may sell as
+many shares as desired (within certain limits) into the Stock Market and
+then may purchase one certificate. Shares are bought from the Public or
+Growth boxes at their par value. They are sold to and bought from the
+Stock Market for their current stock price.
+
+A Corporation’s stock price moves down one square (if possible) when
+ils shares are sold, even when several of its shares are sold at once. A
+Corporation’s Presidency is transferred between players (swapping stock
+certificates) if one player acquires more shares in a Corporation than its
+President has. Shares in a Corporation which hasn’t operated may only
+be sold by its President. Neither the President’s certificate nor more than
+50% of a Corporation’s shares may enter the Stock Market. A player
+may not buy a stock he or she previously sold that stock round nor buy
+more than 60% of a Corporation’s shares. A stock round ends once all
+players pass in succession. Give the First Player card to the player left
+of the last player who made a stock transaction. Move the stock price of
+any stock completely held by players up one square (if possible).
+Corporations. Corporations become available in several groups, whose
+members may be launched in any order. Group “C” is not available in
+the Short Game. There are two Corporation types: Public and Growth.
+They differ in how they are launched, become active, their starting capi-
+tal, initial stock price and whether they receive money for their unbought
+shares when they pay dividends (as they do for their shares in the Stock
+Market). Growth Corporations get this money; Public ones do not.
+
+To launch a Public Corporation, a player sets its initial stock price and
+par value ($67, 77, 88 or 100) and buys an available President’s certifi-
+cate for twice this amount. Place its 10% shares in the Public share box.
+
+To launch a Growth Corporation, the owner of an Independent swaps it
+for an available President's 20% certificate during a stock turn in Phascs
+II or II, before the Asteroid League forms. This counts as that player’s
+stock purchase that turn. Place its 10% shares in the Growth share box.
+A Public Corporation becomes active once 50% of its stock has been
+bought; it then receives 10 times its par value as its starting capital.
+
+A Growth Corporation is active immediately. Its initial stock value is
+$10. It begins with its Independent’s spaceship(s) and treasury but
+receives additional capital only as its 10% shares are bought at its $67
+par value. Replace (for free) the Independent’s base and placed claims
+with its GROWTH base and claims. Flip the Independent certificate to its
+pilot side; its bonuses now only apply to one spaceship. Move one
+Asteroid League share from the trade-in box to the Asteroid League box.
+
+stor] Continue play until Phase III begins before reading further.
+
+As spaceships are bought, the game will enter new phases with various
+effects (see charts). Phase I-III ships eventually become obsolete and
+are removed from the game. Corporations without a ship must buy onc.
+(After the Asteroid League forms, Independents without a ship must buy
+one or join the League.) If a Corporation doesn’t have sufficient cash to
+buy a spaceship, its President must make up the difference with his or
+her own cash, possibly selling stock to obtain it (see 7.38). Thus. being
+President of a Corporation can become a liability (see Player Notes).
+
+Also triggered by phase changes is the formation of the Asteroid League,
+a Corporation which eventually absorbs all Independents that don’t form
+Growth Corporations. The Asteroid Export Co. owner may form the
+Astervid League when Phase III begins (and must do so in Phase IV).
+
+e Hy 3/2
+
+“NS
+TSI buys Private Co. #7 for $120 and uses its special property to place its
+black-edged base marker in hex A (which was explored earlier), after
+flipping the asteroid tile there to its base side B. TS/ then spends $50 to
+place a refueling station there. Later, its 3/2 spaceship can pickup up ICE
+
+$100
+
+Me +20/RARE
+MQ Deliverea
+
+.
+Se
+
+refueling
+LAY station
+
++10 / NICKEL
+meg Delivered
+
+a a
+
+3/2 $100
+
+TST has 6 placed claims and is taking RARE to the VP base and NICKEL to
+the LE base using 4 ships with 8 cargo holds, a 5/1, 3/2, 6/2 and 4/3.
+The 3/2 flies first (using the TS/ refueling station to reach the LE base),
+flipping over claims A and B and placing 2 $60 NICKEL ore counters on
+its card. The 5/1 flies next, picking up at C, refueling and exploring D,
+finding a RARE $30, before arriving at VP. The 6/2 picks up at E,
+explores F, refuels, picks up the $30 RARE at D and ends at VP. The 4/3
+picks up at G, H and F, refuels and ends at LE. $20 for two explorations
+goes into TSI’s treasury. TS/’s earnings (with base bonuses) are $280 N
++ $40 1 + $220 R = $540 (or $54/ share if TST pays out full dividends).
+
+§ Playing Tip: To find good routes quickly and speed play, assign your
+claims to holds and fly fully loaded ships first, conducting exploration.
+exploration first.
+
+Short Game Rules Summary
+
+The Short Game uses all the Full Game rules except the following:
+Remove $6,000 and 2 Phase II spaceships from the game.
+
+TSI’s initial stock and par value is $67, not $100; TS/ receives
+$670 initial capital, not $1,000.
+
+The two group “C” Corporations, the Outer Planet Consortium
+and the Ring Construction Corp., are not used.
+
+The certificate limits are reduced (see chart).
+
+Independent owners receive */2 of their cash-on-hand only if they
+join the Asteroid League when it first forms (regardless of
+whether they still possess a spaceship if they join later).
+
+§ Playing Tip: The Short Game usually ends during Phase UI.
+Note that Independents, as per the normal rules, are worth nothing
+towards a player’s final value (unlike Private Companies). Thus,
+joining the Asteroid League when it first forms is usually wise.
+
+Each Independent may then join it (and must join in Phase V). Its owner
+receives */2 its treasury if it joins when the League first forms (or, in the
+Full Game, if it owns a ship if it joins later), plus a 10% League share.
+As players become wealthier, their ability to purchase more stock will be
+restricted by the certificate limit (see chart) which they may not exceed.
+Both Independent and Private Companies count towards this limit.
+
+The game ends when a player goes bankrupt (by not being able to buy a
+required spaceship for a Corporation, see 7.38) or, more typically, at the
+end of the round sequence (stock plus two operating rounds) during
+which the Bank runs out of money. (For these final rounds, players may
+either “spreadsheet” payments (see Figure 10) or give an equal amount
+of money to the Bank so it can continue to pay out.) The player with the
+most money in stock plus cash-on-hand wins! Cash held in treasuries
+does not count towards this total; Private Companies still held by play-
+ers (if the game ends before Phase V) are worth their printed bid values.
+
+OR Div. Player 1 Player 2 Player 3
+Corp 1 2 Stock Sum #Shrs Amt #Shrs Amt #Shrs Amt
+TSI 53 53 440 546 5 2730 2 1092 2 1092
+
+RU 77 79 243 396 - - 3 1188 6 2376
+VP 48 48 264 360 1 360 5 1800 4 1440
+RCC 63 67 185 315 3 945 - - 3 945
+Cash on hand 2140 2324 912
+
+Final Total 9345 8868 7635
+
+Track each Corporation’s dividend per share on paper. Add them to its
+final stock value. Multiply this by each player’s # of shares. Total these
+amounts, plus cash on hand, to determine each player’s final standing.
+
+Points to Remember (“18xx’” players take note)
+
+Setup: All 13 bases printed on the map start the game in play.
+Initial Auction:
+
+* The minimum bid on a certificate is its printed bid value.
+
+* Money bid is allocated and may not be spent or used for other bids
+until a higher bid is placed on that certificate.
+
+* If all players consecutively pass to end the stock round before the
+first 12 Companies are bought, resolve any pending bids in order.
+
+* The amount placed in an Independent's treasury is $100 plus 1/2 of
+the amount above $100 paid (round fractions down).
+
+Stock Rounds:
+
+¢ All sales are done before the one allowed purchase per turn.
+
+¢ Neither the President’s certificate nor more than 50% of a
+Corporation’s stock may be sold into the Stock Market.
+
+* Selling multiple shares of one Corporation’s stock in a single
+player turn depresses its stock price only one box.
+
+* Only the President may sell shares in a Corporation before it has
+operated during at least one operating round.
+
+* A player may not buy a stock that he or she sold previously that
+round; nor buy (or hold) more than 60% of a Corporation’s stock;
+nor buy (or hold) stock in excess of the certificate limit (see chart).
+
+Forming Corporations:
+
+* A Corporation is launched once its President’s certificate (only) is
+acquired during a stock round. Another Corporation (whether the
+first one is active or not) may then he launched by the next player.
+
+* Corporations become available for launching in groups. Once all
+of a group is launched, the next group is immediately available.
+
+* Launching a Growth Corporation (in Phases II and III before the
+Astervid League forms) counts as that player’s one stock purchase.
+
+* A Public Corp. becomes active, recciving 10 x its par value cash,
+once 50% of its stock is bought. A Growth Corp. is active at once.
+
+Operations:
+
+* There are two operating rounds per stock round.
+
+¢ Fast Buck’s income of $15 per round goes into its treasury.
+
+* Independents operate in numeric order before active Corporations
+operate in stock price order.
+
+° A spaceship’s route always starts at one of its bases. It must end at
+any base (or transshipment point) for its pickups to earn money.
+
+* It costs one extra movement point to explore a hex, placing a tile
+and adding $10 to the Company or Corporation’s treasury.
+
+* A refueling station may be used once per operating round by any
+ship belonging to that Corporation that enters its hex. Each ship
+gains three movement points (limited by its starting movement).
+One pickup may be made at a mine per round. Only the owning
+Company or Corporation may make a pickup at a claimed mine,
+earning its higher value. Making both pickups al an asteroid with
+two mines uses two cargo holds but no extra movement.
+
+Ore bonuses from a base may be earned by a spaceship of any
+Company or Corporation that ends its route there.
+
+The bonus for ending a route at a transshipment point requires an
+empty cargo hold. It may be earned once per ship per round.
+
+An Independent’s earnings may either be split cvenly between its
+owner and its treasury or retained completely within its treasury.
+Corporate earnings may be paid out in full, in half (round down the
+half retained by $10) or retained. Adjust its stock price marker
+right two spaces, right one space or left one space respectively.
+
+¢ A Corporation paying dividends receives them for its shares in the
+Stock Market, Growth box or Asteroid League Trade-in box.
+
+Purchases:
+
+° There are two types of Phase I-V spaceships. A spaceship’s type
+may not be altered after being purchased from the bank.
+After the first Phase V ship is bought, Phase VI spaceships become
+available. In Phases V and VI, a Phase III-V spaceship may be
+upgraded to a Phase VI ship for $700, removing the old ship card.
+After Phase I, Corporations and Companies may buy spaceships
+from each other at any agreed upon price, $1 or higher.
+The Asteroid League’s last spaceship may not be purchased.
+* A Corporation (only) must buy a spaceship if it has none. If it
+doesn’t have sufficient cash to do so, it must buy the earliest ship
+available (of either type) from the bank. Its President supplies the
+needed cash; raising it if necessary by selling shares normally,
+except that its sales may not transfer this Presidency (see 7.38).
+Corporations may buy Private Companies “0” and “7”—“9” from
+players (with their consent) after Phase I, paying at least $1 and no
+more than the printed bid value of each Company.
+Private Companies “7°—“9” each permit an owning Corporation to
+place one extra (black-edged) counter on the map. Doing so does
+not shut down that Private Company.
+After Phase I, a Corporation may buy an Independent’s claims for
+$60 apiece (with its owner’s consent).
+Each round, a Corporation may buy a base and a refueling station
+(after Phase I) and two claims (three if the Asteroid League), plac-
+ing them within range of any of its bases (see 7.4), in addition to
+any Independent claims purchased or Private Co. counters placed.
+Bases may only be placed in explored tiles without claims, flipping
+the asteroid tile there over to its gray base tile side. Claims may be
+placed on mines that were used earlier that round.
+Game Phases / Asteroid League:
+
+* There are six game phases. New phase effects occur immediately
+once a spaceship of that phase is purchased.
+The Asteroid League may be formed when Phase III begins. If the
+owner of the Asteroid Export Co. chooses not to form the League
+then, he or she may form it before the start of any Phase III Stock
+or Operating Round. It must be formed when Phase IV begins.
+Independents may choose to merge into the Asteroid League when
+it forms. The League gets its base, claims, spaceships and 1/2 its
+treasury (round down), with its owner getting the rest and a 10%
+Asteroid League share. If an Independent chooses to join later, its
+owner receives money when it joins only in the Full Game and
+only if it still has a ship. It may join at the start of each Operating
+(but not Stock) Round. Independents must join the League upon
+failing to purchase a spaceship (see 7.39) or when Phase V begins.
+The Asteroid League starts with $250 initial capital, receiving
+extra capital as Independents join and as its shares are bought.
+Ending the Game / Winning:
+
+* The game ends either when a player goes bankrupt (due to not
+being able to purchase a required spaceship for a Corporation) or,
+more typically, at the end of the round sequence — stock plus two
+operating rounds — during which the Bank ran out of money.
+
+* The winner is the player with the highest stock value (counting
+any Private Companies left at bid value), plus cash-on-hand.
+
+Etiquette: All player and treasury monies are open for examination.
+Rounding Rule: The treasury always gets the smaller amount.
+
+.
+
+2038
+
+TYCOONS OF THE ASTEROID BELT
+Rules of Play and Reference
+1. INTRODUCTION
+
+2038 is a game of stock manipulation, space exploration and mining for
+3-6 players, ages 14 to adult. Players invest in and direct companies to
+explore and mine the asteroid belt. Each turn consists of two parts: a
+stock trading round followed by two operating rounds, during which
+corporations conduct exploration and mining activities and possibly pay
+dividends to their shareholders. The game ends when the bank runs out
+of money. The winner is the player with the highest net worth as deter-
+mined by stock portfolio value plus cash on hand.
+
+§ Learning to play 2038:
+
+If you learn best “by doing”, read the “Let's Play!” sheet as you play a
+Short Game. Refer to the full rules, below, should problems arise. If you
+learn best by reading first, skim the “Let’s Play!” sheet before reading
+the full rules, referring back to its examples of play as needed.
+
+2. COMPONENTS AND CONCEPTS
+
+A complete copy of 2038 includes:
+* 16" by 22" game board
+° 11" by 16" stock mat
+¢ 236 die cut counters (1 sheet)
+¢ 106 die cut hexagonal tiles (2 sheets)
+¢ 72 Corporate Stock Certificates
+¢ 12 Certificates representing Private and Independent Companies
+¢ 41 Spaceship cards (Note: 2 Phase VI ships are printed on the reverse
+of other certificates: Private Co. “0” and the T'SJ Probe.)
+* 8 Corporation mats
+* 6 Independent Company mats
+¢ 2 play summary cards
+* 1 packet of play money containing $10,000 in denominations of:
+8 x $500, 35 x $100, 28 x $50, 30 x $20, 30 x $10, 28 x $5, 60 x SI
+* | card used to denote the First Player for stock rounds
+¢ 1 four-page Let’s Play! rules introduction sheet
+* | four-page Player and Design Notes & Charts
+¢ 1 four-page rules folder (what you’re reading)
+If any items are damaged or missing, please write:
+Prism / TimJim Games
+Attn; 2038
+P.O. Box 60141
+Palo Alto, CA 94306-0141
+
+2.1 Board
+
+The board depicts part of the asteroid belt, viewed [rom above the solar
+plane. It is divided into hexes, each containing a transshipment point,
+base location or, after exploration, an asteroid with one or two mines.
+Important: All 13 bases printed on the map begin the game in play.
+
+2.2 Tiles
+
+The 106 tiles are used differently depending on which side is face up:
+
+* As asteroids. When an empty map hex is explored, a tile is chosen
+randomly and placed asteroid side face up. Each asteroid contains either
+one or two mines. Each mine has an ore type, either N (nickel), I (ice) or
+R (rare), and two values representing the amounts carned for delivering
+ore from that mine. The first value is the mine’s initial unclaimed value;
+the second, higher number is its improved value after being claimed.
+
+Asteroid with
+Two Mines Ss ois
+
+Mine
+
+Asteroid with
+Ore Type One Mine R N
+Unclaimed Claimed 30/60 /\ 20/60
+Mine Value Mine Value Vis
+
+* As base tiles. When placing a base marker, flip the asteroid tile over
+to its gray side. Each base tile may hold one Refueling Station marker.
+
+2.3 Spaceships
+Each spaceship has two numbers:
+
+* Movement Points. The number
+of hexes a spaceship may enter
+while operating (its range). A
+spaceship exploring a hex expends
+an extra movement point to place
+
+Obsolete: Phase Ill
+
+an asteroid tile on the mapboard. 3/2 $100
+¢ Cargo Holds. The maximum Cargo a
+number of mine pickups a space- Nlovenient '
+
+ship may make when operating.
+In addition, each spaceship has a price, a phase number showing when it
+centers play, and either an indication that is a permanent spaceship or the
+phase in which it becomes obsolete and is removed from the game.
+
+2.4 Counters
+Four types of counters, plus round and phase markers, are provided:
+
+* Bid markers (22). These are used to mark pending bids by different
+players during the initial auction of Private and Independent Companies.
+
+¢ UseD MINE chits (22, backprinted on the bid markers). Use these to
+mark pickups at unclaimed mines during an operating round.
+
+* Corporation counters (164). Stock markers, bases, refueling stations
+and mining claims for each Company or Corporation in the game. The
+black-edged Corporation bases, refueling stations and claims are used to
+exercise the special properties of Private Companies “7”-“9” or, if
+marked GRowTH, when launching Growth Corporations.
+
+* Ore counters (48). These may be optionally used to mark ore and
+
+transshipment pickups by spaceships (see “Let's Play!” Figure 9).
+
+2.5 Terms
+
+Phase: The six phases represent the asteroid belt’s economic develop-
+ment over time and are tied to the purchase of spaceships during play.
+Spaceships: These are used to run routes, making pickups to earn
+money. Two types of spaceships are available during Phases I-V: fast
+scouts, for exploration, and slower tugs, which have more cargo holds.
+Private Company: These six companies, until shut down, pay income
+to their owners each operating round. Private Companies don’t operate
+spaceships (Space Transportation Co. flies the Probe if T'S/ is mactive).
+Companies “0” and “7”—“9” may be sold to Corporations; ““7”—“9” each
+allow an owning Corporation to place one extra counter on the map.
+Independent Company: The six Independent Companies operate
+spaceships, but do not have shares which are traded during stock rounds.
+Eventually, all Independents must either form Growth Corporations or be
+merged into the Asteroid League.
+
+Corporation: The eight Corporations operate spaceships and are owned
+jointly by their current shareholders. Corporations (except the Asteroid
+League) enter play as either Public or Growth Corporations.
+
+Public Corporation: A Public Corporation is launched by a player
+setting its par value and buying its President’s certificate for twice this
+amount. A Public Corporation is inactive and does not operate until 50%
+of its shares have been bought. Once this occurs, it immediately receives
+100% of its capitalization from the bank.
+
+Growth Corporation: After Phase I (until the Asteroid League forms),
+a Growth Corporation is /Jaunched during a stock turn by transferring the
+assets of an Independent Company owned by the forming player into an
+available Corporation in exchange for its President’s certificate. Growth
+Corporations are immediately active, have a $10 initial stock price, a $67
+par value and receive additional capital only as their shares are bought.
+Asteroid League: This Corporation comes into play differently from
+other Corporations and has different spaceship limits and capitalization.
+President: The player owning the most stock in a Corporation. He or
+she runs it during operating rounds, making all decisions for it.
+
+Stock Price: Each Corporation, once launched, has a stock price for
+which its shares can be sold into and bought from the Stock Market.
+This price, unlike the Corporation’s par value, changes during the game
+and is marked by the position of a stock price marker on the stock mat.
+
+3. SETUP
+
+Unfold the board, placing the stock mat, bank and 10% shares near it and
+the 20% President and Asteroid League shares, spaceships and Phase and
+Round chits on it as indicated. Mix the tiles asteroid side down in the
+box lid. Draw bid chits to determine seating and First Player. Hand out
+bid chils and split $1800 evenly among players. Lay out the 12 Private
+and Independent Co. certificates, with their TSJ shares and the Probe, in
+numerical order (“O"—“11”"). Begin play by purchasing them (see 5.1).
+Short Game: Remove $6,000 and 2 Phase II ships from the game.
+
+4. SEQUENCE OF PLAY
+
+Play proceeds by alternating Stock Rounds with two Operating Rounds.
+Stock Round (see section 5)
+Starting with the First Player, each player in turn cither passes or may
+sell stock share(s) before possibly buying one stock certificate.
+A stock round ends when all players pass in succession, Assign the First
+Player card and adjust stock prices as needed for “all shares held”.
+Operating Round (see sections 6-8)
+1. Private Companies (and Fast Buck) receive income.
+2. In numeric order, each active Independent Company operates.
+3. In stock price order, cach active Corporation operates.
+4. Remove all USED MINE markers. Flip over all used Claim markers.
+Operating an Independent Company or Corporation
+. Run routes for each owned Spaceship.
+. Determine withholdings / dividends. Adjust stock price.
+. May buy | or more Spaceships (Corporations must own at least 1).
+. May buy Private Companics and/or exercise their special properties.
+. May buy 1 Base.
+. May buy | Refueling Station.
+. May buy 1-2 Claims (1-3 if the Asteroid League).
+
+5. STOCK ROUNDS
+
+During a Stock Round cach player in turn, starling with the First Player
+and proceeding clockwise, may sell any number of shares, including
+none, and then possibly buy one stock certificate or launch a Growth
+Corporation. A player who does nothing is deemed to pass. The round
+ends when all players consecutively pass. Then, reassign the First Player
+card and adjust stock prices, if necessary, to reflect “all shares held”.
+Notes: When placing or adjusting stock price markers, a marker entering
+a given box of the stock price chart is placed below any markers already
+in that box. Markers are never adjusted below the bottom or above the
+top rows of the stock price chart; they instead stay where they are.
+
+5.1 Buying Private and Independent Companies
+
+All 12 Private and Independent Companies must be purchased before any
+Corporation stock shares may be bought. Companies become available
+for purchase in ascending numerical order (“0”-“11"). Once bought,
+these Companies may not be sold to the Stock Market (unlike the 7S/
+shares bought with COs “7’—“10"; these may be sold — but note 5.21).
+The player whose turn it is has three options: pass, buy the currently
+available Private or Independent Company (possibly paying more than
+the face price if desired (sce 5.14)) or place a (supported) bid on any one
+Private or Independent Company not yet available for purchase.
+
+5.11 The first bid on any given certificate must equal or exceed its
+printed bid price. Each subsequent bid must exceed the previous bid on
+the certificate by at least $5. Use bid chits to mark players’ pending bids.
+5.12 A player must have sufficient unallocated cash to support a given
+bid. Cash previously allocated towards a bid becomes unallocated once a
+higher bid has been placed on that certificate.
+
+When a certificate becomes available (once the previous one is sold), if it
+has only one pending bid on it, it is immediately sold to that player for
+the amount bid. If several players have pending bids on it, an auction is
+held to determine its buyer and sale price. Proceeding clockwise from
+the player with the highest pending bid, each involved player must either
+drop out or place a bid on it at least $5 higher than the last amount bid.
+5.13 If all players consecutively pass, ending the Stock Round before all
+Independent and Private Companies are sold, resolve all pending bids as
+if those certificates, in order, had become available.
+
+5.14 When an Independent Company is purchased, it receives as its
+starting capital $100 plus 1/2 of any amount above $100 for which it was
+purchased (round any fraction down). Place this cash in ils treasury.
+Important: Throughout the game, cash belonging to players must be
+kept separate from cash held by Companies and Corporations in their
+treasuries. Independent Company owners and Corporation Presidents
+may not mix the funds they control with their own cash on hand.
+
+5.2 Selling Stock
+
+A player may scll any number of stock shares on his or her turn, subject
+to the limits below. The player receives the current stock price for each
+share sold, places the stock certificates in the Stock Market and adjusts
+the stock price for each Corporation in which share(s) were sold down-
+wards one box (even if the player sold more than one stock share of a
+given Corporation during that stock sale).
+
+ADM Wyre
+
+§.21 Only the current President may sell a Corporation’s stock before it
+has operated during at least one operating round.
+§.22 A player may both sell and buy stock in a single player turn but
+this must occur in this order — all sales take place before any purchase.
+5,23 A sale by a Corporation President which reduces that player’s hold-
+ings in the Corporation below another player (who holds at Icast 20% of
+its shares) results in a Presidency change. The player holding the highest
+percentage, resolving ties clockwise, receives the “President” certificate
+in exchange for two 10% shares of stock.
+§.24 No more than 50% of a given Corporation’s shares may be sold to
+the Stock Market. A President’s certificate may never enter the Stock
+Market. A sale resulting in a Presidency change such that these rules are
+obeyed after the sale is complete is allowed.
+Example: The President of 7S7 holds 20%, two other players each
+hold 20% and 40% is in the Stock Market. The President may scll
+one 7S/ share, even though the only TS/ certificate held by that
+player is the 20% President’s certificate. Aftcr the sale, the first
+player clockwise from the selling player will hold the 7S/
+President’s certificate, five 10% TS/ shares will be in the Stock
+Market and the previous TS/ President will hold one 10% 7'S/ share.
+
+5.3 Buying Stock / Launching Corporations
+
+A player may only buy one share certificate at a time, either from a share
+box or the Stock Market. Each certificate represents a 10% stock share,
+except for President certificates which represent 2 shares or 20%. The
+President’s certificate of a given Corporation must be held before any of
+its 10% shares may be bought. Shares are bought from the share boxes at
+par value. Public Corporations’ par values, except for TS7, are set by the
+player purchasing its President’s certificate. TS/’s par is $100 ($67 in the
+Short Game). Growth Corporations have a $67 par value. The As/eroid
+League has a $125 par value. Shares enter the Stock Market only when
+sold by players. A share in the Stock Market is bought by paying the
+stock price of that Corporation (which usually differs from its par value).
+Only shares in available Corporations may be bought. Trans-Space, Inc.
+shares and the Resources Unlimited President certificate may not be
+bought until all the Private and Independent Companies have been
+purchased. Once Resources Unlimited has been launched, all three of
+Lunar Enterprises, Mars Mining, and Venus Prospectors are available.
+After these Corporations launch, then, in the Full Game only, Outer
+Planet Consortium and Ring Construction Corp. both become available.
+§.31 No player may voluntarily own more than 60% of a Corporation’s
+stock. A player who does so involuntarily (due to a forced merger into
+the Asteroid League) must comply on his or her next stock turn.
+
+5.32 If, due to a purchase or merger, a player owns a greater stock
+percentage of a Corporation than its current President, then that player
+becomes President, swapping two shares of stock with the previous
+President to obtain the President’s stock certificate.
+
+5.33 Once a player sells a share in a given Corporation, he or she may
+not purchase shares in that Corporation until the next stock round.
+Certificate Limit. Each player may only hold a fixed number of stock
+certificates depending on the number of players in the game (see chart).
+When computing how many certificates a player holds, each Private
+Company, Independent Company and 20% President certificate counts as
+one certificate. Any Private or Independent Company certificates owned
+by Corporations do not count against their Presidents’ certificate limits.
+5.34 A player may not buy stock in excess of this certificate limit (even
+if doing so would produce a Presidency change that would then result in
+that player not exceeding the certificate limit).
+
+5.35 A player who involuntarily exceeds the certificate limit (due to a
+change in Presidency) must comply on his or her next Stock turn.
+Launching a Public Corporation
+
+A Public Corporation is launched by a player establishing its par value
+and purchasing an available President’s Certificate at twice that amount,
+placing its par value marker in the appropriate box on the stock mat and
+ils stock price marker in the matching box of the stock price track. Place
+its 10% stock shares in the Public Corporation share box.
+
+5.36 A Public Corporation becomes active once 50% of its shares have
+been purchased. Its President then takes its counters and mat, receiving
+10 times the Corporation’s par value from the bank to pul in its treasury.
+Launching a Growth Corporation
+
+Growth Corporations may only be /aunched in game Phases II and II,
+before the Asteroid League forms. A Growth Corporation is launched by
+a player who owns an Independent Company turning it in for the
+President’s share of an available Corporation during that player’s turn of
+a Stock Round. Doing so counts as that player’s stock purchase that
+turn. Remove the Independent Company from the game, giving its cash,
+spaceships and certificate to the Corporation. Place its extra GROWTH
+base marker on the Independent’s base and replace (for free) any placed
+claims with claims belonging to the Corporation. Mark its par value of
+$67 and place its stock price marker in the $10 box of the stock price
+chart. Move its 10% shares to the Growth Corporation share box, shift-
+ing one Asteroid League share from the trade-in box to the League share
+box. The new Corporation immediately becomes active, but reccives no
+money from the bank. When its shares are purchased from the Growth
+Corporation share box, that money goes to its treasury, not to the bank.
+
+5.4 Passing
+A player may pass instead of selling and/or buying any stock. Unless all
+
+players consecutively pass to end the Stack Round, a player who passes
+may sell and buy stock on his or her next turn normally.
+
+5.5 Ending a Stock Round
+
+When all players consecutively pass, the First Player card is given to the
+player to the left of the last player to sell or buy a certificate on his or her
+turn (ignoring any purchases due to pending bids, see 5.13). That player
+will be the first player to take a turn in the next Stock Round.
+
+All Shares Held: At the end of a Stock Round, all Corporations whose
+shares are 100% held by players adjust their stock markers in order up
+one box (unless already at the chart top). Note that the Asteroid League’s
+price may not rise due to this if some of its shares are in the trade-in box.
+
+6. OPERATING ROUNDS
+
+The following four steps constitute an Operating Round and are
+performed in order twice before starting a new Stock Round:
+
+Private Companies receive Income
+
+The current owner (either a player or Corporation) of each active Private
+Company receives its printed income from the bank. In addition, Fast
+Buck’ s Company (or owning Corporation) adds $15 to its treasury.
+Independent Companies Operate
+
+Each Independent Company in order (“1”—“6”) operates. Then, if 7S/
+isn’t active yet, the owner of the Space Transportation Private Company
+flies the TSI Probe from the TS/ Base, receiving its exploration bonuses.
+Corporations Operate
+
+Each Growth and active Public Corporation operates once in stock price
+order (highest to lowest value, with Corporations whose stock markers
+are in the same box operating in top to bottom order). Note: This order
+may change during an operating round due to forced sales (see 7.38).
+Remove all USep Mine chits and flip over all used Claim markers
+
+A given mine may only be used once per Operating Round. This is
+marked with Usb MINE chits or flipped over claim markers, which are
+removed or flipped face up at the end of each Operating Round.
+
+7. OPERATIONS
+7.1 Run Routes
+
+Each spaceship owned by the operating Company or Corporation may
+run one route per operating round, expending movement points and
+making pickups sequentially hex by hex up to the limits of its movement
+allowance and cargo holds (see Ler’s Play! Figures 6 and 9).
+
+A route is a series of adjacent hexes starting from a base belonging to the
+operating Company or Corporation. To earn money, a route’s pickups
+must be delivered by ending that route at any base or a transshipment
+point. If not, the spaceship is simply exploring; its pickups are worth
+nothing and may not be kept for future rounds. Note: Where a ship ends
+its route has no effect on which base it may start from in the next round.
+7.11 A route may both begin and end at the same base. More than one
+spaceship may begin or end its movement at a given base each round.
+
+It costs one movement point to enter a hex. It costs one additional
+movement point to explore a hex by drawing a tile to discover what’s
+there. The owning Company or Corporation receives $10 directly into
+its treasury for each hex explored by its ships. Alternatively, an unex-
+plored hex may be passed through without exploring it.
+
+A spaceship’s remaining movement points are increased cither by 3 or up
+to its starting movement allowance, whichever total is smaller, each time
+it visits a different refueling station belonging to its Corporation.
+
+7.12 A given refueling station may be visited once per operating round
+by each spaceship belonging to its Corporation that enters its hex.
+
+A spaceship may make as many pickups along its movement path as it
+has cargo holds. Making pickups costs no movement points. Making
+both pickups at an asteroid with two mines takes two empty cargo holds.
+Only one pickup may be made at cach mine per Operating Round. Mark
+ore pickups at unclaimed mines by placing Usep Mine chits. Pickups
+may be made at unused and unclaimed mines, unused mines claimed by
+the operating Company or Corporation, or, if ending ils route there, al a
+transshipment point (the last models “delivering the mail”). Note that a
+routc may end at a transshipment point without making a pickup there.
+713 Once a cargo hold has been assigned to a given pickup, its cargo
+may not be jettisoned to make a different pickup.
+
+7.14 Transshipment points may be used multiple times for pickups
+during an Operating Round by different spaceships ending routes there.
+A route’s value is the total of each pickup delivered on the route plus any
+bonuses listed on its Corporation mat, assigned pilot or ending base hex.
+Exploration bonuses do not count towards this total. All delivery
+bonuses are cumulative. Note: Base hex bonuses for certain ore types are
+available to all Company or Corporation ships ending their routes there.
+Pilots: The six Independents serve as pilots for all spaceships owned by
+their Companies. When an Independent launches a Growth Corporation
+or merges into the Asteroid League, its pilot certificate is placed in that
+Corporation (until removed in Phase V). In the case of Fast Buck, the
+owning Corporation receives $15 in its treasury when Private Companies
+are paid. The other Independents may each be assigned as a pilot to one
+(different) spaceship belonging to the owning Corporation each operating
+round, That spaceship, when moved, receives that Independent’s bonus
+(extra movement, additional tile draw and/or route pickup bonus).
+
+7.2 Earnings, Dividends and Stock Adjustments
+
+A Company or Corporation’s earnings in an Operating Round is the sum
+of its routes’ values. Exploration payments and Private Company (and
+fast Buck) income do not count towards this total.
+
+Independent Company earnings may either be split evenly between the
+owner and the Independent Company’s treasury or retained completely
+in the Independent Company’s treasury as its owner wishes.
+
+Corporate earnings may either be retained in its treasury or paid out or
+partially paid out as dividends to its shareholders as its President wishes:
+
+« Retained earnings are placed in the Corporate treasury. The stock
+price is adjusted /e/t one box (or down one box if it can’t be moved left).
+
+« Paid out earnings are divided by 10 and this amount is paid per share
+to each shareholder. The Corporation’s treasury receives this amount for
+each of its shares in the Stock Market, Asteroid League trade-in box or
+Growth Corporation share box (but not for any of its shares in the Public
+Corporation share box). Adjust the stock price right two boxes (or up
+one box and right one box if it can’t be moved right two boxes).
+
+* To pay partial dividends, divide total earnings by two. Round this
+amount down to the nearest $10; retain it in the Corporation’s treasury.
+Divide the remainder by 10 and pay it to shareholders as above. Adjust
+the stock price right one box (or up one box if it can’t be moved right).
+
+Example: A Corporation earns $250 in an operating round and its
+
+President elects to pay partial dividends. $120 is retained in the
+
+Corporation’s treasury and $13 per share is paid to its shareholders.
+7.21 An active Corporation (see 5.36) with zero earnings shifts its stock
+price left one box (or down one box if it can’t be moved left).
+
+7.3. Purchasing Spaceships
+
+An Independent Company or Corporation may, using only its own funds,
+purchase spaceship(s) from the bank at list price or, after Phase I, from
+Companies or Corporations at any agreed upon price not less than $1.
+
+In Phases V and VI, Phase III-V spaceships may be upgraded for $700
+each into Phase VI ships, removing the old ship cards from the game.
+Each spaceship purchase / upgrade is performed separately, one at a time.
+Phase J-V spaceships are divided into two types, scouts and tugs, each
+printed on opposite sides of the same certificate and generally costing
+different amounts. Phase VI spaceships are all the same type: freighters.
+7.31 When buying Phase I-V spaceships from the bank, either type
+may be bought. Once purchased, a ship’s type may not be changed.
+
+7.32 No spaceships of the next game phase may be purchased until all
+spaceships of the current phase have been bought. Exception: Phase VI
+ships may be purchased once one Phase V spaceship has been bought.
+Spaceship Limits: The number of spaceships which a Corporation or
+Company may own varies with the current game phase (see phase chart).
+7.33 Spaceships may not be voluntarily turned in or sold to the bank.
+7.34 Extra ships may not be bought even if this would trigger a change
+of game phase that would, by rendering some spaceships obsolete, result
+in that Company or Corporation complying with the spaceship limit.
+
+7.35 If, due to a change in game phase, a Company or Corporation owns
+more spaceships than it is entitled to, it must immediately comply by
+turing in excess spaceships of its choice to the bank (for no money).
+7.36 Returned ship certificates may be purchased again (as either ship
+type) and don’t affect the current game phase or spaceship availability.
+7.37 No Company or Corporation may purchase the Asteroid League’s
+last spaceship (reducing its number of spaceships to zero).
+
+Mandatory Spaceship Purchase
+
+A Corporation must buy a spaceship if it has none when it operates. If
+it is unable to buy one from another Corporation, Company or the bank
+with its own funds, it must buy the earliest spaceship available (of either
+type) from the bank using all of its treasury with the remainder (only)
+coming from its President’s cash on hand.
+
+7.38 A President who doesn’t have the needed cash must raise it by sell-
+ing stock shares. The President may sell any shares, obeying all rules for
+doing so (including resolving Presidency changes), except for shares
+which would cause a Presidency change in the Corporation currently
+operating. (Note that these sales may also alter the order in which
+Corporations slill to go operate that round.) Once the amount needed has
+been raised, no further sales may be made. If, after making all possible
+sales, the President hasn’t raised the required amount, then that player is
+bankrupt and the game ends immediately (see section 9).
+
+7.39 An Independent Company is not required to own a spaceship until
+the Asteroid League forms. Afterwards, an Independent Company oper-
+ating without a spaceship must either purchase one, using only its own
+funds, or merge into the Asteroid League (without its owner receiving '/2
+of the Independent Company’s treasury in the Full Game, see 8.11).
+
+7.4 Other Purchases
+
+In Phases II-IV a Corporation, using only its own funds, may purchase
+one or more of the Private Companies “0” or “7°— “9” from their owning
+players (with their consent) during an operating round. The amount paid
+tor each must be at least $1 and no greater than its printed bid valuc.
+Private Companies ““7”—“9”, if owned by a Corporation, may place one
+counter (a base, refueling station or claim, respectively) for free during
+the course of the game, using the extra black-edged markers supplied for
+this. Doing so does not result in the Private Company being shut down.
+A Corporation, using only its own funds, may purchase and place up to
+one base, one refueling station and two claims per round (exception: the
+Asteroid League may placc up to three claims per round). These are in
+addition to any markers placed due to using a Private Company’s special
+property (see above) or bought from Independent Companies (see 7.45).
+
+An Independent Company may not purchase Private Companics, bases
+or refueling stations. It may, using only its own funds, purchase and
+place either one or both of its two claims during a single round.
+
+A given hex is within range for placing a base, refueling station or claim
+if at least one of that Company or Corporation’s spaceships could move
+there, factoring in any movement bonuses from already placed refueling
+stations. A Company without spaceships can not place claims.
+
+7.41 A basc may be placed for $50 (exception: Mars Mining pays only
+$25) on any explored asteroid tile that doesn’t already contain a claim
+within range of the placing Corporation. Flip the tile over before placing
+the base marker on it.
+
+7.42 A refueling station may be placed for $50 (exceptions: Venus
+Prospectors pays only $25; Outer Planet Consortium places its first one
+(only) for free) on any base within range of the placing Corporation that
+doesn’t already contain a refueling station (even if that base is not owned
+by the Corporation placing the refueling station).
+
+7.43 Claims may be placed on any unclaimed mine (possibly with a
+UsepD MINE chit on it) within range of the placing Corporation or
+Company. Placing the first claim in a round costs $60 (cxccption:
+Resources Unlimited places its first claim each round for free). Placing
+a second claim in one round costs $100 (exception: the Asteroid
+League’s second claim costs $75; its third one costs $100).
+
+7.44 Corporations have a limited number of bases, refueling stations and
+claims. Once placed, they may not be transferred or removed.
+
+7.45 After Phase I. a Corporation may buy Independent Company claims
+(with their owners’ consent) for $60 each. They necd not be within range
+of the purchasing Corporation. Return an Independent’s claim marker to
+it for reuse after replacing it with one of the Corporation’s claim markers.
+
+y
+
+8. GAME PHASES / ASTEROID LEAGUE
+
+There are six game phases. A phase begins once a spaceship belonging
+to it has been bought. Its effects (see charts) take place immediately in
+the order listed and persist until altered by a later phase.
+
+The Asteroid League is a special Corporation that comes into cxistence
+during either Phase II or IV. It is formed by the owner of Asteroid
+Export Company launching it, taking the President’s certificate of the
+Asteroid League. The owner has the option to do this immediately when
+Phase III begins. If that player doesn’t exercise this option then, he or
+she may choose to exercise it at the beginning of each Operating or Stock
+Round until Phase IV begins (when the League must be formed).
+
+The Asteroid League has an initial capitalization of $250 and a $125 par
+value. The Asteroid Export Company is retained by its owner until the
+League acquires a spaceship (either by purchase or by an Independent
+merging into it); then it is removed. Place its stock price marker in the
+$125 box of the stock price chart and transfer its stock from the Asteroid
+League box to the Growth Corporation share box. Draw a base tile and
+place it and a base marker on its reserved map hex. Note that doing this
+prevents spaceships from using that hex for transshipment pickups.
+
+Once the Asteroid League forms, each Independent, in clockwise order
+starting with the Asteroid League President, may immediately join it, its
+owner receiving */2 of its treasury cash (round down the amount left in the
+treasury) and a 10% Asteroid League share from the trade-in box (this
+may produce a Presidency change as per 5.32). Owners who don’t merge
+at this point may alter their choice at the start of each Operating (but not
+Stock) Round (again, in clockwise order starting with the current
+Asteroid League President). Independent Companies must merge upon
+failing to purchase a spaceship (see 7.39) or when Phase V begins.
+
+8.11 An owner whose Independent merges after the Asteroid League’s
+initial formation receives '/2 of the Independent’s cash only in the Full
+Game and only if it still has a spaceship when it joins, (Note: Phase II
+ships go obsolete before Independents must join the League in Phase V.)
+When an Independent merges, remove it from the game. Give its pilot
+certificate, spaceship and treasury cash (after any final payment) to the
+Asteroid League and replace (at no cost) its base and any placed claims
+with a base marker and claims belonging to the Asteroid League.
+
+8.12 The Asteroid League may not place and must reserve one base and
+two claims for each remaining Independent which hasn’t merged into it.
+8.13 After each merger, if the Asteroid League has morc spaceships than
+allowed, it must return its excess ships to the bank; however, it may
+return any of its spaceships, not just the one(s) most recently received.
+8.14 The Asteroid League operates the round it forms if no Corporation
+has begun to operate from a stock price of $124 or less when the League
+is formed. All spaceships, pilots or claims used earlier that round by
+Independents that joined the League may not be used a second time by it.
+
+9, ENDING THE GAME AND WINNING
+
+The game may end in two ways, either immediately upon a player going
+bankrupt (extremely rare) or, more typically, at the conclusion of the
+round sequence (Stock Round plus two Operating Rounds) during which
+the bank ran out of moncy.
+
+Total each player’s cash on hand and stock portfolio value, based on the
+final stock prices. (Add the printed values of Private Companies (only)
+if the game ends before Phase V.) Ignore all assets held in Corporation
+(or Company) treasuries. The player with the highest total wins.
+
+When playing out the final Operating Rounds, players may find it useful
+to “spreadsheet” them (see Let’s Play! Figure 10) or to each give a fixed
+sum of money to the bank so that it can continue to make payments.
+
+10. ETIQUETTE
+
+Players may make deals; however, any deals are not binding. No assets
+may be traded, given or sold among players, Companies or Corporations
+except as explicitly set forth in the rules. Players’ current cash on hand
+and stock holdings are open for examination, as are Company and
+Corporations’ treasuries, spaceships, certificates and available counters.
+
+Rules questions and comments should be sent to the address listed in
+section 2 above. To expedile handling, supply a SASE and, if possible,
+submit your questions phrased to accept “Yes” or “No” answers.
+
+Rules © 1992-1995 Tom Lehmann, Fun & Game Design; and Jim Hlavaty, Spectrum Game Design.
+2038
+
+TYCOONS OF THE ASTEROID BELT
+
+Player and Design Notes & Charts
+PLAYER NOTES
+
+2038 constantly presents its players with decisions whose effects
+are both far-reaching and interact with other players’ actions. This,
+plus its stock / operations “game-within-a-game” style, produces
+interesting repeated play (since a game can develop many ways),
+but may make 2038 hard to grasp initially. Here are some tips:
+
+* Perceptions matter. If players decide that a given Corporation is
+a good investment and buy it, its price will rise due to being all sold
+out and won't drop due to sales. It then is a good investment. In
+contrast, if players sour on and sell a stock bought earlier, then its
+stock price will fall, regardless of the Corporation's true value.
+
+* Group actions affect the game. For example, during the first two
+operating rounds, players may choose to buy all the Phase | ships
+plus a Phase II spaceship. This allows Growth Corporations to start
+in the second stock round. Similarly, if several Independents join
+the Asteroid League when it forms, their spaceships and claims will
+quickly make the League quite powerful; if they instead hold off
+merging until Phase V, it will be considerably weaker. Act in your
+best interests. Recognizing when you should “go along” with group
+actions — and when you shouldn't — is often overlooked.
+
+* Remember your goals. You are an investor, seeking to hold the
+best stock portfolio and most cash when the game ends. Running
+a Corporation well is one means to this, it is not the end. Players
+who focus solely on preparing future routes for their Corporations
+usually lose. However, neglecting your company’s routes is also
+wrong. Typically, the cost of not developing good routes is about
+$10-30 per share per round. Over six rounds, in a Corporation you
+hold 60% of, this can easily total $600. Thus, it may be worth losing
+a dividend payment and one or two squares of its final stock value
+to raise cash to develop its routes. You must strike a balance
+between short and long term gains.
+
+« Manage your portfolio. Players’ end-game wealth comes from
+two major sources: dividends and stock appreciation. Higher priced
+stocks yield the best appreciation once you're at the certificate limit.
+If not, you may do better with two lower priced shares even if they
+pay smaller dividends. You must also judge whether a Corporation
+is going to pay out its dividends in full. Full dividends from one with
+less developed routes are usually worth more than half dividends
+from another, even if the latter's routes are much better.
+
+* Manage your portfolio mix. It is not enough to buy valuable
+stock and run your companies well if your opponents hold the same
+shares and more. Try to eventually own 60% in Corporations you
+control. Contrive to “share in the wealth” by buying shares in other
+well-run companies, subject to the safety considerations discussed
+below. Be wary of splitting a stock equally between you and its
+President, since that player may transfer its assets to another one
+(where he or she has a favorable stock split). By holding 30-40% in
+two profitable Corporations (whose Presidents each own 60%) as
+well as 60% of your own Corporation (assuming it is profitable), you
+will often win due to a superior overall mix of stock shares.
+
+Spaceship Trouble. It is important to understand that being
+President of a Corporation is both an advantage (you control its
+decisions) and a potential liability. If a Corporation has no ships nor
+the cash to buy one from the Bank (and is unable to buy one from
+another Corporation or Independent), then its President must
+supply the cash needed to buy one. This liability remains until it
+acquires a permanent spaceship — and may reappear if it then
+allows another Corporation to buy its permanent ship.
+
+Transfer of Corporations. Even though Presidencies may not
+change hands very often during a game, the threat of them chang-
+ing hands does affect play. While many Corporate assets can’t be
+
+transferred, two important ones — spaceships and cash — can be.
+Cash can be sent to investors by buying Private Companies “0” and
+“7’—"9” for list price. Among Corporations (and Independents), cash
+can be transferred via spaceship purchases. A Corporation could
+spend its cash either to purchase a soon-to-be-obsolete ship from
+another Corporation or to buy new ships from the Bank, which it
+then sells for $1 apiece. In either case, if its President later sells
+off, giving the Presidency to another player, that player will have
+strengthened the Corporation receiving the cash or spaceships at
+the expense of the “looted” Corporation’s new President (who will
+soon have to come up with the cash to acquire a spaceship).
+
+Stripping a Corporation. Even when it isn't possible to dump a
+Corporation, a President can strip it by transferring out its cash and
+ships prior to selling all but 20% of its shares to the Stock Market to
+generate investment funds. If another player buys these shares,
+the first player then transfers the Presidency. If not, the player
+remains President (the “extra” certificate is valuable when the
+certificate limit becomes relevant), and pays full dividends. Since
+the Corporation has Stock Market shares, some of this money goes
+into its treasury. Once the Corporation’s financial health is restored,
+its President then buys back shares to continue to contro! it.
+
+A variation, if a President can’t shift assets to a second Corporation
+or Independent, is to buy many spaceships and other assets before
+selling down to 20%. This removes cash needed for later ship
+purchases, creating a long-term liability. However, because the
+Corporation is left with good short-term prospects, this stratagem
+can fail if a player, perhaps President of a Corporation with extra
+cash, is willing to take it over. Or, several players might each buy
+one share (for short term gains without risk), thus removing stock
+from the Stock Market which was supposed to provide the
+Corporation with cash. However, this tactic in turn reduces the
+President's incentive to pay full dividends (even though not paying
+out hurts the President more in the short term), which makes that
+stock less attractive to buy... Note how player actions can interact.
+
+Rolling Over Cash. Stripping Corporations is useful only if the
+investor doing so can use the cash generated to create profits
+larger than the liabilities incurred. One method is to launch a Public
+Corporation. This effectively leverages the cash pulled out of the
+stripped Corporation (since the new one is capitalized at twice this
+amount). This “extra” cash can then be transferred back to the
+stripped one, giving the player control of two, reasonably healthy
+Corporations. This tactic, however, presupposes that a Corporation
+is still available to launch. Since Growth Corporations can launch
+after Phase | — without requiring any funds — all Corporations
+might well be in play. If so, and no highly profitable shares remain
+to invest in, then stripping tactics become far less useful.
+
+One way to avoid having a Corporation dumped on you is to never
+buy a second share in one you don’t control. However, a player
+who correctly gauges when it isn’t worthwhile for a President to
+dump a profitable Corporation and then buys additional shares in it
+will often beat players unwilling to take this risk. The decision to
+dump or strip a Corporation is complex and depends on many
+factors, including which player is currently in line to hold the First
+Player card (since a player who can sell shares next round before a
+President can do so is usually safe — but not always, due to forced
+sales — from having a Corporation dumped upon him or her).
+
+Spaceship Management and Route Development. These are
+key to earning high dividends. When choosing between tugs and
+scouts, bear in mind that more cargo holds are better — once a
+route is developed — but that extra movement, particularly when
+augmented by strategically placed refueling stations, allows ships
+not only to explore but also to end their routes at bases paying ore
+bonuses. This suggests that one should buy a scout first, when
+building routes, followed by tugs in later game phases.
+
+Plan for the future by deciding whether your Corporation ultimately
+is going to own one or two spaceships. If it will only own one, plac-
+ing claims “aimed” at different bonus paying bases (attractive during
+the midgame when operating several ships) is usually wrong.
+Similarly, if you can foresee that your Corporation will end up
+running, say, a Phase IV 6/5, you should concentrate on getting
+claims on five high valued, well situated mines in order to be
+competitive with Corporations ending with Phase VI 9/7s. These
+points are particularly valid when your Corporation doesn’t have
+many claims in its counter mix. If so, its potential final route value
+will be reduced by each claim placed solely for midgame use.
+
+When building a route that ends at a base that pays ore bonuses,
+place a new base to start from if this forms a straight path instead
+of a less efficient circular one. Bases can also be used to place
+refueling stations where needed. You will need to decide whether
+to place one claim per round for $60 or two for $160 (effectively
+accelerating the second claim's placement for $40). If operating in
+a crowded area, you may need to claim mines rapidly. This is
+especially true if a Growth Corporation “relocates” to its former
+Independent’s base (e.g. Lucky becoming Lunar Enterprises,
+running routes to the initial RCC base). Generally, accelerating
+claims increases stock dividends at the Corporation’s expense.
+However, a Corporation with many shares in the Growth box or
+Stock Market may make money by accelerating its claims multiple
+rounds. For example, a Corporation placing three claims 2-1-0 for
+$220 over three rounds pays $40 more to accelerate a Nickel claim
+two rounds (compared to a $180 1-1-1 placement). If it has seven
+shares in the Growth box and pays out full for two rounds, it makes
+$16 (+$4/share x 7 shares x 2 rounds = $56 — $40 cost).
+
+lf your Corporation starts late (or has many claims and expects to
+eventually run two spaceships), you will need to place your claims
+even more rapidly. Already placed claims can be bought from an
+Independent for $60 apiece. In one round, a Corporation doing this
+can place three claims for $180 or four for $280. For a cost of $40
+more, the Independent could then replace both its claims in the
+next round, allowing this process to be repeated. Note, however,
+that the Independent is losing the use of its claims while doing so.
+
+During the midgame, Corporations must often choose between
+saving cash or buying another spaceship or more claims. Being
+caught without ships (due to older ones going obsolete) is costly.
+Beyond this, an extra ship can be valuable when operating in an
+area containing unused Ice mines (these pay well without being
+claimed). However, operating at its spaceship limit may leave a
+Corporation unable to buy one of the less costly permanent ships
+when they become available (they tend to be bought quickly). To
+avoid this, keep an open spaceship “slot” and enough cash so that
+a single round of withholding enables the Corporation to pay for it.
+Timing this is important since this cash could buy claims to improve
+current routes, thus enabling the Corporation to save more later by
+withholding a larger sum. When saving, bear in mind that a higher
+stock price results by paying partial dividends twice instead of
+paying out once in full and then withholding completely.
+
+Initial Spaceship Purchases. During the first two operating
+rounds, spaceship decisions are both important and determine how
+quickly the game advances to Phase II. For the Independents,
+especially Drill Hound and Ore Crusher, buying a 3/2 tug is risky
+but potentially lucrative. Since a 3/2 can only explore one hex, if
+the tile it draws has two valuable mines, its owner gains relative to
+other players. However, if the tile only has one mine, its owner falls
+behind. (This risk is less for other Independents since they each
+have a nearby transshipment point.)
+
+Buying a 5/1 scout allows an Independent to “cherry pick” by
+exploring twice, usually making a pickup at the best mine. Its extra
+movement also enables it to end its route at a bonus paying base.
+This, plus the $20 exploration bonus it receives, will usually enable
+an Independent to place a claim if it doesn’t pay out. This keeps it
+competitive with 3/2 ships that found good, but not great, mines.
+(To ensure that an Independent can afford a claim, even with poor
+exploration, its owner may wish to place an extra $10 or so in it
+during the initial auction.) The 5/1’s true advantage is not safety,
+however, but that it prepares future routes by finding mines which
+can be claimed in advance, enabling a second ship (a Phase | 3/2
+or a Phase 1] 4/3) to run for lots of money immediately.
+
+After each Independent buys a ship, TS/ flies its Probe and can buy
+up to three spaceships. Buying two ships gives it the option, if two
+Independents buy a second ship during the second round, of then
+
+buying the first Phase Il spaceship. This makes its Probe obsolete,
+allowing it to buy another Phase II ship. TS/ can then purchase a
+refueling station and possibly transfer cash by buying a Private
+Company from its President. Entering Phase II, however, allows
+other players to form Growth Corporations in the next stock round;
+this may — or may not — be in the TS/ President’s best interest.
+
+Independents. Each Independent can be used to either:
+
+* Produce cash by paying dividends as long as possible before
+
+finally joining the Asteroid League to yield one last payment.
+
+* Start a Growth Corporation.
+
+* Aid a Corporation by selling it claims and/or buying its ships.
+
+* Assist the Asteroid League by merging into it when it forms.
+It is difficult to combine these options. For example, selling claims
+to assist a Corporation reduces that Independent's route value and
+earnings. Similarly, buying a soon-to-be obsolete spaceship from a
+Corporation, to transfer cash and create a “slot” so the Corporation
+can buy a newer ship, will soon leave the Independent without one.
+
+Merging into the Asteroid League early for a share is rarely worth-
+while. This isn’t true if you hold several shares and especially if its
+President controls another Corporation. Then, if Independents with
+placed claims don’t join to provide it with good routes and ships, its
+President will simply transfer the League's cash to his or her other
+Corporation, making your League shares far less valuable.
+
+Corporation Choice. Starting a Public Corporation gives it lots of
+cash (and may allow its founder to leverage cash efficiently), but its
+higher stock price may get driven down by other players. Growth
+Corporations are cheap to launch but have little capital and a $10
+initial stock price; to catch up to Public Corporations, they must pay
+full dividends while building their routes, which keeps them cash
+poor. Since they can ultimately generate more capital than Public
+ones (due to their Growth box shares), their Presidents should only
+buy shares as extra capital is needed. Growth Corporations tend to
+operate last; thus their ships often run fewer times before going
+obsolete. Be wary of starting one if it would own just Phase | ships!
+
+The Short Game. Game tempo, instead of long term liabilities and
+development, underlies this game since player actions determine
+whether the game ends in Phase Il, Ill or, possibly, IV. If it ends in
+Phase II, Independents that don’t form Growth Corporations are
+worth nothing (unlike Private COs held by players). However, if
+Phase III occurs then the Asteroid League usually forms, allowing
+Independents to join it and give their owners a valuable stock share
+plus some cash. This may not be worth the 20% certificate earned
+for starting a Growth Corporation, depending on how many rounds
+Phase II lasts. If Phase | is prolonged, with investors receiving lots
+of cash, several Public Corporations may emerge instead.
+
+DESIGN NOTES
+
+Devotees of the “18xx’ series of railroad games, all loosely based
+on 1829 by Francis Tresham, will recognize 2038 as belonging to
+the same intellectual lineage, even though almost every detail of
+play is different.
+
+Completely absent is the series’ railroad tile mix — there are no
+tracks in space. The forging of territorial links between cities is
+replaced by the exploration, development and claiming of mines.
+Growth Corporations alter the game’s financial aspects as well by
+linking Independents to the larger, publicly traded Corporations.
+
+Our primary goals when developing 2038 were to produce a game
+that was novel, fun to play and which would challenge good players
+by providing them interesting choices at every juncture.
+
+The Storyline
+
+Choosing a science fiction milieu freed us from having to drive the
+game towards an historical outcome. 2038's underlying “story” is
+not intended as a realistic simulation of how asteroids might be
+mined. Instead, it hearkens back to science fiction of the ’50s in
+which space colonies exist and companies, with hardy indepen-
+dents in the vanguard, are racing to exploit the asteroid belt.
+Mining involves extracting and delivering ore to “long-haul” corpora-
+tions, represented by the bases starting on the map, to be shipped
+to other planets. Initially, these companies buy ore from the
+Independents. Eventually, they each launch a subsidiary to mine
+the belt directly; first Earth-based TS/, then RU, etc. Base delivery
+bonuses stem from different end-use demands while Independent
+and Corporate bonuses represent varying personnel expertise.
+
+Each operating round represents a fixed amount of time, with
+spaceships being able to move farther and process more ore per
+round as technology improves. Processing and loading ore takes
+both time and consumables (fuel, oxygen, etc.), thus ships are not
+allowed to jettison their cargo and reload during one round nor run
+routes spanning multiple rounds. Ships returning to base (between
+rounds) carry not only fuel and supplies for their next runs but also
+supplies needed to maintain base personnel. Each base is
+assumed to be quite small — thus, only one refueling station is
+permitted per base to represent both the limited docking space
+available and the difficulty of supplying enough fuel to the station
+during return trips to permit large amounts of refueling to take place.
+
+Transshipment points represent local deliveries to military and
+scientific facilities. These take fuel and time and are permitted only
+at the end of a route, while a ship’s cargo is also being unloaded.
+Survey Board payments encourage further exploration. Claims are
+only recognized by the Board if they improve a mine. Thus, claims
+both increase a mine’s value and grant ownership rights.
+
+Eventually, settlers begin to agitate against the exploitation of “their”
+resources by outsiders. This leads to the creation of the Asteroid
+League and, later, the requirement that all remaining Independents
+merge into it. The Independents who form Growth Corporations are
+eventually dwarfed by their creations and forced to retire.
+
+Game Mechanics
+
+The Independents ensure that most players will have some
+company to run during early rounds. (We want players to launch
+Corporations for financial reasons, not out of boredom!) The initial
+companies are auctioned off to avoid standard openings based on
+seating order and to provide a self-balancing element to the game.
+Their special abilities add flavor, giving each Independent a differ-
+ent feel during operations, and make for interesting initial auctions.
+
+Operations emphasize both exploration, via the different ore types,
+and development, centered around the dual nature of claims. The
+two types of spaceships lead to different approaches: exploration,
+aimed at finding the best mines for future routes, versus maximizing
+short-term earnings by flying extra cargo holds and developing the
+mines around one’s base. The exploration payment balances these
+two options while bases, refueling stations and the various delivery
+bonuses add spatial and cost considerations to route development.
+
+Drawing asteroid tiles randomly during exploration ensures that
+every game is different. Early versions included tiles with no mines.
+These were eliminated since they resulted in too much variance.
+Transshipment points were added to serve as “floors” to ensure that
+no matter what tiles are drawn during the opening game, no
+company would be hopelessly far behind the others.
+
+One consequence of there being “no tracks in space” is that it is
+difficult for a company to carve out its own “turf. The limits and
+costs on placing more than one claim per round produces tension
+when companies are competing for the same mines. Allowing
+claims to transfer between Corporations was rejected because the
+tactic of stripping a Corporation of all its claims, bases and refueling
+stations, in addition to stripping its cash and spaceships, before
+handing it to a minority shareholder was deemed too devastating.
+Jacob Butcher's suggestion, that each Independent have a small
+number of claims which may be purchased, allows an Independent
+to help develop a Corporation’s routes without having to become it.
+
+During playtesting it became clear that 2038 was a rich game in
+terms of money flowing to investors while the high cost of ships,
+claims, bases and refueling stations led to Corporations being cash
+poor. The half dividend payment option enables Corporations to
+raise cash and make progress on the stock chart. The value of
+stock price appreciation is high to ensure a proper tension between
+partial payouts to finance route improvements and full payouts to
+maximize a Corporation’s final stock value.
+
+For story reasons, we wanted the Independents to be absorbed into
+some sort of “League”. However, we worried that such a large,
+powerful Corporation would dominate the game, giving it a “forced”,
+stereotyped feel. Growth Corporations, Steve Goodman’s sugges-
+tion, provides both an alternate “destination” for the Independents
+as well as an interesting player choice when forming corporations.
+The resulting Asteroid League, while still powerful, doesn’t domi-
+nate play and varies considerably from game to game.
+
+Growth Corporations add a second theme of dynamic entrepre-
+neurs who are eventually either dwarfed by the Corporations they
+found or forced to merge into the Asteroid League, complementing
+the primary theme of economic development. Pilots and the
+“golden parachute” rule, whereby a player whose Independent joins
+the League gets ‘/2 of the company’s money, reinforce this flavor.
+
+Decreasing stock prices down and right along the stock mat diago-
+nals ensures that Public Corporations tend to operate before
+Growth ones. This advantage is tempered by the vulnerability of
+Public Corporations’ stock. The prohibition on selling stock before a
+company first operates (except by the President) and having two
+operating phases per stock round reduces this by giving Public
+Corporations a change to improve their investment value, thus
+discouraging later round sales (as does the fact that it is valuable
+for Corporations to have stock in the Stock Market). A President is
+permitted to sell stock in a Corporation before it operates to permit
+that player to defend from takeover other Presidencies held by less
+than 50% of the Corporation’s stock, since being able to run Growth
+Corporations in this manner /s intended.
+
+The 60% limit on shares held in a Corporation makes it difficult for
+the President of a Public one to put shares into the Stock Market
+(which would blur the distinction between Public and Growth
+Corporations) without risking loss of control. It also addresses a
+“realism” issue — in real stock markets, investors rarely can buy up
+ail of a corporation’s stock. The certificate limit, however, is strictly
+artificial — it Keeps an early leader from running away with the
+game and forces portfolio management.
+
+Sales occur before purchases to prevent a player from selling
+shares in a Corporation over several Stock turns in one round (to
+drive its price down more than one box) without giving its President
+a chance to sell off and give that player the Corporation. It also
+gives investors in a Corporation prior to the current Stock Round
+first crack at realizing any stock appreciation.
+
+We hope players will find the choices and options 2038 presents as
+interesting as we did during development. Enjoy.
+
+GAME CREDITS:
+
+Game Design: James Hlavaty and Tom Lehmann
+
+Inspiration: Francis Tresham
+
+Game Development: Tom Lehmann
+
+Development Assistance: Jacob Butcher and Steven Goodman
+
+Cover Painting: John Stoltenberg
+
+Spaceship Illustrations: Jeff Sturgeon
+
+Pilot Ilustrations: Michael McLaughin
+
+Production, Graphics, Rules, Player and Design Notes: Tom Lehmann
+Proofreading: Don Woods, Kris de Lisle, Steve Thomas & Hogan Long
+Published in U.S.A. by Prism Games and TimJim Games under exclusive
+license from Fun & Game Design and Spectrum Game Design.
+
+Aspects of the 7829 game system used under license from Hartland
+Trefoil Limited, of Northampton, England.
+
+Playtesting and Advice:
+
+Tain Alexander, Dimitri Ashling, Phil Baird, Tom Berendt, Bill Bold,
+Ken Brown, Robert Buchanan, Jacob Butcher, Terry Cahalan, Mike
+Calhoon, Greg Clayton, Richard Clyne, Andrew Conway, Andrew Cook,
+Robert Cook, Don Daybell, Dave de Lisle, Kris de Lisle, David
+desJardins, Dan Duval, Barry Eynon, Bill Gallager, Jay Gischer, Jeff
+Glasson, Steven Goodman, Joe Gray, Charles Hoynowski, Anne
+Huberman, Walter Jorgens, Colin Kameoka, Eric Karlson, Lukas
+Kautzsch, Mark Kriguer, Andy Lange, Glenn Lehmann, Josh Lewis,
+Hogan Long, Dane Maslen, Jim McDanold, James M. Moore, Timothy
+Moore, Jesse Mundis, Gary Norton, Dietmar Pfohl, Larry Rosenberg,
+Ron Sapolsky, Bruce Schlickenbernd, Jennifer Schlickenbernd, Michael
+Schropl, Harald Sticling, Keith Swingruber, Ed Tecot, Steve Thomas,
+Carolyn Wales, Rob Watkins, Don Woods, Eric Zakin
+
+Special Thanks: Steve Thomas and Dan Duval
+
+Company and Corporation Summary
+
+# Private Co. Bid Income Shares Sellto Corp? Notes
+0 Planetary Imports $ 50 $10 — yes —
+7 Tunnel Systems 120 5 1TSI yes Corp. may place 1 free Base on any explored and unclaimed tile
+
+10 Space Exploration Co. 1 0 TSI Pres es P . Remove cert. .
+11 Asteroid Export Co. 180 30 (AL. Pres.) no May (must) start Asteroid League in Phase III (IV). Remove this
+certificate after the Asteroid League acquires a spaceship.
+# Independent Co. Delivery Bonus Notes
+1 Fast Buck —_ $15 per operating round is placed into its treasury.
+2 Ice Finder $ 10/Ice Must craw a second tile when exploring a hex if the first tile drawn has no Ice mines.
+
+5 Torch _ Its spaceship(s) have +1 Movement allowance.
+6 Lucky — Draws two tiles when exploring a hex and then chooses which tile to place.
+Gp Corporation Delivery Bonus Bases Refuel Claims Notes
+— Trans-Space, Inc. _ 1 3 10 Receives Probe as one of its four initially allowed spaceships.
+A Resources Unlimited _ 1 1 12 Places its first claim each round for free (second one costs $100).
+B Lunar Enterprises $ 10 / Nickel 1 2 9 = ;
+3 6 costs $25 to pla =
+3a 4 oe ng stations costs $25 to plac
+im 10/Nickel 2 Be efueling station per game for f
+ing Construction Corp. 10 / Nickel 2 2 8 —
+— Asteroid League _ 7 4 15 May place 3 claims / round; 2nd claim costs $75 (8rd costs $100).
+Its last spaceship may not be bought. $250 initial capital.
+. Single Mines (50 / 106) Double Mines (56 / 106)
+dite if Ni0 N20 130 140 150 R20 R30 R40 N20 130 140 R20 R30 R20 R30
+a 7 (YY,
+(106'tHes) N28 4 4 #2 2 40 2 2
+Exploration Data Optional Rules
+. ‘ —T . The four variants below were tried and discarded during playtesting.
+Ore Mines Tiles Gees ef Hineing 1 tine Since group playing styles vary, some groups may wish to use them:
+Type # % # % in2draws in 4 draws nan ere es
+; > oi 2-Player Game. Each player starts with $900. The Certificate Limits
+Nickel 92 57 72 68 90 % 99 % _ are 33 (Full Game) and 26 (Short Game). Play proceeds normally.
+a a Differing perceptions among the players is an important aspect of
+Rare 30 19 30 28 49 74 2038; this is largely lost with only two players.
+
+N=20 52 32 44 42 66 89 Weaker 7S/ (Full Game). Reduce 7'S/'s initial stock price, par value
+aoe cn : Ss and starting capital to (choose one): $89 / 890; 78 / 780: or 67 / 670.
+R>20 18 14 18 17 31 53 Some players disliked TSY's “special status” in the Full Game (due to
+
+Exploration & Route Description Average Explor. starting so early with so much capital). This rule reduces this effect.
+# tile draws # cargo pickups Value Bonus Cutthroat Game. Play with only four Phase IV spaceships, not five.
+1 1 $ 28 $ 10 This guarantees that at least one Corporation must buy a Phase VI
+
+spaceship at full price (assuming the game enters Phase VI).
+Stock Repurchases by Corporations. Modify the following rules:
+
+: we i 5.3 All shares in the Growth Corporation share box (only) are bought
+z 2 (pickupe 1st tile if $30+) 51 20 at the higher of that Corporation’s par or current stock value, placing
+Average Explor. the full amount paid into the Corporation’s treasury.
+Exploration & Route Description Value Bonus 7.2 A Corporation receives paid (or partially paid) earnings only for
+1 draw, end@30 Transshipment, 2 pickups $58 $10 stock shares in the Growth Corporation box or Asteroid League trade-
+1 (2 if nol) draw,+10 |, end@30T, 2 pickups 68 10 in box. It does not receive earnings for shares in the Stock Market.
+
+7.4 At any point while operating, a Corporation (even if Public) may,
+using only its own funds, buy its own shares from the Stock Market at
+the current stock price, placing them in the Growth Corporation box.
+Stock Market shares producing dividends abstracts stock repurchases
+by corporations. This rule forces a corporation to expend capital to
+earn these dividends but gives it stock appreciation as well (assuming
+investors buy these shares later). The play effects — mainly TSI
+1 double draw, end@30T, 2 pickups 64 10 collects less money during the midgame if its stock is sold into and left
+2 double draws, end@30T, 1 pickup 40 20 in the Stock Market — didn’t seem worth the extra rules complexity.
+
+DI
+2 (2 if no R) draws, +10 R, +10 N, 1 pickup 39 20
+1 draw, +10 N, 2 pickups 45 10
+20
+

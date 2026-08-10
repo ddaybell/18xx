@@ -21,12 +21,29 @@ module View
       needs :zoom, default: 1
       needs :near_right_edge, default: false
       needs :near_top_edge, default: false
+      needs :near_bottom_edge, default: false
 
-      # Wide enough to cover the widest realistic button row (e.g. an
-      # "Explore (2 MP)" + "Fly over (1 MP)" + cancel trio) plus its drop
-      # shadow, so the flip kicks in before any clipping would actually
-      # occur, not right at the point it already has.
+      # Roughly matches the popup's own max-width (POPUP_MAX_WIDTH) plus
+      # its drop shadow, so the edge flip below kicks in before any
+      # clipping would actually occur, not right at the point it already
+      # has.
       EDGE_MARGIN = 260
+
+      # Same idea as EDGE_MARGIN but for the vertical axis -- large enough
+      # to flip before a popup stacking several choice buttons actually
+      # runs off the bottom of the map.
+      BOTTOM_EDGE_MARGIN = 220
+
+      # Bounds how wide the popup can grow regardless of label length --
+      # long choice text (e.g. BuyInfrastructure's "Claim Rare mine,
+      # revenue $20 ($60)") wraps onto additional lines instead of
+      # extending the row sideways past this width. Found live in
+      # browser: a fixed-width single-row layout meant EDGE_MARGIN would
+      # have needed to track the *longest possible label any step might
+      # ever show* to guarantee no clipping -- wrapping sidesteps that
+      # entirely, since the popup's width is now bounded independent of
+      # content.
+      POPUP_MAX_WIDTH = 220
 
       def render
         button_style = {
@@ -36,7 +53,12 @@ module View
           color: '#FFFFFF',
           filter: 'drop-shadow(3px 3px 2px #888)',
           padding: '4px 8px',
-          whiteSpace: 'nowrap',
+          # Not nowrap -- a long label (e.g. BuyInfrastructure's "Claim
+          # Rare mine, revenue $20 ($60)") needs to wrap onto a second
+          # line within its own button rather than forcing the whole
+          # popup wider than POPUP_MAX_WIDTH to fit one unbroken line.
+          whiteSpace: 'normal',
+          maxWidth: "#{POPUP_MAX_WIDTH}px",
         }
 
         buttons = @tile_selector.choices.map do |choice, label|
@@ -58,9 +80,10 @@ module View
                    })
 
         style = {
-          display: 'grid',
-          gridAutoFlow: 'column',
-          gridGap: '5px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '5px',
+          maxWidth: "#{POPUP_MAX_WIDTH}px",
           position: 'absolute',
         }
         # Flips which edge the offset is measured from -- not just the
@@ -72,7 +95,12 @@ module View
         else
           style[:left] = '-60px'
         end
-        if @near_top_edge
+        # Same flip idea as near_right_edge above, but anchoring from the
+        # bottom instead of the top so the box grows upward, away from
+        # the map's own bottom edge, instead of downward past it.
+        if @near_bottom_edge
+          style[:bottom] = '8px'
+        elsif @near_top_edge
           style[:top] = '8px'
         else
           style[:top] = "#{-68 * @zoom}px"

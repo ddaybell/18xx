@@ -45,10 +45,9 @@ module Engine
           # still proceed): this is the step-wide `pass` action, ending
           # BuyInfrastructure entirely for this turn -- base, station, AND
           # claim -- since it's the last step in the OR sequence, that also
-          # ends the entity's whole turn. The label spells this out so it
-          # doesn't read as a narrower "skip just the base" option.
+          # ends the entity's whole turn.
           def pass_description
-            'Skip All Remaining Infrastructure This Turn'
+            'Skip Infrastructure'
           end
 
           # The generic Choose view (assets/app/view/game/choose.rb) calls

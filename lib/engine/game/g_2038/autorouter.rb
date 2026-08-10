@@ -53,7 +53,7 @@ module Engine
         # caller in ShipSelector) rather than a real action baked into
         # replay forever -- this cost is paid once, by the player who
         # asked for it, not on every future page load.
-        DEFAULT_TIMEOUT = 20.0
+        DEFAULT_TIMEOUT = 30.0
         NODES_PER_TIME_CHECK = 500
 
         def initialize(game)

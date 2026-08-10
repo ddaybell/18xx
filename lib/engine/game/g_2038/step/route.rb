@@ -29,6 +29,23 @@ module Engine
           SUGGEST = 'suggest_route'
           ACCEPT_SUGGESTION = 'accept_suggested_route'
           PREVIOUS_ROUTE = 'previous_route'
+          # The one real action a hand-flown route ever submits now,
+          # mirroring ACCEPT_SUGGESTION's self-contained-choice-string
+          # pattern -- see local_choose!/submit_flight_choice/
+          # replay_submitted_flight!. Unlike Accept Route's hexes+cargo
+          # encoding, a hand-flown flight can hit every choice type this
+          # step supports (explore vs flyover, shortcuts, pickups,
+          # transship, Lucky's redraw), so rather than re-deriving a
+          # second parallel replay format, this just carries the literal
+          # sequence of `choice` values the player clicked, replayed
+          # through the exact same dispatch_choice! table that built it.
+          SUBMIT_FLIGHT = 'submit_flight'
+          FLIGHT_SEP = '~'
+          # A dedicated choice key for undo_last_hex! (see its comment) --
+          # never a real hex id, so it can be dispatched unambiguously
+          # whether it arrives via a hex-choice popup's own button or as
+          # the sole aliased action on a directly-clicked hex.
+          UNDO_HEX = 'undo_hex'
 
           ORE_NAMES = { n: 'Nickel', i: 'Ice', r: 'Rare' }.freeze
 
@@ -91,6 +108,40 @@ module Engine
             # replays it -- confirmed with the user: a suggestion the
             # player never accepts shouldn't pollute the log.
             @pending_suggestion = nil
+            # The literal sequence of `choice` values clicked locally for
+            # the ship currently being built (or just finished, awaiting
+            # Submit) -- see local_choose!/SUBMIT_FLIGHT. Reset here each
+            # round, and again by rollback_local_flight! once that flight
+            # is submitted or discarded.
+            @local_flight_log = []
+            # Monotonic count of hexes appended to @trace (launch_at/
+            # move_to), used by local_choose! instead of @trace.size to
+            # detect "did this dispatch enter a new hex" -- @trace.size
+            # alone misses a hex whose own arrival immediately auto-
+            # finished the route (maybe_auto_finish! resets @trace to []
+            # within the very same dispatch that just grew it), which
+            # otherwise left that hex's mark never recorded and
+            # undo_last_hex! silently rolling back one hex further than
+            # intended. Found live in browser: reaching a base with 0 MP
+            # left undid both that hex and the one before it in a single
+            # click.
+            @hexes_entered = 0
+            # Non-nil while a local, unsubmitted flight has mutated real
+            # game state (mine reveals, hex tiles, pickups, log lines) --
+            # everything needed to precisely undo it, captured the moment
+            # local building starts (see local_choose!/rollback_local_flight!).
+            # nil whenever there's nothing pending: no local flight has
+            # started, or the last one was submitted/discarded.
+            @rollback = nil
+            # True only while replaying an already-submitted flight for
+            # real (live, right after the player clicks Submit, or later
+            # on reload/for another client) -- gates the one-time-only
+            # side effects a flight can't safely run twice: the
+            # exploration bonus payment (Game#explore_hex!'s `pay:`) and
+            # finish_route's auto-pass. False during ordinary local
+            # building, so neither fires on a preview that might still be
+            # discarded.
+            @committing = false
             resolve_unambiguous_pilots!
           end
 
@@ -98,23 +149,42 @@ module Engine
             super.merge({ routes: [], extra_revenue: 0, laid_hexes: [] })
           end
 
+          # Always both choose (Submit/pilot/cancel-completed) and pass
+          # (Submit All Routes, or Cancel/Discard while a flight's in
+          # progress or pending) for as long as it's this entity's turn --
+          # never [] just because every ship has flown. The corp's turn
+          # only actually ends once the player explicitly clicks Submit
+          # All Routes (see pass_description/finish_route's now-
+          # removed auto-pass) -- confirmed with the user: building
+          # routes entirely client-side means nothing should silently
+          # jump to Dividend on its own, since there's no longer a
+          # per-hex real action for the player to have "seen" happen.
           def actions(entity)
             return [] unless entity == current_entity
             return [] unless entity.operator?
-            # A route that has explored is committed: no pass/cancel until finished
-            return %w[choose] if @explored_in_trace && !@trace.empty?
-            # Normally nothing left to do once every ship has flown -- except a
-            # just-finished, never-explored route can still be undone (see
-            # cancellable_trains), so keep the step open for that one extra
-            # decision instead of silently ending the turn.
-            return [] if available_trains(entity).empty? && cancellable_trains.empty?
+            # A company that owns no ships at all -- not just none left
+            # unrun this turn, see route_trains vs available_trains --
+            # has nothing to confirm here; skip straight past this step
+            # (and, since it'll earn exactly $0, Dividend's own actions
+            # already auto-skips on total_revenue.zero? too) rather than
+            # making the player click Submit All Routes for a turn
+            # that could never have had anything in it.
+            return [] if @game.route_trains(entity).empty?
 
             ACTIONS
           end
 
+          # nil -- suppresses the generic Choose panel's "X:" header
+          # entirely (see assets/app/view/game/choose.rb, which already
+          # treats a falsy choice_name as "no header"). Used to read "Fly
+          # 3/2:", but that's redundant now: which ship is flying is
+          # already shown by the bordered/highlighted row in
+          # ShipSelector (or trivially implied for a single-ship entity),
+          # and every button choose.rb might show below this (pilot
+          # assignment, cancelling an already-submitted route) already
+          # names the ship in its own label.
           def choice_name
-            train = current_train(current_entity)
-            train ? "Fly #{ship_label(train)}" : 'Fly'
+            nil
           end
 
           # Memoized: `available_hex` calls this once per hex on the map (a
@@ -146,21 +216,32 @@ module Engine
           # tile redraw) are fully redundant with clicking the relevant hex
           # directly on the map (`available_hex` above, and
           # `hex_choice_popup` below for the explore/flyover/multi-pickup/
-          # tile-redraw disambiguation) -- only finish has no map-click
-          # equivalent, so that's all that's left here. CANCEL is left out
-          # on purpose: the generic Pass button already offers it (see
-          # `pass_description` below, which returns 'Cancel Route' whenever
-          # @trace isn't empty) -- including it here too just draws the
-          # same "cancel this route" action as two buttons at once.
-          # `choices` itself is unchanged: it's still the source of truth
-          # for hex-click validation and `process_choose`.
+          # tile-redraw disambiguation). FINISH is deliberately left out
+          # too, even though it has no map-click equivalent of its own --
+          # ShipSelector's Submit button now covers it (see submit_ready?/
+          # finish_and_submit_choice), so a route that could end here with
+          # MP still left shows the same one "Submit ($X)" button a route
+          # that already auto-finished from running out of MP does,
+          # instead of a separate "Finish"/"End route" button the player
+          # would click before *also* needing to click Submit -- found
+          # live in browser: those two clicks were fully redundant of each
+          # other. CANCEL is left out on purpose too: the generic Pass
+          # button already offers it (see `pass_description` below, which
+          # returns 'Cancel' whenever @trace isn't empty) -- including it
+          # here too just draws the same "cancel this route" action as two
+          # buttons at once. `choices` itself is unchanged: it's still the
+          # source of truth for hex-click validation and `process_choose`.
           def entity_choices(_entity)
             entity = current_entity
             return {} unless entity
+            # A just-finished, not-yet-submitted flight blocks everything
+            # else here too (see compute_choices) -- Submit/Discard (Pass)
+            # are the only live moves until it resolves one way or the
+            # other. cancel_completed_choices is unaffected: those are
+            # earlier, already-*submitted* routes from this same turn.
+            return cancel_completed_choices if @rollback&.dig(:finished)
 
-            choices.select { |key, _label| key == FINISH }
-                   .merge(pilot_choices(entity))
-                   .merge(cancel_completed_choices)
+            pilot_choices(entity).merge(cancel_completed_choices)
           end
 
           # A completed route may be undone -- but only the most recent ones
@@ -181,6 +262,13 @@ module Engine
             blocked = false
             result = []
             @ran_trains.reverse_each do |train|
+              # The currently pending (local, not-yet-submitted) flight
+              # has its own undo path -- Discard, via local_pass! -- and
+              # isn't real yet, so it neither belongs in this list nor
+              # should its own explored-ness block earlier, genuinely
+              # already-submitted routes from being reachable here.
+              next if @rollback&.dig(:finished_train) == train
+
               if @route_stats_by_train[train][:explored].positive?
                 blocked = true
                 next
@@ -264,6 +352,7 @@ module Engine
           # it was resolved.
           def assign_pilot!(entity, source, train)
             @pilot_assignments[source] = train
+            @rollback[:pilots_assigned] << source if @rollback
             @log << "#{entity.name}: Pilot #{@game.class::PILOT_NAMES[source]} (#{source}) assigned to #{ship_label(train)}"
           end
 
@@ -304,7 +393,21 @@ module Engine
           # hex of the flight can be explored, same as a hand-flown route
           # ending there.
           def hex_choice_popup(entity, hex)
-            return nil unless entity == current_entity && !@trace.empty?
+            return nil unless entity == current_entity
+
+            if @trace.empty?
+              # Nothing left flying -- the only thing a hex click can mean
+              # here is undoing an already-finished, not-yet-submitted
+              # route's last hex, and only a popup (forcing an explicit
+              # confirm) when that would un-reveal a tile. Otherwise the
+              # direct click already dispatches it (see compute_choices'
+              # matching branch); no popup needed.
+              return nil unless @rollback&.dig(:finished) && hex == undo_click_hex
+              return { UNDO_HEX => undo_hex_label } if undoing_last_hex_reveals_tile?
+
+              return nil
+            end
+
             return redraw_tile_popup if @pending_redraw && hex == @trace.last
             return pickup_popup if hex == @trace.last
 
@@ -313,13 +416,36 @@ module Engine
             flyover_key = neighbor ? "#{FLYOVER}#{hex.id}" : hex.id
             popup = {}
             popup[explore_key] = 'Explore (2 MP)' if choices.key?(explore_key)
-            popup[flyover_key] = 'Fly over (1 MP)' if choices.key?(flyover_key)
+            popup[flyover_key] = 'Skip (1 MP)' if choices.key?(flyover_key)
             popup.size > 1 ? popup : nil
           end
 
+          # Mid-flight version of the same "force a popup if undo would
+          # un-reveal a tile, otherwise let a single option dispatch
+          # directly" rule hex_choice_popup's finished-route branch above
+          # uses -- current_hex_action_choices already folds Undo in
+          # alongside pickup/transship, so this only needs to decide
+          # *when* that combined set needs a popup instead of a direct
+          # click.
           def pickup_popup
-            matches = choices.select { |key, _label| key.start_with?(PICKUP) }
-            matches.size > 1 ? matches : nil
+            matches = current_hex_action_choices
+            return matches if matches.size > 1
+            return matches if matches.key?(UNDO_HEX) && undoing_last_hex_reveals_tile?
+
+            nil
+          end
+
+          # The current hex's own action set: pickup/transship (if any
+          # ore/credit is still there to collect) plus Undo (if there's a
+          # previous hex to back up to) -- one combined pool so
+          # alias_current_hex_pickup!/pickup_popup/dispatch_choice! all
+          # agree on what a click (or a popup button) on the ship's own
+          # hex can mean.
+          def current_hex_action_choices
+            matches = choices.select { |key, _label| key.start_with?(PICKUP) || key == TRANSSHIP }
+            return matches unless undo_last_hex_available?(current_entity)
+
+            matches.merge(UNDO_HEX => undo_hex_label)
           end
 
           # Opt-in hook for assets/app/view/game/hex_choice_popup.rb: chain
@@ -384,11 +510,244 @@ module Engine
             'Cannot pick up: mine claimed by another company.'
           end
 
+          # The warning icon rides directly in the button's plain text --
+          # no shared frontend file needs to know this exists. Shown only
+          # when cancelling would actually roll back a real reveal --
+          # checked via @rollback[:laid_hexes], not @explored_in_trace,
+          # since that flag resets at finish_route, but a just-finished,
+          # not-yet-submitted flight that explored something is still
+          # exactly as cancellable, and just as much a real reveal to
+          # warn about.
+          # "Submit All Routes" whenever nothing's locally pending --
+          # replaces the old "Skip Remaining Ships"/"Done Flying" wording
+          # (and their auto-pass-on-last-ship behavior, now removed from
+          # finish_route): with every route built client-side, ending the
+          # corp's turn is now always an explicit confirmation, regardless
+          # of whether every ship has flown or the player is choosing to
+          # leave some unflown.
           def pass_description
-            return 'Cancel Route' unless @trace.empty?
+            return 'Submit All Routes' if @trace.empty? && @rollback&.dig(:finished) != true
 
-            entity = current_entity
-            entity && available_trains(entity).empty? ? 'Done Flying' : 'Skip Remaining Ships'
+            return 'Cancel (⚠️ un-reveals tile)' if @rollback && @rollback[:laid_hexes].any?
+
+            'Cancel'
+          end
+
+          # Opt-in hook for assets/app/view/game/actionable.rb: every
+          # ordinary Choose click while a route is being hand-flown runs
+          # locally (no process_action, no network, no permanent action
+          # history entry) until the whole flight is done and the player
+          # explicitly hits Submit -- see SUBMIT_FLIGHT/local_choose!/
+          # replay_submitted_flight!. Everything that must still go
+          # through the real pipeline, submitted immediately in its own
+          # one and only click, is excluded: the self-contained
+          # SUBMIT_FLIGHT string itself; CANCEL_COMPLETED (undoing an
+          # *already-submitted* route from earlier this same turn, which
+          # is real state other clients need to see change); and the
+          # ACCEPT_SUGGESTION: string (plus its legacy exact-match
+          # formats) -- these are never generated going forward (Accept
+          # now replays through apply_pending_suggestion! and submits the
+          # normal SUBMIT_FLIGHT way, same as Modify), but old recorded
+          # games still carry them, and replaying one must dispatch it for
+          # real through accept_route!, never treat it as a local preview.
+          def local_choose?(entity, choice)
+            choice = choice.to_s
+            entity == current_entity &&
+              !choice.start_with?("#{SUBMIT_FLIGHT}:") &&
+              !choice.start_with?(CANCEL_COMPLETED) &&
+              !choice.start_with?("#{ACCEPT_SUGGESTION}:") &&
+              choice != ACCEPT_SUGGESTION &&
+              choice != SUGGEST &&
+              choice != PREVIOUS_ROUTE
+          end
+
+          # Runs one hop of a hand-flown route entirely locally: records
+          # the literal choice for later replay (see submit_flight_choice)
+          # and dispatches it through the same table a real action would
+          # use, so the live preview and the eventual real replay can
+          # never diverge in what they do for a given choice. Lazily
+          # snapshots rollback state on the very first local choice since
+          # the last submit/discard (covers a pre-launch PILOT choice,
+          # not just the launch hex itself).
+          def local_choose!(entity, choice)
+            @rollback ||= capture_rollback!
+            hexes_entered_before = @hexes_entered
+            log_index = @local_flight_log.size
+            @local_flight_log << choice
+            dispatch_choice!(entity, choice)
+            # A hex-mark records the log index of whichever choice caused
+            # a new hex to be entered -- launch, an ordinary move, a
+            # flyover, or a shortcut hop -- so undo_last_hex! can later
+            # truncate the log to "everything before the most recent
+            # hex" without having to reparse choice strings to tell moves
+            # apart from pickups/pilot/redraw choices that don't enter a
+            # hex at all. Compares @hexes_entered (a monotonic counter),
+            # not @trace.size -- a hex whose own arrival immediately
+            # auto-finishes the route (maybe_auto_finish! resets @trace
+            # to [] within this same dispatch) would otherwise look like
+            # no growth happened at all, and its mark would never get
+            # recorded.
+            @rollback[:hex_marks] << log_index if @hexes_entered > hexes_entered_before
+          end
+
+          # Opt-in hook mirroring local_choose? for Action::Pass: true
+          # whenever there's local, unsubmitted flight state to throw
+          # away (mid-flight, or finished but not yet submitted). False
+          # once nothing's pending, so an ordinary end-of-turn Pass still
+          # goes through as a real, recorded action exactly as before.
+          # Not just !@rollback.nil? -- @rollback gets created lazily on
+          # *any* local click (see local_choose!), including a bare ship-
+          # tab selection or pilot assignment that hasn't launched
+          # anything yet. Neither has a real effect worth offering to
+          # cancel, so this only counts a flight actually in progress
+          # (@trace non-empty) or one that's finished but not yet
+          # submitted (@rollback[:finished]) -- found live in browser: a
+          # freshly-selected, never-launched ship's row showed a Cancel
+          # button with nothing behind it to cancel.
+          def local_pass?(entity)
+            entity == current_entity && (!@trace.empty? || @rollback&.dig(:finished) == true)
+          end
+
+          def local_pass!(_entity)
+            rollback_local_flight!
+          end
+
+          # Opt-in hook for assets/app/view/game/pass.rb: suppresses the
+          # standalone Pass button exactly when ShipSelector's own per-row
+          # Cancel is already showing for the same thing (see
+          # local_pass?/cancel_flight_button) -- the two would otherwise
+          # both read "Cancel" for the identical action. Once nothing's
+          # pending this returns false, since the standalone button is
+          # then the only way to reach the real "Skip Remaining
+          # Ships"/"Done Flying" end-of-turn pass, which has no per-row
+          # equivalent.
+          def suppress_standalone_pass?(entity)
+            local_pass?(entity)
+          end
+
+          # Public: the self-contained choice this ship's just-finished,
+          # not-yet-submitted flight would submit -- nil until finish_route
+          # has actually run locally (see FLIGHT_SEP/replay_submitted_flight!).
+          def submit_flight_choice(entity)
+            return nil unless entity == current_entity
+            return nil unless @rollback&.dig(:finished)
+            return nil if @local_flight_log.empty?
+
+            "#{SUBMIT_FLIGHT}:#{@local_flight_log.join(FLIGHT_SEP)}"
+          end
+
+          # Public: whether ShipSelector's Submit button should be showing
+          # right now -- either the flight has already finished (running
+          # out of MP auto-finishes it; so does a previous click of this
+          # same button), or it's simply sitting on a hex where finishing
+          # is currently a legal move (mirrors compute_choices' old FINISH
+          # gate: @trace.size > 1, same as "End route" used to check).
+          # Read-only -- safe to call on every render, unlike
+          # finish_and_submit_choice below.
+          def submit_ready?(entity)
+            return false unless entity == current_entity
+            return false if @rollback.nil?
+
+            @rollback[:finished] || @trace.size > 1
+          end
+
+          # Public: whether undo_last_hex! has anything to undo -- at
+          # least two hexes recorded (the launch plus one more), whether
+          # the flight is still in progress or already finished but not
+          # yet submitted. With only the launch hex on record there's
+          # nothing meaningful to back up to short of discarding the
+          # whole flight, which Cancel already covers.
+          def undo_last_hex_available?(entity)
+            entity == current_entity && (@rollback&.dig(:hex_marks)&.size || 0) > 1
+          end
+
+          # Public: undoes the most recently entered hex -- whether the
+          # route is still in progress or already finished but not yet
+          # submitted -- leaving the ship back at the hex before it, free
+          # to fly a different direction from there. Implemented as a
+          # full rollback (the exact same one Cancel/local_pass! uses)
+          # followed by replaying every local choice up to (not
+          # including) the discarded hex's own move -- see
+          # local_choose!'s hex_marks comment. Deliberately not a second,
+          # narrower undo path: reusing rollback_local_flight! wholesale
+          # means this can never drift out of sync with what a full
+          # Cancel already knows how to reverse (explored tiles, the
+          # deferred exploration bonus, pickups, PRNG state).
+          def undo_last_hex!(entity)
+            return unless @rollback
+
+            marks = @rollback[:hex_marks]
+            return if marks.size <= 1
+
+            replay_log = @local_flight_log[0...marks.last]
+
+            rollback_local_flight!
+            replay_log.each { |c| local_choose!(entity, c) }
+          end
+
+          # Public: which hex a click means "undo the last hex" for --
+          # the ship's current position while still flying, or (since
+          # finish_route empties @trace) the endpoint of the route it
+          # just flew, once finished but not yet submitted. nil once
+          # nothing's pending at all. Shared by available_hex/
+          # hex_choice_popup/compute_choices/dispatch_choice! so all four
+          # always agree on the exact same hex.
+          def undo_click_hex
+            return @trace.last unless @trace.empty?
+            return nil unless @rollback&.dig(:finished)
+
+            train = @rollback[:finished_train]
+            @round.routes.find { |r| r.train == train }&.hexes&.last
+          end
+
+          # Public: whether undoing the last hex would take back an
+          # exploration -- the deciding factor for whether a click needs
+          # a confirmation popup first (see hex_choice_popup/pickup_popup)
+          # rather than acting immediately.
+          def undoing_last_hex_reveals_tile?
+            return false unless @rollback
+
+            last_explored = @rollback[:laid_hexes].last
+            hex = undo_click_hex
+            !!(last_explored && hex && last_explored[:hex_id] == hex.id)
+          end
+
+          def undo_hex_label
+            undoing_last_hex_reveals_tile? ? 'Undo (⚠️ un-reveals tile)' : 'Undo'
+          end
+
+          # Public: the Submit button's label -- the route's real,
+          # already-computed revenue if it's already finished, or a live
+          # preview of what finishing right now would earn otherwise (the
+          # same figure the old, now-removed "Finish"/"End route" choice
+          # button used to show). Ending a route with MP still available
+          # now looks identical to running out of MP: same button, same
+          # label, same code, regardless of which way the flight actually
+          # ends. Read-only.
+          def submit_button_label(entity)
+            revenue =
+              if @rollback&.dig(:finished)
+                train = @rollback[:finished_train]
+                @round.routes.find { |r| r.train == train }&.revenue
+              elsif @trace.size > 1 && (train = current_train(entity))
+                @game.trace_revenue(entity, train, @trace, @cargo)
+              end
+            revenue ? "Submit (#{@game.format_currency(revenue)})" : 'Submit'
+          end
+
+          # Public: the Submit button's actual click handler. Finishes the
+          # flight locally first if it hasn't already (the same effect the
+          # old "Finish"/"End route" choice button used to have on its
+          # own) and only then returns the self-contained choice to submit
+          # for real -- so ending a route with MP still left takes the
+          # exact same one click as a route that already auto-finished
+          # from running out of MP, instead of a separate Finish click
+          # before Submit even appears. Mutating -- only call from a click
+          # handler, never from render (see submit_ready?/
+          # submit_button_label for the read-only render-time checks).
+          def finish_and_submit_choice(entity)
+            local_choose!(entity, FINISH) if @trace.size > 1 && !@rollback&.dig(:finished)
+            submit_flight_choice(entity)
           end
 
           # Optional hook for the map view: the in-progress trace, so it can
@@ -450,15 +809,25 @@ module Engine
           # this OR" (a genuine dead end -- no message needed).
           def ship_rows(entity)
             trains = @game.route_trains(entity)
-            return [] if trains.size <= 1
+            return [] if trains.empty?
 
             selected = current_ship_choice(entity)
-            mid_flight = !@trace.empty?
+            # Blocks switching ships both while actively flying and while
+            # a just-finished flight is still awaiting Submit/Discard --
+            # see compute_choices' matching guard.
+            mid_flight = !@trace.empty? || @rollback&.dig(:finished)
+            pending_train = @rollback&.dig(:finished_train)
             trains.map do |train|
               if @ran_trains.include?(train)
                 route = @round.routes.find { |r| r.train == train }
-                { choice: nil, blocked: false, label: ship_label(train), selected: false,
-                  summary: route && route_summary(route) }
+                # Not unconditionally false -- a locally-finished,
+                # not-yet-submitted flight (train == pending_train) is
+                # still the one the player's action bar belongs to, same
+                # as an unrun ship mid-flight below; only a genuinely
+                # already-*submitted* route (any other @ran_trains entry)
+                # is a settled, non-selected fact.
+                { choice: nil, blocked: false, label: ship_label(train), selected: train == pending_train,
+                  summary: route && route_summary(route), color_index: route_color_index(entity, train) }
               else
                 ship_choice = "#{SHIP}#{train.id}"
                 is_selected = ship_choice == selected
@@ -468,9 +837,29 @@ module Engine
                                  suggestion_summary(@pending_suggestion)
                                end
                 { choice: mid_flight ? nil : ship_choice, blocked: mid_flight && !is_selected,
-                  label: ship_label(train), selected: is_selected, summary: live_summary }
+                  label: ship_label(train), selected: is_selected, summary: live_summary,
+                  color_index: route_color_index(entity, train) }
               end
             end
+          end
+
+          # Public: the same per-route color index View::Game::Map's
+          # render_route_lines would assign this train's route on the map
+          # (0-based, current_turn_routes order, with the live in-progress
+          # or pending-suggestion route -- if any -- appended last, exactly
+          # matching that method's own draw order) -- lets ShipSelector
+          # highlight each row in the same color its route line is drawn
+          # in. nil for a ship with no route currently drawn at all (not
+          # yet run, not selected, no pending suggestion).
+          def route_color_index(entity, train)
+            routes = current_turn_routes(entity)
+            submitted_index = routes.index { |r| r.train == train }
+            return submitted_index if submitted_index
+
+            live = live_route_hexes(entity)
+            return routes.size if !live.empty? && train == current_train(entity)
+
+            nil
           end
 
           # Public: whether "Suggest Route" is meaningful right now -- a
@@ -480,6 +869,8 @@ module Engine
           # autorouter always plans a fresh flight from a base, never a
           # continuation of one already underway.
           def suggestable?(entity)
+            return false if @rollback&.dig(:finished)
+
             @game.autorouter_enabled? && @trace.empty? && !current_train(entity).nil?
           end
 
@@ -501,25 +892,7 @@ module Engine
             !@pending_suggestion.nil? && @pending_suggestion[:train] == current_train(entity)
           end
 
-          # Public: one line describing the pending suggestion (revenue and
-          # what it's carrying), for display next to the ship's row/button
-          # before the player commits to it. nil if nothing's pending.
-          def pending_suggestion_summary(entity)
-            return nil unless suggestion_pending?(entity)
-
-            suggestion_summary(@pending_suggestion)
-          end
-
-          # Public: whether the pending suggestion has more than just its
-          # launch hex left -- i.e. there's still something for a "Trim
-          # Last Stop" button to remove. Mirrors the guard the old
-          # hex-click trim used (see trim_suggestion_choice, kept private
-          # for legacy replay only).
-          def trimmable?(entity)
-            suggestion_pending?(entity) && @pending_suggestion[:hexes].size > 1
-          end
-
-          # Public: drops the last hex of the pending suggestion (and any
+# Public: drops the last hex of the pending suggestion (and any
           # cargo picked up there), recomputing revenue for the shortened
           # route. Purely an edit to the still-unaccepted preview -- like
           # suggest_route!, this touches no real game state and logs
@@ -554,6 +927,81 @@ module Engine
           def clear_pending_suggestion!(_entity)
             @pending_suggestion = nil
             @round.laid_hexes = []
+          end
+
+          # Public: hands the pending suggestion off to hand-flying --
+          # shared by both Accept and Modify (see ship_selector.rb), since
+          # both now land in the exact same place: a fully local,
+          # not-yet-submitted flight the player can either Submit as-is or
+          # back out of the tail end (clicking the route's own endpoint,
+          # repeatedly, to taste) and fly on from wherever they backed up
+          # to. Confirmed with the user: Accept must never silently finish
+          # and submit the route in one click -- every route, suggested or
+          # hand-flown, needs its own explicit Submit so the player always
+          # gets a last chance to change their mind (found live in browser:
+          # an earlier version routed Accept through a single self-
+          # contained recorded action, which also turned out to crash on
+          # replay whenever 2+ ships were still unrun -- see SUBMIT_FLIGHT/
+          # local_flight_log for the replayable trail this local-first
+          # approach produces instead).
+          #
+          # Replays the suggestion through local_choose! itself, hop by
+          # hop -- exactly as if the player had clicked each of those
+          # hexes by hand. A suggestion never routes through unexplored
+          # territory (the autorouter only plans over already-known
+          # hexes), so this never explores anything and needs no rollback
+          # concerns beyond what local_choose!/pick_up already handle for
+          # an ordinary hand-flown pickup. Once this returns, either the
+          # flight auto-finished (MP exhausted) and Submit/Cancel are on
+          # offer, or @trace is non-empty and normal map clicks
+          # (compute_choices) take over from the suggested endpoint
+          # exactly like any other in-progress local flight -- same
+          # Discard/Submit machinery, nothing new to keep in sync.
+          def apply_pending_suggestion!(entity)
+            suggestion = @pending_suggestion
+            return unless suggestion
+
+            @pending_suggestion = nil
+            @round.laid_hexes = []
+
+            hexes = suggestion[:hexes]
+            cargo_by_hex = suggestion[:cargo].group_by { |c| c[:hex_id] }
+
+            local_choose!(entity, hexes.first.id)
+
+            hexes.each_cons(2) do |from, to|
+              break if @trace.empty? # maybe_auto_finish! already closed it out
+
+              # A suggestion never *explores* a hex it doesn't need to
+              # (autorouter search never reveals a tile speculatively --
+              # see accept_route!'s comment), but it does fly straight
+              # through unexplored ones it has no reason to stop at, same
+              # as a player would by hand. compute_choices only offers a
+              # bare hex id for a genuine "Move to" (destination already
+              # explored) or a no-stop shortcut hop; an unexplored direct
+              # neighbor is only ever reachable as FLYOVER (Skip) or the
+              # 2-MP Explore, and since the latter never applies here, the
+              # former is always the right one -- found live in browser as
+              # "Invalid route choice" the moment a suggestion happened to
+              # fly over a not-yet-explored hex on its way to somewhere
+              # else.
+              choice = from.neighbors.value?(to) && needs_exploration?(to) ? "#{FLYOVER}#{to.id}" : to.id
+              local_choose!(entity, choice)
+              next if @trace.empty?
+
+              (cargo_by_hex[to.id] || []).each do |c|
+                pickup_choice = c[:mine_idx] ? "#{PICKUP}#{c[:mine_idx]}" : TRANSSHIP
+                # Re-validate right before applying, same graceful-skip-if-
+                # no-longer-available philosophy as replay_cargo/Previous
+                # Route -- a suggestion computed against a mine another
+                # ship (or another player, in a hotseat game) has since
+                # claimed would otherwise dispatch a choice compute_choices
+                # no longer offers, raising "Invalid route choice" instead
+                # of just quietly not picking it up. Found live in browser
+                # picking up cargo mid-suggestion.
+                local_choose!(entity, pickup_choice) if choices.key?(pickup_choice)
+              end
+            end
           end
 
           # Public: whether the pending suggestion's search hit its time
@@ -610,11 +1058,11 @@ module Engine
           # accept_suggested_route!, once the player commits to it.
           # Clicking Suggest Route again (before accepting) just recomputes
           # and replaces whatever was pending.
-          def suggest_route!(entity)
+          def suggest_route!(entity, timeout: Autorouter::DEFAULT_TIMEOUT)
             train = current_train(entity)
             return unless train
 
-            result = @game.autorouter.suggest_route(entity, train)
+            result = @game.autorouter.suggest_route(entity, train, timeout: timeout)
             unless result
               @pending_suggestion = nil
               @log << "No profitable route found for #{ship_label(train)}"
@@ -774,35 +1222,30 @@ module Engine
             finish_route(entity) unless @trace.empty?
           end
 
-          # Public: builds the self-contained choice string the view
-          # submits for "Accept Route" going forward -- just the hex-id
-          # path and which mine (by hex_id + index) got picked up where,
-          # nothing computed (no revenue/ore/value). That's deliberate:
-          # unlike the legacy accept_suggested_route! above, this carries
-          # everything accept_route! needs directly in the action itself,
-          # so replaying it later never depends on @pending_suggestion --
-          # which, now that Suggest/Previous/Trim are unrecorded, will
-          # never be populated by anything during replay at all.
-          def accept_choice_for_pending(entity)
-            return nil unless suggestion_pending?(entity)
-
-            hex_part = @pending_suggestion[:hexes].map(&:id).join(',')
-            cargo_part = @pending_suggestion[:cargo].map do |c|
-              "#{c[:hex_id]}_#{c[:mine_idx].nil? ? 'x' : c[:mine_idx]}"
-            end.join(',')
-            "#{ACCEPT_SUGGESTION}:#{hex_part}|#{cargo_part}"
-          end
-
-          # Public: the real "Accept Route" handler going forward --
-          # entirely self-contained (see accept_choice_for_pending above),
-          # so it needs no @pending_suggestion at all. Re-validates each
-          # pickup against current mine_state right as it's reached (same
-          # graceful-skip-if-no-longer-available philosophy as
-          # replay_cargo/Previous Route) rather than trusting the payload
-          # blindly -- cheap insurance since launch_at/move_to already do
-          # the real MP/refuel/exploration-gating work regardless.
+          # Legacy replay only -- games recorded while Accept still
+          # submitted itself as one self-contained real action (the
+          # ACCEPT_SUGGESTION: choice string built by the since-removed
+          # accept_choice_for_pending) still need this to replay correctly.
+          # Accept going forward never produces a new one of these; it
+          # replays through apply_pending_suggestion! instead, the same
+          # local-then-explicit-Submit path Modify uses (see that method's
+          # comment for why). Re-validates each pickup against current
+          # mine_state right as it's reached (same graceful-skip-if-no-
+          # longer-available philosophy as replay_cargo/Previous Route)
+          # rather than trusting the payload blindly.
           def accept_route!(entity, choice)
             _prefix, rest = choice.split(':', 2)
+            # New format carries the train id explicitly, ahead of the
+            # hexes: "train_id:hexes|cargo" -- see accept_choice_for_
+            # pending's comment. Old recorded games (from before that fix)
+            # used a plain "hexes|cargo" payload with no train id; the two
+            # are distinguished by whether a ':' appears before the first
+            # '|', since no hex id ever contains one.
+            if rest.to_s.split('|', 2).first.to_s.include?(':')
+              train_id, rest = rest.split(':', 2)
+              train = @game.route_trains(entity).find { |t| t.id == train_id }
+              @selected_train_id = train.id if train
+            end
             hex_part, cargo_part = rest.to_s.split('|', 2)
             hex_ids = hex_part.to_s.split(',')
             cargo_tokens = cargo_part.to_s.split(',').filter_map do |token|
@@ -854,6 +1297,21 @@ module Engine
           def process_choose(action)
             entity = action.entity
             choice = action.choice
+
+            return replay_submitted_flight!(entity, choice) if choice.to_s.start_with?("#{SUBMIT_FLIGHT}:")
+
+            dispatch_choice!(entity, choice)
+          end
+
+          # The complete choose-action dispatch table -- shared by
+          # process_choose (a real, recorded action: CANCEL_COMPLETED, one
+          # of the legacy formats below, or one hop of
+          # replay_submitted_flight!'s loop, with @committing true) and
+          # local_choose! (every live click while a route is still being
+          # built locally and unsubmitted, @committing false). One
+          # dispatch table for both guarantees a submitted flight replays
+          # through exactly the logic that built it live, hop for hop.
+          def dispatch_choice!(entity, choice)
             valid = choices.key?(choice) || ship_choices(entity).key?(choice) || pilot_choices(entity).key?(choice) ||
               cancel_completed_choices.key?(choice) ||
               # Legacy -- only ever reachable while replaying an existing
@@ -877,6 +1335,15 @@ module Engine
               cancel_route
             elsif choice.start_with?(CANCEL_COMPLETED)
               cancel_completed_route(entity, choice.delete_prefix(CANCEL_COMPLETED))
+            elsif choice == UNDO_HEX
+              undo_last_hex!(entity)
+            elsif @rollback&.dig(:finished) && choice == undo_click_hex&.id
+              # Only reachable once nothing else is offered (see
+              # compute_choices' finished-flight branch) -- a direct click
+              # on an already-finished, not-yet-submitted route's last
+              # hex, with nothing to un-reveal (the popup already
+              # intercepted the case where there was).
+              undo_last_hex!(entity)
             elsif choice.start_with?(REDRAW)
               resolve_redraw!(entity, choice)
             elsif choice.start_with?(PICKUP)
@@ -907,13 +1374,15 @@ module Engine
             elsif @trace.empty?
               launch_at(entity, choice)
             elsif choice == @trace.last.id
-              matches = choices.select { |key, _label| key.start_with?(PICKUP) || key == TRANSSHIP }
+              matches = current_hex_action_choices
               raise GameError, "Ambiguous pickup at #{choice}" if matches.size != 1
 
               match = matches.keys.first
               if match == TRANSSHIP
                 pick_up_transshipment!(entity, @trace.last)
                 finish_route(entity)
+              elsif match == UNDO_HEX
+                undo_last_hex!(entity)
               else
                 pick_up(entity, match.delete_prefix(PICKUP).to_i)
               end
@@ -964,6 +1433,17 @@ module Engine
           def compute_choices
             entity = current_entity
             return {} unless entity
+            # A flight that finished locally but hasn't been submitted yet
+            # blocks starting (or switching to) another ship -- at most one
+            # flight is ever pending discard/submit at a time, so there's
+            # nothing to interleave (see local_choose!/rollback_local_flight!).
+            # The one exception is undoing its own last hex -- clicking the
+            # route's endpoint (or, if that would un-reveal a tile, the
+            # popup's confirm button) is still offered.
+            if @rollback&.dig(:finished)
+              hex = undo_click_hex
+              return hex ? { hex.id => undo_hex_label, UNDO_HEX => undo_hex_label } : {}
+            end
             return redraw_choices if @pending_redraw
 
             train = current_train(entity)
@@ -981,7 +1461,7 @@ module Engine
                 end
                 if mp_left(entity, train) >= 1
                   result["#{FLYOVER}#{hex.id}"] =
-                    "Fly over #{hex.id} (1 MP; #{mp_left(entity, train) - 1} left)"
+                    "Skip #{hex.id} (1 MP; #{mp_left(entity, train) - 1} left)"
                 end
               elsif mp_left(entity, train) >= 1
                 result[hex.id] = "Move to #{hex.id} (1 MP; #{mp_left(entity, train) - 1} left)"
@@ -1009,7 +1489,25 @@ module Engine
           # pick (and switch) which one flies before committing to a base.
           # With only one available ship there's nothing to pick, so skip
           # straight to base selection.
+          #
+          # A flight that finished locally but hasn't been submitted yet
+          # always wins over that fallback, regardless of how many (or
+          # how few) other ships remain unrun -- @rollback[:finished_train]
+          # is already in @ran_trains at this point (finish_route put it
+          # there), so once it was the *last* unrun ship, available_trains
+          # would otherwise narrow to size 1 and silently hand focus to
+          # whatever ship comes next, even though the pending flight is
+          # still what the player's looking at (its Submit/Cancel bar,
+          # its route on the map). Found live in browser: rerouting a
+          # suggestion that used up all its MP auto-finished it, and with
+          # no other ship left unrun, the UI jumped straight to the next
+          # ship's "Fly" panel while the just-finished one's Submit button
+          # kept showing the right revenue anyway (that path reads
+          # @rollback directly, not this method) -- just under the wrong
+          # ship's name, with no way to tell the two apart.
           def current_train(entity)
+            return @rollback[:finished_train] if @rollback&.dig(:finished_train)
+
             trains = available_trains(entity)
             return nil if trains.empty?
             return trains.first if trains.size == 1
@@ -1263,14 +1761,23 @@ module Engine
           end
 
           # Short form for quick scanning in the ship-selector row: "explore
-          # <hexes>/<bonus>, mines <visited>/<delivered>".
+          # <hexes>/<bonus>, mines <visited>/<delivered>". The explore part
+          # is dropped entirely for a route that never explored anything --
+          # "explore 0/$0" conveys nothing a blank doesn't already, and
+          # skipping it leaves more room for the mines/commodities that do
+          # matter -- confirmed with the user.
           def route_summary(route)
             stats = @route_stats_by_train[route.train] || { explored: 0, mines: 0, cargo: [] }
-            bonus = stats[:explored] * @game.class::EXPLORATION_BONUS
             codes = (stats[:cargo] || []).filter_map { |c| ORE_NAMES[c[:ore]]&.[](0) }
             codes_str = codes.empty? ? '' : " (#{codes.join(', ')})"
-            "explore #{stats[:explored]}/#{@game.format_currency(bonus)}, "\
-              "mines #{stats[:mines]}/#{@game.format_currency(route.revenue)}#{codes_str}"
+            explore_str =
+              if stats[:explored].positive?
+                bonus = stats[:explored] * @game.class::EXPLORATION_BONUS
+                "explore #{stats[:explored]}/#{@game.format_currency(bonus)}, "
+              else
+                ''
+              end
+            "#{explore_str}mines #{stats[:mines]}/#{@game.format_currency(route.revenue)}#{codes_str}"
           end
 
           # One line describing a pending (not-yet-accepted) suggestion --
@@ -1372,7 +1879,9 @@ module Engine
           # once in practice, but treating them as one combined pool here
           # keeps the "exactly one -> alias it" rule uniform either way.
           def alias_current_hex_pickup!(result)
-            matches = result.select { |key, _label| key.start_with?(PICKUP) || key == TRANSSHIP }
+            result[UNDO_HEX] = undo_hex_label if undo_last_hex_available?(current_entity)
+
+            matches = result.select { |key, _label| key.start_with?(PICKUP) || key == TRANSSHIP || key == UNDO_HEX }
             return if matches.empty?
 
             result[@trace.last.id] ||= matches.values.first
@@ -1394,6 +1903,7 @@ module Engine
             @refueled_hexes = []
             hex = @game.hex_by_id(hex_id)
             @trace << hex
+            @hexes_entered += 1
             update_trace_highlight
           end
 
@@ -1402,6 +1912,7 @@ module Engine
             do_explore = explore && needs_exploration?(hex)
             @mp_spent += do_explore ? 2 : 1
             @trace << hex
+            @hexes_entered += 1
 
             if do_explore
               # Peeking at what's there is itself a reveal, whether or not
@@ -1424,7 +1935,7 @@ module Engine
                   auto_redraw!(entity, hex_id, first_name, pilot_source)
                 end
               else
-                @game.explore_hex!(hex_id, entity)
+                explore_hex_tracked!(hex_id, entity)
                 @hexes_explored_this_trip += 1
               end
             end
@@ -1492,13 +2003,13 @@ module Engine
 
             borrowed_hex_id, second_name = @game.borrow_second_tile(hex_id) || []
             unless borrowed_hex_id
-              @game.explore_hex!(hex_id, entity)
+              explore_hex_tracked!(hex_id, entity)
               @hexes_explored_this_trip += 1
               return
             end
 
-            @game.resolve_second_draw!(hex_id, second_name, borrowed_hex_id, first_name)
-            @game.explore_hex!(hex_id, entity)
+            resolve_second_draw_tracked!(hex_id, second_name, borrowed_hex_id, first_name)
+            explore_hex_tracked!(hex_id, entity)
             @hexes_explored_this_trip += 1
           end
 
@@ -1510,7 +2021,7 @@ module Engine
           def start_redraw!(hex_id, first_name)
             borrowed_hex_id, second_name = @game.borrow_second_tile(hex_id) || []
             unless borrowed_hex_id
-              @game.explore_hex!(hex_id, current_entity)
+              explore_hex_tracked!(hex_id, current_entity)
               @hexes_explored_this_trip += 1
               return
             end
@@ -1527,9 +2038,9 @@ module Engine
             r = @pending_redraw
             chosen, other = choice == "#{REDRAW}first" ? [r[:first_name], r[:second_name]] : [r[:second_name], r[:first_name]]
 
-            @game.resolve_second_draw!(r[:hex_id], chosen, r[:borrowed_hex_id], other)
+            resolve_second_draw_tracked!(r[:hex_id], chosen, r[:borrowed_hex_id], other)
             @pending_redraw = nil
-            @game.explore_hex!(r[:hex_id], entity)
+            explore_hex_tracked!(r[:hex_id], entity)
             @hexes_explored_this_trip += 1
             maybe_auto_finish!(entity, current_train(entity))
           end
@@ -1552,6 +2063,7 @@ module Engine
             value = @game.pickup_value(entity, hex.id, mine_idx)
             @cargo << { hex_id: hex.id, mine_idx: mine_idx, ore: mine[:ore], value: value }
             @game.mark_mine_used!(hex.id, mine_idx)
+            @rollback[:pickups] << [hex.id, mine_idx] if @rollback
             @log << "#{entity.name} picks up #{ORE_NAMES[mine[:ore]]} ore at #{hex.id} "\
                     "(#{@game.format_currency(value)})"
             maybe_auto_finish!(entity, current_train(entity))
@@ -1565,6 +2077,12 @@ module Engine
             if revenue.zero? && !@cargo.empty?
               @log << "#{entity.name}'s #{@cargo.size} #{@cargo.size == 1 ? 'load is' : 'loads are'} "\
                       'not delivered and lost'
+            end
+
+            if @rollback
+              @rollback[:finished] = true
+              @rollback[:finished_train] = train
+              @rollback[:last_route_snapshot] = @game.last_route(train)
             end
 
             route = Engine::Route.new(@game, @game.phase, train, hexes: trace, revenue: revenue)
@@ -1584,9 +2102,13 @@ module Engine
             @mp_spent = 0
             @selected_train_id = nil
             update_trace_highlight
-            # Stay open one more beat if this (or an earlier, still-eligible)
-            # route could still be cancelled -- see cancellable_trains.
-            pass! if available_trains(entity).empty? && cancellable_trains.empty?
+            # No auto-pass here anymore, even once every ship has flown --
+            # confirmed with the user: with routes built entirely client-
+            # side, the corp's turn should never silently jump to Dividend
+            # on its own. Ending the turn is always an explicit click on
+            # "Submit All Routes" now (see pass_description/actions,
+            # which -- also per that change -- no longer goes empty just
+            # because available_trains/cancellable_trains are).
           end
 
           def cancel_route
@@ -1623,6 +2145,139 @@ module Engine
             @route_stats_by_train.delete(train)
             @ran_trains.delete(train)
             @log << "#{entity.name} cancels #{ship_label(train)}'s completed route"
+          end
+
+          # Starting point for a fresh @rollback -- see local_choose!.
+          # rand is a single LCG integer (Game::Base#rand/#initialize_seed),
+          # so snapshotting it here and restoring it verbatim in
+          # rollback_local_flight! is enough to make a later real replay
+          # draw identically to whatever the discarded local preview
+          # already showed (tile rotation, Lucky's second-draw borrow) --
+          # no need to separately track which random calls happened.
+          def capture_rollback!
+            {
+              log_size: @log.size,
+              rand: @game.rand_state,
+              laid_hexes: [],
+              mine_state_added: [],
+              hex_assignment_originals: {},
+              pickups: [],
+              pilots_assigned: [],
+              finished: false,
+              finished_train: nil,
+              last_route_snapshot: nil,
+              hex_marks: [],
+            }
+          end
+
+          # Precisely undoes everything local_choose! has mutated for real
+          # since the last submit/discard -- explored hexes/mine reveals,
+          # Lucky/Ice Finder/Drill Hound's borrowed tile assignments,
+          # pickups, pilot assignments, the log tail, and (if the flight
+          # had already finished locally) the route/ran-trains/last-route
+          # bookkeeping finish_route recorded. A no-op when nothing's
+          # pending (@rollback nil) -- true both when the player never
+          # started a local flight and, deliberately, at the top of every
+          # real replay (see replay_submitted_flight!), so a fresh reload
+          # with no local state to undo behaves identically to the live
+          # browser that just submitted.
+          def rollback_local_flight!
+            r = @rollback
+            return unless r
+
+            if r[:finished]
+              train = r[:finished_train]
+              @round.routes.pop
+              @ran_trains.delete(train)
+              @route_stats_by_train.delete(train)
+              @game.restore_last_route!(train, r[:last_route_snapshot])
+            end
+
+            r[:laid_hexes].reverse_each do |e|
+              hex = @game.hex_by_id(e[:hex_id])
+              # Puts the revealed mine tile back in the Tile Manifest's
+              # pool -- explore_hex! removed it on the way in (see its own
+              # comment); discarding this preview means it was never
+              # really revealed at all.
+              @game.tiles << hex.tile
+              hex.lay(e[:original_tile])
+            end
+            r[:mine_state_added].each { |hex_id| @game.mine_state.delete(hex_id) }
+            r[:hex_assignment_originals].each { |hex_id, name| @game.hex_assignments[hex_id] = name }
+            r[:pickups].each { |hex_id, idx| @game.mark_mine_used!(hex_id, idx, false) }
+            r[:pilots_assigned].each { |source| @pilot_assignments.delete(source) }
+
+            @game.rand_state = r[:rand]
+            @log.slice!(r[:log_size]..-1) if @log.size > r[:log_size]
+
+            @trace = []
+            @cargo = []
+            @explored_in_trace = false
+            @mp_spent = 0
+            @selected_train_id = nil
+            @pending_redraw = nil
+            @local_flight_log = []
+            @hexes_entered = 0
+            @rollback = nil
+            @choices_memo = nil
+            update_trace_highlight
+          end
+
+          # Wraps Game#explore_hex! so a local, unsubmitted flight can be
+          # rolled back precisely (see rollback_local_flight!) -- records
+          # the hex's pre-explore tile so it can be re-laid, and that
+          # @mine_state gained a fresh entry so it can be dropped. A no-op
+          # tracking-wise during a real replay (@rollback is nil there --
+          # see rollback_local_flight!'s comment): nothing will ever need
+          # to undo a real, committed explore. `pay:` is deferred to
+          # @committing -- see Game#explore_hex!'s own comment.
+          def explore_hex_tracked!(hex_id, entity)
+            if @rollback
+              hex = @game.hex_by_id(hex_id)
+              @rollback[:laid_hexes] << { hex_id: hex_id, original_tile: hex.tile }
+              @rollback[:mine_state_added] << hex_id
+            end
+            @game.explore_hex!(hex_id, entity, pay: @committing)
+          end
+
+          # Wraps Game#resolve_second_draw! the same way explore_hex_tracked!
+          # wraps explore_hex! -- records each hex's original tile
+          # assignment the first time it's touched (a flight may redraw
+          # more than once, and each redraw touches two hexes: the one
+          # being explored and whichever unexplored hex it borrowed from),
+          # so rollback_local_flight! can restore the exact pre-draw state
+          # regardless of how many redraws happened.
+          def resolve_second_draw_tracked!(hex_id, chosen_name, borrowed_hex_id, other_name)
+            if @rollback
+              originals = @rollback[:hex_assignment_originals]
+              originals[hex_id] = @game.hex_assignments[hex_id] unless originals.key?(hex_id)
+              originals[borrowed_hex_id] = @game.hex_assignments[borrowed_hex_id] unless originals.key?(borrowed_hex_id)
+            end
+            @game.resolve_second_draw!(hex_id, chosen_name, borrowed_hex_id, other_name)
+          end
+
+          # The real, recorded handler for SUBMIT_FLIGHT -- rolls back
+          # whatever local preview already happened (a no-op on a fresh
+          # reload, which never ran one), then replays the submitted
+          # choice sequence hop by hop through the exact same
+          # dispatch_choice! table local_choose! used, with @committing
+          # true so the exploration bonus actually gets paid and
+          # finish_route's auto-pass can actually end the turn. Rolling
+          # back first (rather than trusting the live browser's
+          # already-correct local state) means the browser that submitted
+          # and a browser that later reloads from raw_actions run through
+          # an identical code path -- no separate "already did this"
+          # special case to keep in sync.
+          def replay_submitted_flight!(entity, choice)
+            _prefix, rest = choice.split(':', 2)
+            sequence = rest.to_s.split(FLIGHT_SEP)
+            raise GameError, 'Empty submitted flight' if sequence.empty?
+
+            rollback_local_flight!
+            @committing = true
+            sequence.each { |c| dispatch_choice!(entity, c) }
+          ensure
+            @committing = false
           end
 
           def update_trace_highlight

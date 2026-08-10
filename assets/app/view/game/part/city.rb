@@ -596,9 +596,19 @@ module View
           @game.mine_claim_owner(@tile.hex.id, mine_index)
         end
 
+        # Doubled while `owner` is the entity currently taking its turn --
+        # confirmed with the user some ROUTE_COLORS reds are hard to tell
+        # apart at the normal ring size, and the active company's own
+        # claims are exactly what a player is scanning the map for while
+        # running its ships (or its other steps -- not narrowed to Route
+        # specifically, since there's nothing Route-specific about wanting
+        # to spot your own claims).
         def render_claim_ring(owner)
+          base_radius = SLOT_RADIUS + 5
+          radius = owner == @game.round.current_entity ? base_radius * 2 : base_radius
+
           h(:circle, attrs: {
-              r: SLOT_RADIUS + 5,
+              r: radius,
               fill: 'none',
               stroke: owner.color,
               'stroke-width': 8,

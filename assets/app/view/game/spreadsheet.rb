@@ -244,8 +244,8 @@ module View
         corporation_subtitles = [
           h(:th, render_sort_link('Cash', :cash)),
           *treasury,
-          h(:th, render_sort_link('Trains', :trains)),
-          h(:th, render_sort_link('Tokens', :tokens)),
+          h(:th, render_sort_link(@game.trains_label, :trains)),
+          h(:th, render_sort_link(@game.tokens_label, :tokens)),
           *extra,
           h(:th, render_sort_link('Order', :order)),
           h(:th, render_sort_link('Companies', :companies)),

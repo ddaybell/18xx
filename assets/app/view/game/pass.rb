@@ -10,8 +10,20 @@ module View
       needs :actions, default: []
 
       def render
+        step = @game.round.active_step
+        entity = @game.round.current_entity
+        # Opt-in hook: a step whose own UI already surfaces an equivalent
+        # Cancel button (e.g. G2038::Step::Route's per-row Cancel, right
+        # next to Submit) can suppress this standalone one so the player
+        # isn't shown two buttons doing the identical thing -- found live
+        # in browser: a route pending Submit showed "Cancel" both here
+        # and on its ship's own row. Every other game's step doesn't
+        # implement suppress_standalone_pass?, so this is always false
+        # for them and behavior is unchanged.
+        suppressed = step.respond_to?(:suppress_standalone_pass?) && entity && step.suppress_standalone_pass?(entity)
+
         children = []
-        if @actions.include?('pass')
+        if @actions.include?('pass') && !suppressed
           children << h(PassButton)
           # In hotseat mode there's no real "logged in as this specific
           # player" concept -- one local browser session plays every
