@@ -13,19 +13,26 @@ module Engine
           end
 
           # An independent that owns no ship and can't afford the cheapest
-          # one left in the Depot must merge into the AL instead of taking
-          # its turn (§7.39/Phase 9f) -- mirrors how a closed entity is
-          # already skipped here, just with a forced merge as the reason.
-          # Safe to call more than once per entity: once merged, `minor.
-          # closed?` is true, so the `super` check above short-circuits
-          # before ever reaching `independent_must_merge?` again.
-          def skip_entity?(entity)
-            return true if super
+          # one left in the Depot must merge into the AL (§7.39/Phase 9f)
+          # -- but only once it's had its own turn and is *still* shipless
+          # at the end of it, not pre-emptively before that turn even
+          # starts. The rule text ties this to the independent's own
+          # turn ending shipless, not to a shipless check firing whenever
+          # any *other* company's turn happens to end with this
+          # independent up next in rotation -- found live in browser:
+          # OPC bought an independent's last ship on OPC's own turn, and
+          # the independent was force-merged immediately afterward,
+          # never getting the turn (and BuyTrain opportunity) it was
+          # owed. Checked in after_end_of_turn instead of skip_entity?,
+          # so the independent's own turn (Route auto-skips with no
+          # ships, but BuyTrain still runs -- the owner could choose to
+          # buy it a replacement ship there) happens first.
+          def after_end_of_turn(operator)
+            super
 
-            return false unless @game.independent_must_merge?(entity)
+            return unless operator.minor? && @game.independent_must_merge?(operator)
 
-            @game.merge_independent_into_al!(entity)
-            true
+            @game.merge_independent_into_al!(operator)
           end
 
           # TSI's pre-float turn (flying the Probe under ST's owner's

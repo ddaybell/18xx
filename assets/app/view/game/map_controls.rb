@@ -9,6 +9,7 @@ module View
       needs :show_starting_map, default: false, store: true
       needs :historical_routes, default: [], store: true
       needs :historical_laid_hexes, default: nil, store: true
+      needs :historical_ship_routes, default: [], store: true
       needs :game, default: nil, store: true
 
       def render
@@ -68,22 +69,34 @@ module View
         operating[operating.keys.max]&.laid_hexes || []
       end
 
+      # G2038 equivalent of generate_last_route above -- one hex-id array
+      # per ship, straight from Game#last_route (already maintained for
+      # the ship-selector's own "Last" button), rather than
+      # connection_hexes/halts/nodes, which G2038 never populates. No
+      # "tile" counterpart -- per the user, only the route lines are
+      # wanted here, not last_laid_hexes' highlight-box effect.
+      def generate_last_ship_routes(entity)
+        entity.trains.filter_map { |train| @game.last_route(train)&.dig(:hexes) }
+      end
+
       def route_controls
         return '' unless @game
 
         # "Show Last Route and Tile" draws colored segments along printed
         # track lanes (Engine::Route#connection_hexes/#halts, both
         # track-connectivity concepts) -- meaningless for a trackless game
-        # (HIDE_TILE_TRACK), which has no lanes to draw along at all.
-        # G2038's own routes are built from a plain hex list (no
-        # connection_hexes/routes/nodes ever passed in), so this silently
-        # degrades to empty data and draws nothing rather than erroring --
-        # hiding the control entirely is more honest than leaving a
-        # control that quietly does nothing. Parked in ROADMAP.md
-        # (Phase 12) for a proper G2038-specific replacement later,
-        # reusing the existing live-flight hex-highlight overlay instead
-        # of this track-based one.
-        return '' if @game.class.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
+        # (HIDE_TILE_TRACK), which has no lanes to draw along at all. A
+        # game that separately exposes Game#last_route (G2038's own
+        # per-ship route history, see generate_last_ship_routes above)
+        # gets a working "Show Last Route" control built from that
+        # instead, just without the "and Tile" half -- see route_change's
+        # own branch below. A HIDE_TILE_TRACK game with no such hook
+        # would still get nothing (there's no generic fallback that could
+        # possibly work), but no game in this codebase is in that spot
+        # today.
+        hide_tile_track = @game.class.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
+        g2038_ship_routes = @game.respond_to?(:last_route)
+        return '' if hide_tile_track && !g2038_ship_routes
 
         step = @game.round.active_step
         actions = step&.actions(step&.current_entity) || []
@@ -106,9 +119,21 @@ module View
         route_change = lambda do
           operator_name = Native(@route_input).elm&.value
           operator = all_operators.find { |o| o.name == operator_name }
-          if operator
+          if operator && g2038_ship_routes
+            # No skip: here -- unlike the standard branch below, this is
+            # the *only* store call this branch makes, and `store`'s own
+            # `update unless skip` means skip: true would silently update
+            # the ivar without ever repainting the map. Found live in
+            # browser: the dropdown's own selected value changed freely,
+            # but the drawn route never followed -- it only ever caught
+            # up whenever some unrelated action (submitting a route,
+            # etc.) happened to trigger its own, separate repaint.
+            store(:historical_ship_routes, generate_last_ship_routes(operator))
+          elsif operator
             store(:historical_routes, generate_last_route(operator), skip: true)
             store(:historical_laid_hexes, last_laid_hexes(operator))
+          elsif g2038_ship_routes
+            store(:historical_ship_routes, [])
           else
             store(:historical_routes, [], skip: true)
             store(:historical_laid_hexes, nil)
@@ -116,7 +141,8 @@ module View
         end
 
         @route_input = render_select(id: :route, on: { input: route_change }, children: operators)
-        h('label.inline-block', ['Show Last Route and Tile For:', @route_input])
+        label = g2038_ship_routes ? 'Show Last Route For:' : 'Show Last Route and Tile For:'
+        h('label.inline-block', [label, @route_input])
       end
 
       def render_select(id:, on: {}, children: [])

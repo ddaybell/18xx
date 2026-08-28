@@ -23,6 +23,17 @@ module Engine
             return if @bids
 
             super
+            # Base sorts @companies by value (cheapest-first) -- correct
+            # for every other game, where declared order already matches
+            # ascending value, but wrong here under the Variant Start
+            # Packet: it swaps in cheaper certificates for some companies
+            # *in their original deck slot*, not a re-sort (confirmed with
+            # the user -- e.g. Tunnel Systems drops to $20 but stays
+            # dealt after $100 companies like Lucky). Restoring the
+            # game's own declared order is a no-op at baseline (already
+            # ascending there) and correct under the variant.
+            @companies = @game.initial_auction_companies
+            @cheapest = @companies.first
           end
 
           def may_purchase?(company)

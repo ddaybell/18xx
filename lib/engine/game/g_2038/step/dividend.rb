@@ -26,19 +26,26 @@ module Engine
             process_dividend(action)
           end
 
-          # Half payout needs shareholders paid before the corporation, not
-          # after -- the base engine's process_dividend always pays the
-          # corporation first off a pre-computed split, but half's split is
-          # only a naive floor(revenue/2) target; the real per-holder ceil
-          # in payout_shares can push shareholders' actual total above
-          # that. Computing the corporation's share as whatever's left of
-          # revenue *after* the real shareholder payout (using the same
-          # revenue split, so both agree on the same per_share) makes the
-          # corporation absorb the ceil rounding instead of over-paying
-          # total revenue. Full duplication of process_dividend is needed
-          # since the base method hardcodes corporation-then-shares with no
-          # smaller override point; every other kind (payout, withhold,
-          # split, retain) behaves identically to the base version.
+          # The base engine's payout_shares/dividends_for_entity re-derive
+          # per_share from a revenue figure and ceil it *per holder*, which
+          # for a fractional rate (e.g. $9.50) gives a 1-share holder $10
+          # (ceil of 9.50) but a 2-share holder $19 (exact, no rounding
+          # needed) -- two different effective per-share rates out of the
+          # same dividend. Per the user's rule -- "for partial payouts you
+          # round down for the company and up for the players" -- the rate
+          # itself must be a single whole dollar figure shared by every
+          # holder, not a per-holder ceil of a fractional rate. half below
+          # computes that uniform rate once and how much it actually costs
+          # to pay every real holder (shareholder_payout_total, since bank-
+          # held IPO shares and open-market shares -- not in
+          # players/corporations -- never get paid regardless of
+          # capitalization type); the corporation absorbs whatever's left
+          # of revenue. process_dividend and payout_shares are overridden
+          # only so that already-final per_share flows straight through to
+          # disbursement instead of being silently re-derived from a
+          # revenue/total_shares division that would undo this fix for any
+          # kind other than half; both otherwise behave identically to the
+          # base version.
           def process_dividend(action)
             entity = action.entity
             revenue = total_revenue
@@ -55,37 +62,95 @@ module Engine
             @round.routes = []
             @round.extra_revenue = 0
 
-            shareholder_revenue = revenue - payout[:corporation]
-            if kind == :half && payout[:per_share].positive?
-              paid = shareholder_payout_total(entity, shareholder_revenue)
-              payout = payout.merge(corporation: revenue - paid)
-            end
-
             log_run_payout(entity, kind, revenue, subsidy, action, payout)
 
             payout_corporation(payout[:corporation] + subsidy, entity)
-            # shareholder_revenue (not revenue - payout[:corporation]) --
-            # for :half, payout[:corporation] has already been adjusted
-            # above, so re-deriving it from that would silently swap in a
-            # different, already-rounded revenue figure and recompute a
-            # different per_share than shareholder_payout_total just used.
-            payout_shares(entity, shareholder_revenue) if payout[:per_share].positive?
+            payout_shares(entity, payout[:per_share]) if payout[:per_share].positive?
 
             change_share_price(entity, payout)
             pass!
           end
 
-          # Mirrors what payout_shares is about to actually disburse (same
-          # per_share math, via the same dividends_for_entity ceil-per-
-          # holder logic) without paying anyone yet -- used only to figure
-          # out how much the corporation should be left holding.
-          def shareholder_payout_total(entity, revenue)
-            per_share = payout_per_share(entity, revenue)
+          # Same per_share, per-holder dividends_for_entity ceil logic as
+          # the base engine's own payout_shares -- the difference is that
+          # per_share here is already final (computed by half/payout/split
+          # above) rather than re-derived from a revenue argument, so it
+          # can't drift from what shareholder_payout_total (below) already
+          # assumed.
+          # A minor never registers a Share for its own owner -- Minor
+          # includes Ownable (a plain owner attr), not the ShareHolder
+          # machinery a Corporation's IPO/president's-cert setup relies
+          # on -- so owner.percent_of(minor) is always 0 and the generic
+          # share-based path below (dividends_for_entity, ultimately
+          # num_shares_of) silently finds nothing to pay every single
+          # time, even though per_share here IS the owner's whole payout
+          # (a minor's total_shares is 1). Found live: the log showed a
+          # correct-looking "$X = $Y per share" for a split, but actually
+          # disbursed nothing -- the OLD log line quoted the nominal
+          # target revenue rather than what payout_shares had actually
+          # paid out, which is what let this go unnoticed until the fix
+          # for the half-pay rounding bug (this same file, `half`) made
+          # the log honest about the real total and the $0 became
+          # visible. Pay the owner directly instead of routing through
+          # the share-holder lookup that can never find them.
+          def payout_shares(entity, per_share)
+            if entity.minor?
+              owner = entity.owner
+              return unless owner
+
+              @game.bank.spend(per_share, owner, check_positive: false)
+              log_payout_shares(entity, per_share, per_share, "#{@game.format_currency(per_share)} to #{owner.name}")
+              return
+            end
+
+            payouts = {}
+            (@game.players + @game.corporations).each { |payee| payout_entity(entity, payee, per_share, payouts) }
+
+            receivers = payouts
+                          .sort_by { |_r, c| -c }
+                          .map { |receiver, cash| "#{@game.format_currency(cash)} to #{receiver.name}" }.join(', ')
+
+            log_payout_shares(entity, payouts.values.sum, per_share, receivers)
+          end
+
+          # What payout_shares above is about to actually disburse for a
+          # given whole-dollar per_share (same dividends_for_entity ceil-
+          # per-holder logic) without paying anyone yet -- used only to
+          # figure out how much the corporation should be left holding.
+          def shareholder_payout_total(entity, per_share)
             (@game.players + @game.corporations).sum { |payee| dividends_for_entity(entity, payee, per_share) }
           end
 
           def round_state
             super.merge(laid_hexes: [])
+          end
+
+          # §13c rule 2: "A corporation receives paid (or partially paid)
+          # earnings only for stock shares in the Growth Corporation box
+          # or Asteroid League trade-in box. It does not receive earnings
+          # for any shares in the Stock Market." -- i.e. this codebase's
+          # own established "Treasury Shares" concept (Corporation#
+          # treasury_shares/#num_treasury_shares), as opposed to unsold
+          # "IPO Shares" (Corporation#ipo_shares), which must NOT pay.
+          # Mirrors 1862's own G1862::Step::Dividend#holder_for_corporation
+          # exactly (always redirect to `entity` itself, unconditionally)
+          # -- safe to do so *only* because Game#setup (see the
+          # optional_stock_repurchases block there) points every
+          # full-capitalization corp's ipo_owner at the bank once this
+          # rule is active, the same way 1862's own Game#convert_to_full!
+          # does for its chartered companies. With that in place,
+          # entity.num_shares_of(entity) can no longer include unsold IPO
+          # shares (those live with the bank now) -- only genuinely
+          # repurchased Treasury Shares ever end up owned by the entity
+          # again, so no capitalization check is even needed here.
+          # Shares actually sitting in the open market never pay anyone
+          # here or anywhere else regardless (payout_shares only ever
+          # iterates players + corporations, never @game.share_pool) --
+          # no separate code needed for that half.
+          def holder_for_corporation(entity)
+            return entity if @game.optional_stock_repurchases
+
+            super
           end
 
           # ---------------------------------------------------------------------------
@@ -100,16 +165,20 @@ module Engine
 
           # Half payout: half to shareholders, half retained. Stock moves right 1.
           #
-          # dividends_for_entity ceils *per holder*, so fragmented ownership
-          # can push shareholders' actual total above a naive floor(revenue/2)
-          # (confirmed with the user: a $150 half-pay gives $8/share -- ceil
-          # of $7.50 -- to shareholders, and the remaining $70, not a flat
-          # $75, to the corporation). process_dividend below pays
-          # shareholders first off this same revenue split, then gives the
-          # corporation whatever's actually left over.
+          # Per the user: "for partial payouts you round down for the
+          # company and up for the players." per_share is ceiled once,
+          # globally, to a whole dollar (a $150 half-pay on 10 shares gives
+          # $8/share -- ceil of $7.50 -- confirmed with the user; a $190
+          # half-pay gives $10/share -- ceil of $9.50 -- also confirmed).
+          # The corporation gets whatever's left of revenue after actually
+          # paying every real holder that rate (shareholder_payout_total --
+          # bank-held IPO shares and open-market shares never get paid
+          # regardless of capitalization type, so this can be less than
+          # per_share * total_shares).
           def half(entity, revenue)
-            corp = revenue / 2
-            { corporation: corp, per_share: payout_per_share(entity, revenue - corp) }
+            per_share = (revenue / 2.0 / entity.total_shares).ceil
+            paid = shareholder_payout_total(entity, per_share)
+            { corporation: revenue - paid, per_share: per_share }
           end
 
           # Withhold: all retained. Stock moves left 1.

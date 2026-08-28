@@ -74,6 +74,36 @@ module Engine
             @claims_this_round = Hash.new(0)
           end
 
+          # Opt-in hooks for assets/app/view/game/hex.rb: while this
+          # entity is actively choosing a base/station/claim location,
+          # its own already-placed bases and stations both get
+          # highlighted, regardless of which of the three this entity is
+          # currently placing -- per the user, seeing existing bases is
+          # just as useful while placing a station (and vice versa) as
+          # it is while placing the matching type. Split into two
+          # methods (rather than one combined list, like this used to
+          # be) so hex.rb can draw them differently -- a base gets the
+          # generic hex-border highlight, a station gets a highlight
+          # around its own teardrop icon instead, so the two read as
+          # different things at a glance per the user.
+          # Its starting home included, not just ones placed via
+          # place_base! -- both are real tokens in entity.tokens.
+          def highlight_base_hexes(entity)
+            return [] unless entity&.operator?
+            return [] unless %i[base station claim].include?(@sub_phase[entity])
+
+            entity.tokens.filter_map { |t| t.city&.hex&.id }.uniq
+          end
+
+          # There's no "starting" refueling station -- those are only
+          # ever bought (Game#station_hexes).
+          def highlight_station_hexes(entity)
+            return [] unless entity&.operator?
+            return [] unless %i[base station claim].include?(@sub_phase[entity])
+
+            @game.station_hexes(entity)
+          end
+
           def actions(entity)
             return [] unless entity == current_entity
             return [] if choices(entity).empty?
@@ -328,9 +358,20 @@ module Engine
               state[:mines].each_with_index do |mine, idx|
                 next if mine[:owner]
 
-                result["#{CLAIM}#{hex.id}_#{idx}"] =
-                  "Claim #{ORE_NAMES[mine[:ore]]} mine, revenue #{@game.format_currency(mine[:unclaimed])} "\
-                  "(#{@game.format_currency(cost)})"
+                # A structured {ore:, value:} label rather than text --
+                # HexChoicePopup renders this as an ore-colored icon (same
+                # visual language as the charter's claim display,
+                # View::Game::Corporation#render_claim_column) instead of
+                # a text button, so the two mines on a double-mine hex
+                # read at a glance instead of needing to parse an
+                # abbreviation. The claim cost itself is still dropped
+                # here -- it's identical for both mines on the same hex
+                # (one flat per-round tier, not per-mine), so showing it
+                # next to each option would read as if it varied between
+                # them; it's still shown elsewhere (the round's own
+                # claim-cost display) before the player ever opens this
+                # popup.
+                result["#{CLAIM}#{hex.id}_#{idx}"] = { ore: mine[:ore], value: mine[:unclaimed] }
               end
             end
             result

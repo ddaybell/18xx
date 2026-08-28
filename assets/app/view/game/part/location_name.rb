@@ -119,10 +119,21 @@ module View
             'stroke-width': 0.5,
           }
 
+          # Opt-in hook: .tile__text's own `fill: black` (main.css) suits
+          # every other game's light hex backgrounds, but is illegible on
+          # G2038's dark starfield -- text_props' `style:` (an inline
+          # style attribute) is needed, not `attrs: { fill: }`, since a
+          # plain SVG presentation attribute loses to a stylesheet class
+          # rule; an inline style wins over both.
+          text_props = {}
+          if @game.respond_to?(:location_name_text_color) && (color = @game.location_name_text_color)
+            text_props[:style] = { fill: color }
+          end
+
           rendered_name = @name_segments.map.with_index do |segment, index|
             x = 0
             y = (index * LINE_HEIGHT) + 1
-            h(:text, { attrs: { transform: "translate(#{x} #{y})" } }, segment)
+            h(:text, { attrs: { transform: "translate(#{x} #{y})" }, **text_props }, segment)
           end
 
           h(:g, { attrs: { transform: rotation_for_layout } }, [
@@ -152,10 +163,21 @@ module View
         def render_background_box
           width, height = box_dimensions
 
+          # Opt-in hook: pairs with location_name_text_color above -- a
+          # white background box behind white text would be illegible,
+          # so a game overriding the text color gets to override this
+          # too (G2038 uses a dark box, matching its starfield).
+          background_color =
+            if @game.respond_to?(:location_name_background_color) && (color = @game.location_name_background_color)
+              color
+            else
+              BACKGROUND_COLOR
+            end
+
           attrs = {
             height: height,
             width: width,
-            fill: BACKGROUND_COLOR,
+            fill: background_color,
             'fill-opacity': BACKGROUND_OPACITY,
             stroke: 'none',
             x: -width / 2,

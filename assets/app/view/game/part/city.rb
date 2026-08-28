@@ -17,6 +17,24 @@ module View
         needs :tile
         needs :city
         needs :show_revenue
+        # Snabberb only populates an ivar for a `needs` key a
+        # component's own class (or an ancestor) explicitly declares --
+        # there's no implicit fallback to the global store just because
+        # some *other* component already declared `:game`. Without
+        # this, every `@game` reference below (mine-claim-owner
+        # emphasis, home-delivery-bonus lookup, mine ore/value lookups)
+        # was silently reading `nil` -- found live in browser chasing a
+        # G2038 bug, but scoped here (not Part::Base) after confirming
+        # other Part::* files use `@game` too, and one of them
+        # (borders.rb's remove-border click handler, the sole trigger
+        # for 18 India's gauge-change-marker removal -- confirmed via
+        # its own code comment, "Triggered by on_click event in
+        # View::Game::Part::Borders", with no other path to that
+        # action) would have picked up a real behavior change for that
+        # other game from a shared-base fix. That one's being left
+        # alone and reported separately rather than silently changed as
+        # a side effect of this G2038 session.
+        needs :game, default: nil, store: true
 
         # key is how many city slots are part of the city; value is the offset for
         # the first city slot
@@ -300,6 +318,17 @@ module View
           @num_cts = @tile.cities.size + @tile.towns.size
         end
 
+        # Opt-in hook: a game can hide a city part entirely -- e.g.
+        # G2038's H10, whose empty AL-reserved token slot would
+        # otherwise read as "a base is already here" well before the AL
+        # actually exists to occupy it (H10 doubles as both a
+        # transshipment point and the AL's future home base). The city
+        # only needs to render once that stops being true -- see
+        # Game#hide_city?/Game#transshipment_hex?.
+        def should_render?
+          !(@game.respond_to?(:hide_city?) && @game.hide_city?(@tile&.hex, @city))
+        end
+
         def render_part
           num_slots = @city.slots(all: true)
           slot_radius = num_slots > 6 ? BIG_CITY_SLOT_RADIUS[num_slots] : SLOT_RADIUS
@@ -428,8 +457,21 @@ module View
                         force: @city.pass?)
                     end
 
+          # The delivery-bonus badge sits a bit farther out from the
+          # base's own center than a plain revenue circle would (found
+          # live in browser -- at the shared displacement it read as
+          # crowding the token) -- shifted outward along the same radial
+          # direction `displacement` already points along, not applied
+          # to the ordinary revenue-circle case above.
+          content_displacement =
+            if bonus_ore
+              displacement + (displacement.negative? ? -DELIVERY_BONUS_RADIAL_SHIFT : DELIVERY_BONUS_RADIAL_SHIFT)
+            else
+              displacement
+            end
+
           h(:g, { attrs: { transform: "rotate(#{rotation})" } }, [
-            h(:g, { attrs: { transform: "translate(#{displacement} 0) rotate(#{-revert_angle})" } }, [content]),
+            h(:g, { attrs: { transform: "translate(#{content_displacement} 0) rotate(#{-revert_angle})" } }, [content]),
           ])
         end
 
@@ -462,6 +504,11 @@ module View
         DELIVERY_BONUS_TINT = 0.6
         DELIVERY_BONUS_RADIUS = 18
         DELIVERY_BONUS_FONT_SIZE = '15px'
+        # On the same local-unit scale as Part::City::SLOT_RADIUS (25,
+        # the token's own radius) -- how much farther out from the
+        # base's center the badge sits than a plain revenue circle
+        # would, per the user.
+        DELIVERY_BONUS_RADIAL_SHIFT = 3
 
         def render_delivery_bonus(ore, amount)
           base = MINE_ORE_COLOR[ore]

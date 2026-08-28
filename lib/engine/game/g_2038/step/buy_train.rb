@@ -45,6 +45,21 @@ module Engine
             @game.rust(exchanged)
           end
 
+          # §13b: with OSR/MR in play, Phase VI ('9/7') needs *two* Phase V
+          # ships bought first, not one -- the base game's own exception
+          # (TRAINS' `available_on: '5'` on '9/7') already covers the
+          # base-game "one" case via the standard phase-name mechanism,
+          # but a phase name can't express a count, so this filters '9/7'
+          # back out of the depot list until the second one's sold. See
+          # Game#phase_vi_unlocked? (shared with #discountable_trains_for,
+          # the separate exchange-discount UI) for the actual count logic.
+          def buyable_trains(entity)
+            trains = super
+            return trains if @game.phase_vi_unlocked?
+
+            trains.reject { |t| t.name == '9/7' }
+          end
+
           # The base engine's EBUY_DEPOT_TRAIN_MUST_BE_CHEAPEST restricts a
           # president-funded purchase to strictly the cheapest depot train.
           # Confirmed with the user this should only apply when the

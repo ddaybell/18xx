@@ -26,6 +26,46 @@ module Engine
             super.reject { |p| [10, 125].include?(p.price) }
           end
 
+          # Base can_buy_any_from_ipo?/can_ipo_any? look at corporation.shares
+          # (shares literally owned by the corporation object) to find what's
+          # still buyable pre-sellout -- correct only when ipo_owner == self,
+          # true for every game except this one. Once optional_stock_
+          # repurchases points a full-cap corp's ipo_owner at the bank (see
+          # Game#setup), those same still-unsold shares move to the bank and
+          # corporation.shares goes permanently empty, even for a corp
+          # nobody has parred yet -- can_ipo_any? and can_buy_any_from_ipo?
+          # then find nothing to buy/par for ANY corporation, for ANY
+          # player, for the rest of the game (found live: right after the
+          # last private sold, the whole Stock round returned empty actions
+          # for every player and fell straight through into the first OR).
+          # corporation.ipo_shares (Corporation#ipo_shares, `@ipo_owner.
+          # shares.select { corporation == self }`) tracks the *right*
+          # holder regardless of where ipo_owner points, exactly the same
+          # fix 1862 already uses for its own chartered companies (see
+          # G1862::Step::BuySellParShares#can_buy_any_from_ipo?/
+          # #can_ipo_any?) -- process_par (base class) already gets this
+          # right on its own via ipo_shares.first, so only these two
+          # discovery methods need the override. Deliberately NOT also
+          # exposing genuine treasury shares (corporation.shares, shares
+          # actually bought back into the corp via StockRepurchase) here --
+          # the rules describe those as parked in the Growth Corporation
+          # box, not up for resale, and Game#issuable_shares already
+          # enforces that (always []).
+          def can_buy_any_from_ipo?(entity)
+            @game.corporations.each do |corporation|
+              next unless corporation.ipoed
+              return true if can_buy_shares?(entity, corporation.ipo_shares)
+            end
+
+            false
+          end
+
+          def can_ipo_any?(entity)
+            !bought? && @game.corporations.any? do |c|
+              @game.can_par?(c, entity) && can_buy?(entity, c.ipo_shares.first&.to_bundle)
+            end
+          end
+
           def actions(entity)
             result = super
             return result unless choice_available?(entity)

@@ -90,6 +90,18 @@ module View
           return false unless step.respond_to?(:local_pass?) && step.local_pass?(action.entity)
 
           step.local_pass!(action.entity)
+        when Engine::Action::Undo
+          # Without this, the real Undo button/ctrl+z had nothing of the
+          # current entity's own to undo yet (a hand-built route touches
+          # no real recorded action until Submit -- see local_choose!
+          # above), and so reached past it into the *previous* entity's
+          # last real action instead -- found live in browser: an Undo
+          # meant to back out a locally-picked tile (e.g. Lucky's
+          # second-draw choice) or a bare pilot assignment silently
+          # undid the prior company's turn.
+          return false unless step.respond_to?(:local_undo?) && step.local_undo?(action.entity)
+
+          step.local_undo!(action.entity)
         else
           return false
         end

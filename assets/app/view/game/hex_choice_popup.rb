@@ -9,13 +9,40 @@ module View
     # Generic hex-anchored popup rendering one button per staged choice, plus
     # a dismiss button. Mirrors TileConfirmation's positioning/style but is
     # driven by an arbitrary Lib::HexChoicePopup instead of a single tile.
-    # A choice's value is either a text label (rendered as a button, as
-    # before) or an Engine::Tile (rendered as a small clickable tile
-    # preview instead) -- the latter for G2038's Lucky redraw, which needs
-    # to show real tile art rather than a text description.
+    # A choice's value is a text label (rendered as a button, as before),
+    # an Engine::Tile (rendered as a small clickable tile preview instead
+    # -- G2038's Lucky redraw, which needs real tile art rather than a
+    # text description), or a {ore:, value:} Hash (rendered as a small
+    # ore-colored icon -- G2038's double-mine claim popup, so the two
+    # mines on a hex read at a glance instead of needing to parse an
+    # abbreviated text label).
     class HexChoicePopup < Snabberb::Component
       include Actionable
       include Lib::Settings
+
+      # Mirrors View::Game::Corporation::CLAIM_MINE_COLOR (itself a local
+      # copy of Part::City::MINE_ORE_COLOR's values) -- kept as its own
+      # copy rather than a shared reference, same reasoning as that
+      # constant's own comment: this file has no other reason to depend
+      # on either of those.
+      CLAIM_MINE_COLOR = { n: [200, 40, 40], i: [40, 100, 210], r: [40, 150, 70] }.freeze
+      # Mirrors Part::City::MINE_VALUE_RANGE/#mine_color's white-blend
+      # tint exactly -- a mine's popup icon needs to look like the same
+      # mine on the hex (pale for a low-value mine, more saturated for a
+      # high one), not a flat, fully-saturated color regardless of value.
+      # Found live in browser: an untinted $20 Nickel circle read as a
+      # much more intense red than the hex's own pale-pink mine circle.
+      MINE_VALUE_RANGE = (10..70)
+
+      def tinted_mine_color(ore, value)
+        base = CLAIM_MINE_COLOR[ore]
+        span = MINE_VALUE_RANGE.max - MINE_VALUE_RANGE.min
+        t = ((value - MINE_VALUE_RANGE.min).to_f / span).clamp(0.0, 1.0)
+        white_blend = 0.82 - (0.42 * t)
+
+        r, g, b = base.map { |c| ((c * (1 - white_blend)) + (255 * white_blend)).round.clamp(0, 255) }
+        format('#%02x%02x%02x', r, g, b)
+      end
 
       needs :tile_selector, store: true
       needs :zoom, default: 1
@@ -64,6 +91,8 @@ module View
         buttons = @tile_selector.choices.map do |choice, label|
           if label.is_a?(Engine::Tile)
             render_tile_choice(choice, label)
+          elsif label.is_a?(Hash)
+            render_claim_choice(choice, label)
           else
             h('button.no_margin', {
                 props: { innerHTML: label },
@@ -137,6 +166,42 @@ module View
         ])
       end
 
+      # A claim option's ore-colored icon (ore letter inside a colored
+      # circle, unclaimed value above it) -- same visual language as
+      # View::Game::Corporation#render_claim_column's already-placed
+      # claims, so a player who's seen one recognizes the other.
+      def render_claim_choice(choice, data)
+        color = tinted_mine_color(data[:ore], data[:value])
+        wrapper_props = {
+          style: {
+            display: 'inline-block',
+            cursor: 'pointer',
+            textAlign: 'center',
+            filter: 'drop-shadow(3px 3px 2px #888)',
+          },
+          on: { click: -> { choose(choice) } },
+        }
+        circle_props = {
+          style: {
+            width: '1.8rem',
+            height: '1.8rem',
+            margin: '0 auto',
+            borderRadius: '50%',
+            background: color,
+            color: '#000000',
+            fontWeight: 'bold',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+        }
+
+        h(:div, wrapper_props, [
+          h('div.no_margin', { style: { color: '#FFFFFF', fontSize: '14px' } }, @game.format_currency(data[:value])),
+          h(:div, circle_props, data[:ore].to_s.upcase),
+        ])
+      end
+
       def choose(choice)
         entity = @tile_selector.entity
         hex = @tile_selector.hex
@@ -168,7 +233,22 @@ module View
           store(:tile_selector, Lib::HexChoicePopup.new(hex, next_popup, coordinates, root, entity, role))
         end
 
-        if (consenter = @game.consenter_for_choice(entity, choice, label))
+        if step.respond_to?(:explore_would_lock_other_routes?) &&
+           step.explore_would_lock_other_routes?(entity, hex, choice)
+          # Closes the Explore/Skip popup itself here, rather than
+          # leaving it open alongside the warning banner (dispatch below
+          # only closes it once actually confirmed) -- two simultaneous,
+          # independent prompts (one hex-anchored, one a top banner) read
+          # as "which one do I answer first," and clicking Explore again
+          # in the still-open popup wouldn't have skipped the warning
+          # anyway, only re-shown an equivalent one. One prompt at a
+          # time: Confirm in the banner explores for real: anything else
+          # (the banner's own 3s auto-dismiss, or clicking away) abandons
+          # the click entirely, same as dismissing any other popup --
+          # clicking the hex again offers a fresh Explore/Skip choice.
+          store(:tile_selector, nil, skip: true)
+          store(:confirm_opts, { message: '⚠️ Explore locks all submitted routes', click: dispatch }, skip: false)
+        elsif (consenter = @game.consenter_for_choice(entity, choice, label))
           check_consent(entity, consenter, dispatch)
         else
           dispatch.call

@@ -67,6 +67,11 @@ module Engine
         url: 'https://18xx.games',
         hidden: true,
       },
+      timjim_games: {
+        name: 'TimJim Games',
+        url: 'https://boardgamegeek.com/boardgamepublisher/90/timjim-games',
+        hidden: true,
+      },
       traxx: {
         name: 'TraXX',
         url: 'https://traxx-denver.com/games/',

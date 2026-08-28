@@ -97,6 +97,26 @@ module Engine
             end
           end
 
+          # Opt-in hooks for assets/app/view/game/hex.rb -- same reasoning
+          # as Step::BuyInfrastructure's own highlight_base_hexes/
+          # highlight_station_hexes (placing a free TS/VA/RS base, station,
+          # or claim wants the same "where do I already have infrastructure"
+          # context, per the user). No sub_phase gate needed here -- unlike
+          # BuyInfrastructure, this step only ever runs while a corp
+          # actually has a usable free-placement ability, per its own
+          # class comment.
+          def highlight_base_hexes(entity)
+            return [] unless entity&.corporation?
+
+            entity.tokens.filter_map { |t| t.city&.hex&.id }.uniq
+          end
+
+          def highlight_station_hexes(entity)
+            return [] unless entity&.corporation?
+
+            @game.station_hexes(entity)
+          end
+
           private
 
           # Tunnel Systems: map-wide, not range-limited -- the one real

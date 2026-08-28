@@ -146,6 +146,7 @@ module View
           },
           style: {
             fontSize: '24px',
+            **map_text_color_style,
           },
         }
 
@@ -165,12 +166,27 @@ module View
           },
           style: {
             fontSize: '24px',
+            **map_text_color_style,
           },
         }
 
         h(:g, [
           h(:text, props, @tile.name),
           ])
+      end
+
+      # Opt-in hook, same pattern/reasoning as Part::LocationName's own
+      # location_name_text_color -- the hardcoded fill: 'black' above
+      # suits every other game's light hex backgrounds but is illegible
+      # against G2038's dark starfield. An inline `style:` override (not
+      # `attrs: { fill: }`) is required, not optional -- a plain SVG
+      # presentation attribute loses to a stylesheet class rule, an
+      # inline style wins over both. Returns {} (no override) for every
+      # other game, since they don't define the hook at all.
+      def map_text_color_style
+        return {} unless @game.respond_to?(:map_text_color) && (color = @game.map_text_color)
+
+        { fill: color }
       end
     end
   end

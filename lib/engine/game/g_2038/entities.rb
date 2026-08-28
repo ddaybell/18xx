@@ -279,8 +279,15 @@ module Engine
           },
         ].freeze
 
+        # Every CORPORATIONS background color is light enough for black
+        # text (confirmed with the user) -- set once here instead of on
+        # each entry (a few already redundantly set text_color: 'black'
+        # themselves; those are harmless no-ops against this default).
+        # Doesn't touch MINORS -- init_minors never applies
+        # corporation_opts, and several of those independents' colors
+        # (navy, purple, dark red, etc.) genuinely need white text.
         def corporation_opts
-          { float_percent: 50 }
+          { float_percent: 50, text_color: 'black' }
         end
 
         CORPORATIONS = [
@@ -308,7 +315,7 @@ module Engine
             claim_costs: [0, 100],
             claim_limit: 12,
             coordinates: 'D8',
-            color: '#d57e59',
+            color: '#C66F53',
             type: :group_a,
           },
           {
@@ -340,9 +347,10 @@ module Engine
             stations: [50, 50],
             claim_limit: 9,
             delivery_bonus: :n,
-            delivery_bonus_amount: 20,
+            delivery_bonus_amount: 10,
             coordinates: 'O1',
             color: '#fefc5d',
+            text_color: 'black',
             type: :group_b,
             abilities: [
               { type: 'description',
@@ -400,13 +408,61 @@ module Engine
             delivery_bonus: :n,
             delivery_bonus_amount: 10,
             coordinates: 'F18',
-            color: '#f8b34b',
+            color: '#FFDB58',
             text_color: 'black',
             type: :group_c,
             abilities: [
               { type: 'description',
                 description: '+$10 per Nickel delivered' },
             ],
+          },
+          {
+            sym: 'OSR',
+            name: 'On-Site Refining',
+            logo: 'g_2038/OSR',
+            simple_logo: 'g_2038/OSR.alt',
+            tokens: [0, 0, 0, 0, 0, 0],
+            bases: [50],
+            stations: [50],
+            claim_limit: 6,
+            claim_costs: [80, 120],
+            # Home base bonus: +$10/Rare delivered by *anyone* (same
+            # home_delivery_bonus mechanic as VP/MM/LE/OPC/RCC's own
+            # bonuses -- confirmed with the user this one is plain Rare,
+            # not "any ore," despite the setup instructions' separately-
+            # described "+10/all claims" ability below being unrelated).
+            delivery_bonus: :r,
+            delivery_bonus_amount: 10,
+            # Placement per §13b: "randomly draw two asteroid tiles...
+            # place the On-Site Refining START base... on the tile
+            # located near Drill Hound's starting hex" -- B14 confirmed
+            # by the user as the correct hex.
+            coordinates: 'B14',
+            color: '#8ed957',
+            text_color: 'black',
+            type: :group_c,
+            abilities: [
+              { type: 'description',
+                description: '+$10 per claimed mine delivery' },
+            ],
+          },
+          {
+            sym: 'MR',
+            name: 'Mining Robotics',
+            logo: 'g_2038/MR',
+            simple_logo: 'g_2038/MR.alt',
+            tokens: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            bases: [50, 50],
+            stations: [50, 50],
+            claim_limit: 14,
+            claim_costs: [40, 40],
+            # Placement per §13b: "...the Mining Robotics START base...
+            # on the tile located near Ice Finder's starting hex" -- O13
+            # confirmed by the user as the correct hex.
+            coordinates: 'O13',
+            color: '#FA8072',
+            text_color: 'black',
+            type: :group_c,
           },
           {
             sym: 'AL',

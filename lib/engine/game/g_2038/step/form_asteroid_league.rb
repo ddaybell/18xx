@@ -80,7 +80,7 @@ module Engine
           def choices
             {
               FORM => 'Form the Asteroid League',
-              DECLINE => 'Decline (asked again next round)',
+              DECLINE => 'Decline (asked again next OR)',
             }
           end
 

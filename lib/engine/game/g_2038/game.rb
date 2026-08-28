@@ -3,15 +3,20 @@
 require_relative 'meta'
 require_relative 'map'
 require_relative 'entities'
+require_relative 'corporation'
 require_relative '../base'
 require_relative 'round/operating'
 require_relative 'step/waterfall_auction'
+require_relative 'step/company_pending_par'
 require_relative 'step/buy_train'
+require_relative 'step/discard_train'
 require_relative 'step/dividend'
 require_relative 'step/route'
 require_relative 'step/form_asteroid_league'
 require_relative 'step/buy_infrastructure'
 require_relative 'autorouter'
+require_relative 'combo_generator'
+require_relative 'optimal_autorouter'
 
 module Engine
   module Game
@@ -23,6 +28,8 @@ module Engine
 
         attr_reader :mine_state, :al_reserved_shares, :al_independents_ever_offered, :al_corporation,
                     :fast_buck_income_recipient, :hex_assignments
+
+        CORPORATION_CLASS = G2038::Corporation
 
         TILE_TYPE = :lawson
         TRACK_RESTRICTION = :permissive
@@ -53,8 +60,63 @@ module Engine
         BANK_CASH = 10_000
 
         CERT_LIMIT = { 3 => 22, 4 => 16, 5 => 13, 6 => 11 }.freeze
+        # §13a: "The certificate limits are reduced." Confirmed with the
+        # user (not in the extractable rules text -- the printed chart
+        # didn't survive PDF/text extraction).
+        SHORT_GAME_CERT_LIMIT = { 3 => 17, 4 => 13, 5 => 10, 6 => 9 }.freeze
+        # §13b: "The Certificate Limit is increased" once OSR/MR are in
+        # play -- confirmed from the expansion's own printed chart
+        # ("w/10 Corps."), mutually exclusive with the Short Game (see
+        # optional_new_corporations' incompatibility check in setup).
+        NEW_CORPORATIONS_CERT_LIMIT = { 3 => 27, 4 => 20, 5 => 16, 6 => 13 }.freeze
 
         STARTING_CASH = { 3 => 600, 4 => 450, 5 => 360, 6 => 300 }.freeze
+
+        # §13d: variant charter cards for 6 of the 12 Private/Independent
+        # companies -- cheaper certificates, and PI/TS/VA/RS/ST/AE income
+        # unchanged. Critically, TS/VA/RS no longer grant a TSI share at
+        # all in this variant (their `shares` ability is simply dropped);
+        # PI/ST/AE keep their existing abilities untouched. ST is also
+        # renamed to Space Exploration Co. here (confirmed from the
+        # variant's own printed charter card). Only the overridden fields
+        # are listed -- game_companies below merges each of these onto its
+        # matching COMPANIES entry by sym, leaving every other field (incl.
+        # every non-listed company, FB/IF/DH/OC/TH/LY) untouched.
+        VARIANT_START_PACK_COMPANIES = {
+          'PI' => { value: 35, max_price: 35 },
+          'TS' => { value: 20, max_price: 20,
+                    desc: 'If owned by a corporation, may place 1 free Base on ANY explored and unclaimed tile.',
+                    color: nil,
+                    abilities: [
+                      { type: 'generic', subtype: 'free_base', description: 'Free base, any explored hex',
+                        when: 'owning_corp_or_turn', count: 1, remove: '5' },
+                    ] },
+          'VA' => { value: 40, max_price: 40,
+                    desc: 'If owned by a corporation, may place 1 free Refueling Station within range.',
+                    color: nil,
+                    abilities: [
+                      { type: 'generic', subtype: 'free_station', description: 'Free refueling station, in range',
+                        when: 'owning_corp_or_turn', count: 1, remove: '5' },
+                    ] },
+          'RS' => { value: 60, max_price: 60,
+                    desc: 'If owned by a corporation, may place 1 free Claim within range.',
+                    color: nil,
+                    abilities: [
+                      { type: 'generic', subtype: 'free_claim', description: 'Free claim, in range',
+                        when: 'owning_corp_or_turn', count: 1, remove: '5' },
+                    ] },
+          'ST' => { name: 'Space Exploration Co.', value: 160, revenue: 20 },
+          'AE' => { value: 160, revenue: 30 },
+        }.freeze
+
+        def game_companies
+          return super unless optional_variant_start_pack
+
+          super.map do |company|
+            overrides = self.class::VARIANT_START_PACK_COMPANIES[company[:sym]]
+            overrides ? company.merge(overrides) : company
+          end
+        end
 
         MARKET = [
           %w[71 80 90 101 113 126 140 155 171 188 206 225 245 266 288 311 335 360 386 413 441 470 500],
@@ -86,11 +148,13 @@ module Engine
         # below, which reads this directly rather than going through the
         # generic Phase#train_limit's per-entity.type hash lookup; group_a/b/c/d
         # remain solely about release phase, not train limits). The Asteroid
-        # League doesn't exist as an operating entity until it forms (Phase 3+,
-        # see asteroid_league_can_form/must_form below), so its limit is moot
-        # before then; independents are gone by Phase 6, so that key is simply
-        # absent there.
-        TRAIN_LIMIT_PHASE_1_2 = { corporation: 4, asteroid_league: 4, independent: 2 }.freeze
+        # League cannot exist at all before Phase 3 (it forms no earlier than
+        # the asteroid_league_can_form event on the '5/4' train, which is what
+        # brings in Phase 3 -- see event_asteroid_league_can_form!/PHASES
+        # below), so TRAIN_LIMIT_PHASE_1_2 carries no asteroid_league key at
+        # all, not just a moot one; independents are gone by Phase 6, so that
+        # key is simply absent there too.
+        TRAIN_LIMIT_PHASE_1_2 = { corporation: 4, independent: 2 }.freeze
         TRAIN_LIMIT_PHASE_3_5 = { corporation: 3, asteroid_league: 4, independent: 1 }.freeze
         TRAIN_LIMIT_PHASE_6 = { corporation: 2, asteroid_league: 3 }.freeze
 
@@ -107,7 +171,7 @@ module Engine
             train_limit: TRAIN_LIMIT_PHASE_1_2,
             tiles: %i[yellow],
             operating_rounds: 2,
-            status: %w[can_buy_bases_stations can_buy_companies],
+            status: %w[can_buy_bases_stations can_buy_companies can_form_growth_corps],
           },
           {
             name: '3',
@@ -115,7 +179,7 @@ module Engine
             train_limit: TRAIN_LIMIT_PHASE_3_5,
             tiles: %i[yellow],
             operating_rounds: 2,
-            status: %w[can_buy_bases_stations can_buy_companies],
+            status: %w[can_buy_bases_stations can_buy_companies can_form_growth_corps],
           },
           {
             name: '4',
@@ -167,6 +231,9 @@ module Engine
           'can_buy_bases_stations' =>
             ['Can Buy Bases/Stations', 'Corporations may buy and place bases and refueling stations, and buy '\
                                         'spaceships from other companies/corporations'],
+          'can_form_growth_corps' =>
+            ['Can Form Growth Corporations', 'Growth Corporations may be formed in Phases II and III, until the '\
+                                              'Asteroid League forms.'],
         ).freeze
 
         # Spaceship names are movement/cargo_holds (e.g. '3/2' = 3 MP, 2 cargo holds),
@@ -293,6 +360,16 @@ module Engine
             distance: 9,
             cargo_holds: 7,
             price: 950,
+            # §7.32's exception: "Phase VI ships may be purchased once
+            # one Phase V spaceship has been bought" -- Phase name '5'
+            # itself only begins once the first '7/6' is bought (`on:
+            # '7/6'` above), so tying availability to that phase name is
+            # exactly "after one Phase V ship," with no extra bookkeeping
+            # needed. §13b overrides this specific count to 2 once OSR/MR
+            # are in play -- see Step::BuyTrain#buyable_trains, which
+            # filters '9/7' back out of the depot list until then (this
+            # available_on can't express a *count*, only a phase name).
+            available_on: '5',
             num: 9,
             # Train#price subtracts this from the 9/7's own $950 -- a $250
             # discount, landing at $700, not $700 charged outright (found
@@ -326,11 +403,7 @@ module Engine
           ],
           'close_remaining_companies' => [
             'Private companies close',
-            'Every private company still open (other than Space Transportation Co. and Asteroid '\
-            'Export Co., which close on their own separate triggers) closes immediately when Phase V '\
-            'begins. Any inherited pilot ability (Torch\'s +1 MP, Ice Finder/Drill Hound/Ore Crusher\'s '\
-            'ore bonus, Lucky\'s extra tile draw) stops applying from that point on, though the ship '\
-            'keeps flying.',
+            'All private companies close. All pilots are removed from play.',
           ],
           'group_b_corps_available' => ['Group B Corporations become available'],
           'group_c_corps_available' => ['Group C Corporations become available'],
@@ -338,6 +411,26 @@ module Engine
 
         def bank_starting_cash
           optional_short_game ? 4_000 : BANK_CASH
+        end
+
+        # §13d: "+$300 total starting money, divided by player count" --
+        # confirmed as a flat addition on top of the base game's own
+        # STARTING_CASH (the variant's printed totals -- $700/$525/$420/
+        # $350 for 3/4/5/6 players -- are each exactly STARTING_CASH plus
+        # 300/player_count, with no remainder at any player count).
+        def init_starting_cash(players, bank)
+          super
+          return unless optional_variant_start_pack
+
+          bonus = 300 / players.size
+          players.each { |player| bank.spend(bonus, player) }
+        end
+
+        def game_cert_limit
+          return self.class::SHORT_GAME_CERT_LIMIT if optional_short_game
+          return self.class::NEW_CORPORATIONS_CERT_LIMIT if optional_new_corporations
+
+          self.class::CERT_LIMIT
         end
 
         # Shared engine code (BuyTrain's buy_train_action, Game::Base#
@@ -395,7 +488,18 @@ module Engine
 
           before = @log.size
           result = super
-          @log[before..].each do |entry|
+          # @log[before..] can be nil, not [] -- a submitted ship flight
+          # (Step::Route's SUBMIT_FLIGHT) rolls back its own local
+          # preview's log lines (@log.slice!) before replaying the real
+          # flight, and if the real replay logs fewer lines than the
+          # local preview did, @log ends up *shorter* than `before`.
+          # Indexing a Ruby array from a start past its own length
+          # returns nil, not an empty array, and #each on that raised
+          # "undefined method `each' for nil" -- found live in browser,
+          # crashing every Submit that hit this shrink-then-regrow case
+          # and (from the player's perspective) appearing to roll the
+          # whole turn back, since the action never actually committed.
+          @log[before..]&.each do |entry|
             next unless entry.message.is_a?(String)
 
             entry.message = shipify_log(entry.message)
@@ -483,6 +587,24 @@ module Engine
           Array(phase[:on]).join(', ')
         end
 
+        # Overrides the generic Game::Base#trains_str (used by the
+        # corporation/minor charter's "Trains" line): shows this entity's
+        # ships slowest-first, matching the same order Step::Route#
+        # ship_rows and the auto-router's own turn-start priority use
+        # (Step::Route#start_slowest_ship_search!) -- per the user.
+        # Display-only, same shape as the base implementation otherwise
+        # (obsolete ships still parenthesized) -- doesn't touch
+        # entity.trains' own stored (acquisition) order.
+        def trains_str(corporation)
+          (corporation.system? ? corporation.shells : [corporation]).map do |c|
+            if c.trains.empty?
+              'None'
+            else
+              c.trains.sort_by { |t| ship_distance(c, t) }.map { |t| t.obsolete ? "(#{t.name})" : t.name }.join(' ')
+            end
+          end
+        end
+
         # There is no separate pre-game "auction phase" -- confirmed with
         # the user the very first round is a normal Stock round, it just
         # happens to also carry the WaterfallAuction step (see stock_round
@@ -533,9 +655,9 @@ module Engine
         def stock_round
           Engine::Round::Stock.new(self, [
             G2038::Step::MergeIntoLeague,
-            Engine::Step::DiscardTrain,
+            G2038::Step::DiscardTrain,
             Engine::Step::SpecialTrack,
-            Engine::Step::CompanyPendingPar,
+            G2038::Step::CompanyPendingPar,
             G2038::Step::WaterfallAuction,
             G2038::Step::BuySellParShares,
           ])
@@ -546,8 +668,10 @@ module Engine
             G2038::Step::MergeIntoLeague,
             G2038::Step::FormAsteroidLeague,
             Engine::Step::Bankrupt,
-            Engine::Step::DiscardTrain,
+            G2038::Step::DiscardTrain,
+            G2038::Step::StockRepurchase,
             G2038::Step::Route,
+            G2038::Step::StockRepurchase,
             G2038::Step::Dividend,
             G2038::Step::BuyTrain,
             [G2038::Step::BuyCompany, { blocks: true }],
@@ -609,6 +733,13 @@ module Engine
         # invocations.
         def autorouter
           @autorouter ||= Autorouter.new(self)
+        end
+
+        # The from-scratch "optimal set" alternative (see optimal_
+        # autorouter.rb) -- built and run alongside #autorouter for
+        # comparison, never replacing it.
+        def optimal_autorouter
+          @optimal_autorouter ||= OptimalAutorouter.new(self)
         end
 
         def revenue_str(route)
@@ -717,7 +848,8 @@ module Engine
           return 0 if train.name == 'Probe' || trace.size < 2
           return 0 unless deliverable_destination?(trace.last)
 
-          cargo.sum { |c| c[:value] } + independent_ore_bonus(entity, train, cargo) + home_delivery_bonus(trace.last, cargo)
+          cargo.sum { |c| c[:value] } + independent_ore_bonus(entity, train, cargo) +
+            home_delivery_bonus(trace.last, cargo) + osr_claim_delivery_bonus(entity, cargo)
         end
 
         # A transshipment point's printed value works like a mine with
@@ -845,6 +977,13 @@ module Engine
         def home_delivery_bonuses
           @home_delivery_bonuses ||= self.class::CORPORATIONS.each_with_object({}) do |data, h|
             next unless data[:delivery_bonus]
+            # OSR (§13b) is the only corp here whose entities.rb entry
+            # exists regardless of optional rules but whose hex (B14)
+            # isn't a real base without optional_new_corporations --
+            # without this, a Full Game without the expansion would
+            # still silently pay OSR's bonus to anyone delivering to
+            # what's just an ordinary mine hex there.
+            next if data[:sym] == 'OSR' && !optional_new_corporations
 
             h[data[:coordinates]] = [data[:delivery_bonus], data[:delivery_bonus_amount]]
           end
@@ -860,6 +999,130 @@ module Engine
           cargo.count { |c| c[:ore] == ore } * amount
         end
 
+        # §13b: On-Site Refining's *own* bonus -- distinct from its home
+        # base's delivery_bonus (:r/+10, paid to *anyone* delivering Rare
+        # there, same mechanism as VP/MM/LE/OPC/RCC's own home bonuses).
+        # This one instead pays OSR itself +$10 for every delivery it
+        # makes from a mine *it has claimed* (any ore type) -- "+10 /
+        # claimed delivery." Checked against @mine_state directly (not
+        # cargo's own recorded :value, which already reflects the
+        # claimed-vs-unclaimed price split via pickup_value) since this
+        # is a flat bonus stacked on top of that value, not a
+        # replacement for it.
+        OSR_CLAIM_DELIVERY_BONUS = 10
+
+        def osr_claim_delivery_bonus(entity, cargo)
+          return 0 unless entity.id == 'OSR'
+
+          claimed = cargo.count do |c|
+            c[:mine_idx] && @mine_state.dig(c[:hex_id], :mines, c[:mine_idx], :owner) == entity.id
+          end
+          claimed * self.class::OSR_CLAIM_DELIVERY_BONUS
+        end
+
+        # One pickable slot -- either a specific mine (mine_idx set) or a
+        # transshipment hex (mine_idx/ore nil). `value` is the admissible
+        # ranking ceiling (raw + best-case bonus, see #candidate_slots);
+        # `raw_value` is the real pickup/transshipment value alone, with
+        # no bonus assumption baked in -- the feasibility solver (Game::
+        # OptimalAutorouter's own component) needs this to build a real
+        # cargo list and let Game#trace_revenue compute actual bonuses
+        # for whatever destination a specific route really reaches, since
+        # `value`'s bonus assumption is only a safe over-estimate for
+        # ranking, not necessarily achievable for any single combo.
+        CandidateSlot = Struct.new(:hex_id, :mine_idx, :ore, :value, :raw_value, keyword_init: true)
+
+        # Public: every slot this entity+train could currently pick up --
+        # every unclaimed-or-entity-owned, not-yet-used-this-OR mine, plus
+        # every currently-paying transshipment hex -- each tagged with an
+        # admissible (never too low) ceiling on what a single unit there
+        # could ever contribute: its own pickup/transshipment value, plus
+        # #best_case_ore_bonus for whatever ore it is. The alternative-
+        # ordering search (component 2 of the "optimal set" autorouter --
+        # see also Autorouter#solo_ceiling, the earlier per-ship version
+        # of this same idea) ranks candidate cargo combinations by summing
+        # these values, highest first.
+        def candidate_slots(entity, train)
+          slots = []
+
+          @mine_state.each do |hex_id, state|
+            state[:mines].each_with_index do |mine, idx|
+              next if mine[:used]
+              next if mine[:owner] && mine[:owner] != entity.id
+
+              bonus = best_case_ore_bonus(entity, train, mine[:ore], claimed: mine[:owner] == entity.id)
+              raw = pickup_value(entity, hex_id, idx)
+              slots << CandidateSlot.new(hex_id: hex_id, mine_idx: idx, ore: mine[:ore],
+                                          value: raw + bonus, raw_value: raw)
+            end
+          end
+
+          self.class::TRANSSHIPMENT_HEXES.each do |hex_id|
+            next unless transshipment_hex?(hex_id)
+
+            value = transshipment_value(hex_by_id(hex_id), train)
+            next unless value.positive?
+
+            slots << CandidateSlot.new(hex_id: hex_id, mine_idx: nil, ore: nil, value: value, raw_value: value)
+          end
+
+          slots
+        end
+
+        # The best-case additional bonus (beyond raw pickup/transshipment
+        # value) a single unit of `ore` could ever contribute for this
+        # entity+train -- entity's own INDEPENDENT_ORE_BONUS, its assigned
+        # pilot's ore bonus, OSR's own claim-delivery bonus (if this unit
+        # is a mine OSR itself has claimed), and whichever home_delivery_
+        # bonuses hex pays the MOST for this ore.
+        #
+        # Deliberately loose, not exact: a real route only ever ends at
+        # ONE hex, so at most one home_delivery_bonus can actually be
+        # realized across the whole cargo -- crediting every slot its own
+        # independently-best bonus assumes they could all somehow deliver
+        # to their own ideal destination at once, which overstates the
+        # true achievable total if two slots' best-paying hexes differ.
+        # That's fine and intentional here, the same admissible-bound
+        # philosophy Autorouter#solo_ceiling already uses for ranking/
+        # pruning candidates against each other -- it can only ever fail
+        # to prune something early, never wrongly discard a genuinely-
+        # better combination. transshipment slots (ore nil) never get a
+        # bonus -- none of these bonus types key off a nil ore.
+        def best_case_ore_bonus(entity, train, ore, claimed:)
+          return 0 unless ore
+
+          entity_fixed_ore_bonus(entity, train, ore, claimed: claimed) + best_home_delivery_amount(ore)
+        end
+
+        # Just the destination-INDEPENDENT slice of #best_case_ore_bonus
+        # -- entity's own INDEPENDENT_ORE_BONUS, its assigned pilot's ore
+        # bonus, and OSR's own claim-delivery bonus -- every one of these
+        # applies no matter where the route ends, unlike the home_
+        # delivery_bonus portion. Pulled out so OptimalAutorouter's per-
+        # destination-ore-focused sweeps (see that file's own comment on
+        # why summing every slot's own independently-best home bonus made
+        # the search's stopping point too slow to reach on a rich board)
+        # can credit this exact, non-estimated part unconditionally, and
+        # only add a home bonus when a slot's ore matches that sweep's
+        # one assumed destination -- keeping each sweep's own per-slot
+        # values genuinely additive/separable, unlike the combined bound.
+        def entity_fixed_ore_bonus(entity, train, ore, claimed:)
+          return 0 unless ore
+
+          bonus = 0
+          bonus += self.class::INDEPENDENT_ORE_BONUS_AMOUNT if self.class::INDEPENDENT_ORE_BONUS[entity.id] == ore
+          pilot_ore = self.class::INDEPENDENT_ORE_BONUS[pilot_source_for_train(entity, train)]
+          bonus += self.class::INDEPENDENT_ORE_BONUS_AMOUNT if pilot_ore == ore
+          bonus += self.class::OSR_CLAIM_DELIVERY_BONUS if entity.id == 'OSR' && claimed
+          bonus
+        end
+
+        # The most any single home_delivery_bonuses hex pays for `ore` --
+        # 0 if none do.
+        def best_home_delivery_amount(ore)
+          home_delivery_bonuses.values.select { |bonus_ore, _| bonus_ore == ore }.map { |_, amt| amt }.max.to_i
+        end
+
         # Torch's spaceships all get +1 MP over their printed stats -- every
         # movement-point calculation should read this instead of
         # train.distance directly. A Growth Corp formed from Torch (Phase 8)
@@ -868,6 +1131,46 @@ module Engine
         def ship_distance(entity, train)
           torch_bonus = entity.id == 'TH' || pilot_source_for_train(entity, train) == 'TH'
           train.distance + (torch_bonus ? 1 : 0)
+        end
+
+        # Plain BFS shortest-hop tree from `start`, ignoring refueling/MP
+        # entirely (1 MP per hop, unconstrained) -- memoized per source hex
+        # for the life of this game. The underlying hex-adjacency graph
+        # (which hexes are real vs. .empty, and which are neighbors) never
+        # changes over a game, only what's explored/placed on top of it
+        # does, so this exact same walk from a given source hex would
+        # otherwise get recomputed byte-for-byte identically every time
+        # it's asked for -- found live in browser: a single multi-ship
+        # Auto click on a well-developed board re-ran this same BFS from
+        # the same launch hexes dozens of times over (once per ship per
+        # ordering trial), all with identical results. Shared by
+        # Autorouter#seed_transshipment_baseline! and Step::Route#
+        # plain_shortest_paths, previously two independent copies of this
+        # same algorithm.
+        #
+        # Returns [dist, predecessor]: dist is {hex_id => hop count},
+        # predecessor is {hex_id => the hex reached just before it} for
+        # every hex reachable from start (excluding start itself).
+        def hex_bfs(start)
+          @hex_bfs_cache ||= {}
+          @hex_bfs_cache[start.id] ||= begin
+            dist = { start.id => 0 }
+            predecessor = {}
+            queue = [start]
+
+            until queue.empty?
+              hex = queue.shift
+              hex.neighbors.each_value do |neighbor|
+                next if neighbor.empty || dist.key?(neighbor.id)
+
+                dist[neighbor.id] = dist[hex.id] + 1
+                predecessor[neighbor.id] = hex
+                queue << neighbor
+              end
+            end
+
+            [dist, predecessor]
+          end
         end
 
         # Ice Finder/Drill Hound must draw a second tile if their first
@@ -933,9 +1236,9 @@ module Engine
 
         PILOT_DESCRIPTIONS = {
           'LY' => 'draws 2 tiles when exploring and places the better one',
-          'IF' => '+$10 per Ice ore delivered (forces a second tile draw if the first lacks Ice)',
-          'DH' => '+$10 per Rare ore delivered (forces a second tile draw if the first lacks Rare)',
-          'OC' => '+$10 per Nickel ore delivered',
+          'IF' => '+$10 per Ice (draws second tile if first lacks Ice)',
+          'DH' => '+$10 per Rare (draws second tile if first lacks Rare)',
+          'OC' => '+$10 per Nickel',
           'TH' => '+1 movement point to spaceships',
         }.freeze
 
@@ -943,7 +1246,10 @@ module Engine
         # ability/abilities (Phase 8), named per source rather than a
         # generic "Pilot:" label -- nil if it wasn't formed via Growth Corp
         # conversion (or hasn't absorbed any independent yet). Joins
-        # multiple entries if the corp has more than one (e.g. AL).
+        # multiple entries if the corp has more than one (e.g. AL). No
+        # "(assignable to one ship per OR)" note -- per the user, the game
+        # already enforces that, and restating it on every pilot just
+        # clutters the charter.
         def pilot_description(entity)
           sources = growth_corp_pilots(entity)
           return nil if sources.empty?
@@ -1016,6 +1322,12 @@ module Engine
         # distinct from the escalating DEFAULT_CLAIM_COSTS schedule used
         # for placing a brand new claim.
         INDEPENDENT_CLAIM_PRICE = 60
+
+        # §13b: On-Site Refining pays an extra +$20 whenever it buys a
+        # claim from an Independent this way -- unlike INDEPENDENT_CLAIM_
+        # PRICE itself, this surcharge goes to the bank, not the selling
+        # Independent.
+        OSR_INDEPENDENT_CLAIM_SURCHARGE = 20
 
         # Raw CORPORATIONS config for this entity -- `bases:`/`stations:`/
         # `claim_costs:` are custom per-corp fields (§7.4) that the base
@@ -1147,6 +1459,20 @@ module Engine
           @mine_state.flat_map { |hex_id, state| [hex_id] * state[:mines].count { |m| m[:owner] == entity.id } }
         end
 
+        # Same one-entry-per-claimed-mine list as claim_hexes above, but
+        # with the specific ore/claimed-value each entry needs to render
+        # as its own mine-colored circle on the corporation card (see
+        # View::Game::Corporation#render_claim_column) rather than a
+        # generic flag icon -- claim_hexes alone only has the hex id,
+        # which isn't enough to know which of a double-mine hex's two
+        # (possibly differently-valued/ore'd) mines a given slot is.
+        def claim_details(entity)
+          @mine_state.flat_map do |hex_id, state|
+            state[:mines].select { |m| m[:owner] == entity.id }
+                          .map { |m| { hex_id: hex_id, ore: m[:ore], value: m[:claimed], used: m[:used] } }
+          end
+        end
+
         def claim_cost_schedule(entity)
           corp_data(entity)&.dig(:claim_costs) || DEFAULT_CLAIM_COSTS
         end
@@ -1161,6 +1487,8 @@ module Engine
           return 2 if entity.minor?
 
           limit = corp_data(entity)&.dig(:claim_limit) || Float::INFINITY
+          # §13b: "Mars Mining gains 2 more Claims" once OSR/MR are in play.
+          limit += 2 if entity.id == 'MM' && optional_new_corporations
           return limit unless entity == @al_corporation
 
           [limit - (remaining_independents.size * 2), 0].max
@@ -1301,7 +1629,6 @@ module Engine
           @tiles.delete(tile)
           hex.lay(tile)
           tile.cities.first.place_token(entity, token, check_tokenable: false)
-          add_station_slot_marker!(hex)
           @log << "#{entity.name} places a #{free ? 'free ' : ''}base at #{hex.id}"\
                   "#{free ? '' : " (#{format_currency(cost)})"}"
         end
@@ -1309,17 +1636,30 @@ module Engine
         # Hex ids for every entity's starting home base (corp + independent +
         # AL) -- only used to know which hexes the edge-touching exclusion
         # below applies to. A base a company creates later via place_base!
-        # is never in this set, so it's unconditionally eligible.
+        # is never in this set, so it's unconditionally eligible. OSR/MR's
+        # own home hexes (B14/O13) are excluded here unless New Corporations
+        # is active -- otherwise base_tile? below would still treat them as
+        # a placed base (and hex.rb would draw the ring-station art on an
+        # otherwise-ordinary, unexplored blue hex) even with the rule off.
         def starting_base_hexes
           @starting_base_hexes ||= (self.class::CORPORATIONS + self.class::MINORS).map { |data| data[:coordinates] }
+          return @starting_base_hexes if optional_new_corporations
+
+          @starting_base_hexes - self.class::OSR_MR_HOME_HEXES
         end
 
         # Which bases may ever receive a refueling station (§7.42): every
         # interior (non-edge) starting base except AL's, plus any base a
         # company creates later via place_base! (always eligible, regardless
         # of position). Edge-touching starting bases (VP/LE/MM/OPC/RCC, all
-        # with fewer than 6 neighbors) never get one.
+        # with fewer than 6 neighbors) never get one. §13b: OSR's/MR's own
+        # starting bases (B14/O13) are an explicit exception on top of
+        # that -- "Refueling Stations may not be placed at either of these
+        # two starting bases".
+        OSR_MR_HOME_HEXES = %w[B14 O13].freeze
+
         def station_eligible?(hex)
+          return false if optional_new_corporations && self.class::OSR_MR_HOME_HEXES.include?(hex.id)
           return true unless starting_base_hexes.include?(hex.id)
           return hex.all_neighbors.size == 6 unless Array(@al_corporation.coordinates).include?(hex.id)
 
@@ -1328,22 +1668,6 @@ module Engine
           # confirmed with the user. Before that it's just a placeholder
           # token with no corporation behind it yet.
           @asteroid_league_formed && hex.all_neighbors.size == 6
-        end
-
-        STATION_SLOT_NAME = 'g2038_station_slot'
-
-        # Generic "may get a station here" placeholder (a white circle with
-        # an outlined teardrop) shown on every eligible, not-yet-stationed
-        # base -- replaced by the real per-corp colored icon the moment a
-        # station is actually placed (see place_station!).
-        def add_station_slot_marker!(hex)
-          return if hex.tile.icons.any? { |i| i.name == STATION_SLOT_NAME }
-
-          hex.tile.icons << Part::Icon.new('g_2038/station_slot', STATION_SLOT_NAME, true, false, false, large: true)
-        end
-
-        def remove_station_slot_marker!(hex)
-          hex.tile.icons.reject! { |i| i.name == STATION_SLOT_NAME }
         end
 
         # A refueling station may be placed on any base within range that
@@ -1361,21 +1685,6 @@ module Engine
           entity.spend(cost, bank) if cost.positive?
           @station_hexes[entity] << hex.id unless free
           @refueling_stations[hex.id] = entity
-          remove_station_slot_marker!(hex)
-
-          # Unlike a base, a station has no token/city slot of its own to
-          # render through (the hex's one city slot is already the base
-          # owner's) -- Part::Icon is the engine's existing generic
-          # "extra thing pinned to a tile" mechanism (used by every game for
-          # preprinted map decorations), so pushing one onto the tile's
-          # live icons array at placement time gets it drawn with zero
-          # shared view/engine code touched. public/icons/g_2038/ holds one
-          # placeholder icon per corp, matching each one's own color.
-          # large: true picks up the engine's existing Part::LargeIcons
-          # rendering path (LARGE_RADIUS 25 vs. the normal 16) -- also
-          # pre-existing/generic, not something added for this.
-          hex.tile.icons << Part::Icon.new("g_2038/#{entity.id}_station", "station_#{entity.id}", true, false, false,
-                                            large: true, owner: entity)
 
           @log << "#{entity.name} places a #{free ? 'free ' : ''}refueling station at #{hex.id}"\
                   "#{free ? '' : " (#{format_currency(cost)})"}"
@@ -1387,8 +1696,9 @@ module Engine
         # uncounted extra rather than eating into the corp's claim_limit.
         def place_claim!(entity, hex, mine_idx, cost, free: false)
           entity.spend(cost, bank) if cost.positive?
-          @mine_state[hex.id][:mines][mine_idx][:owner] = entity.id
-          @mine_state[hex.id][:mines][mine_idx][:free] = true if free
+          mine = @mine_state[hex.id][:mines][mine_idx]
+          mine[:owner] = entity.id
+          mine[:free] = true if free
 
           # The claimed value is now the only one that matters on the map --
           # only the claim owner may pick up here, always at the claimed rate.
@@ -1400,12 +1710,19 @@ module Engine
           # something else (e.g. a full reload) rebuilds the tile from
           # scratch.
           city = hex.tile.cities[mine_idx]
-          claimed_value = @mine_state[hex.id][:mines][mine_idx][:claimed]
-          city.revenue = Part::RevenueCenter::PHASES.to_h { |phase| [phase, claimed_value] }
+          city.revenue = Part::RevenueCenter::PHASES.to_h { |phase| [phase, mine[:claimed]] }
           city.instance_variable_set(:@uniq_revenues, nil)
 
-          @log << "#{entity.name} claims a #{free ? 'free ' : ''}mine at #{hex.id}"\
+          @log << "#{entity.name} claims a #{free ? 'free ' : ''}mine (#{claim_label(mine)}) at #{hex.id}"\
                   "#{free ? '' : " (#{format_currency(cost)})"}"
+        end
+
+        # "R:30"-style identifier for a mine -- the ore's one-letter code,
+        # a colon, its claimed value -- used in claim-related log lines
+        # so the log itself says what was actually claimed, not just
+        # where. Per the user.
+        def claim_label(mine)
+          "#{mine[:ore].to_s.upcase}:#{mine[:claimed]}"
         end
 
         # A corporation buying an already-placed claim off the independent
@@ -1418,10 +1735,14 @@ module Engine
           mine = @mine_state[hex.id][:mines][mine_idx]
           seller = minor_by_id(mine[:owner])
           entity.spend(self.class::INDEPENDENT_CLAIM_PRICE, seller)
+
+          surcharge = entity.id == 'OSR' ? self.class::OSR_INDEPENDENT_CLAIM_SURCHARGE : 0
+          entity.spend(surcharge, bank) if surcharge.positive?
           mine[:owner] = entity.id
 
-          @log << "#{entity.name} buys #{seller.name}'s claim at #{hex.id} "\
-                  "(#{format_currency(self.class::INDEPENDENT_CLAIM_PRICE)})"
+          total = self.class::INDEPENDENT_CLAIM_PRICE + surcharge
+          @log << "#{entity.name} buys #{seller.name}'s claim (#{claim_label(mine)}) at #{hex.id} "\
+                  "(#{format_currency(total)})"
         end
 
         # A corp buying an independent's claim is a cross-player
@@ -1442,6 +1763,19 @@ module Engine
         end
 
         def setup
+          # §13-pre: the expansion's own "New Corporations" text is
+          # explicit -- "to the full game (but not the Short Game)" --
+          # and the Variant Start Packet transitively implies New
+          # Corporations (optional_new_corporations above), so this one
+          # check covers both. Raised here (not at the lobby/options
+          # level) since @optional_rules is only assembled once game
+          # setup actually runs -- matches how other invalid-combination
+          # checks in this codebase surface (a GameError at setup time,
+          # not a silent ignore).
+          if optional_short_game && optional_new_corporations
+            raise GameError, 'The Short Game cannot be combined with New Corporations or the Variant Start Packet'
+          end
+
           @log << '2038 is a game of exploration, involving reveals of hidden tiles. Using Undo to revert '\
                   'a revealed tile to its hidden state could give a player an unfair benefit. Please exercise '\
                   'care in exploration, and refrain from undoing actions that have revealed tiles.'
@@ -1459,9 +1793,9 @@ module Engine
           # (Phase 9) all land here so the charter can show them.
           @extra_base_hexes = Hash.new { |h, k| h[k] = [] }
           # Most recently completed flight for each ship (train id -> hex
-          # path + which mines were picked up), so "Previous Route" can
+          # path + which mines were picked up), so "Modify"/"Submit" can
           # offer a cheap replay instead of re-running the autorouter's
-          # search -- see Step::Route#replay_previous_route!. Persists here
+          # search -- see Step::Route#preview_last_route. Persists here
           # (not on the round-local @route_stats_by_train) because it needs
           # to survive into the *next* OR, when Step::Route is rebuilt fresh.
           @last_route = {}
@@ -1501,6 +1835,35 @@ module Engine
           @al_corporation.capitalization = :incremental
           @asteroid_league_formed = false
 
+          # §13c: "IPO shares" (a corp's own still-unsold allocation)
+          # must NOT pay the corp dividends once this rule is active,
+          # while genuinely repurchased "Treasury Shares" (rule 3) must.
+          # Both currently show `owner == corp` with no way to tell them
+          # apart -- confirmed with the user, following the same pattern
+          # 1862 uses for its own chartered/full-capitalization
+          # companies (Game#convert_to_full!): point `ipo_owner` at the
+          # bank instead of the corp itself, so a corp's *unsold* shares
+          # live with the bank while only genuinely *repurchased* ones
+          # ever end up owned by the corp again. Every G2038 corp starts
+          # `:full` capitalization; AL just switched to `:incremental`
+          # immediately above (Growth Corps switch similarly later, on
+          # formation) -- both correctly skipped here and left alone,
+          # already handled by rule 1's own capitalization check
+          # elsewhere. Must run *after* AL's own capitalization switch
+          # above, not before, or AL (still `:full` at that point) would
+          # get its own IPO shares wrongly redirected to the bank too.
+          # Otherwise run as early as possible, before any shares have
+          # actually moved, so "every currently self-held share" is
+          # unambiguously the entire unsold allotment.
+          if optional_stock_repurchases
+            @corporations.each do |corp|
+              next if corp.capitalization == :incremental
+
+              corp.ipo_owner = bank
+              corp.shares_by_corporation[corp].dup.each { |share| transfer_treasury_share!(share, bank) }
+            end
+          end
+
           # One of AL's 8 non-president shares reserved per independent, from
           # the very start of the game (not just once AL forms) -- guarantees
           # a share is available if and when that specific independent later
@@ -1523,6 +1886,18 @@ module Engine
 
           @corporations.reject! { |c| c.id == 'AL' }
 
+          # §13b: OSR/MR's home hexes (B14/O13) only exist as real base
+          # cities when optional_new_corporations makes optional_hexes
+          # carve them out of the blue/unexplored set -- without the
+          # rule they're ordinary unexplored hexes, so place_home_token
+          # would crash looking for a city that was never placed. Pulled
+          # out of the generic placement loop for that one case only;
+          # with the rule on they go through the exact same
+          # place_home_token/coordinates: flow as any other corp below.
+          osr_mr = @corporations.select { |c| %w[OSR MR].include?(c.id) }
+          placement_entities = @corporations + @minors + [@al_corporation]
+          placement_entities -= osr_mr unless optional_new_corporations
+
           # All 13 starting-base hexes are on the map and deliverable from
           # turn one -- unlike the engine's HOME_TOKEN_TIMING default of
           # :operate, a corp/independent's own home base doesn't wait for
@@ -1531,19 +1906,41 @@ module Engine
           # not just for itself. place_home_token no-ops harmlessly if
           # called again later (it checks `tokens.first&.used`), so the
           # standard :operate-time call still fires without conflict once
-          # each entity actually starts operating.
-          (@corporations + @minors + [@al_corporation]).each { |entity| place_home_token(entity) }
+          # each entity actually starts operating. Placed for OPC/RCC too,
+          # even under optional_short_game (where they're about to be
+          # excluded from @corporations below) -- confirmed with the user:
+          # the Short Game section only says the *corporations* aren't
+          # used, and "Points to Remember" separately states, twice and
+          # unconditionally, "All 13 bases printed on the map start/begin
+          # the game in play" -- combined with the Short Game's own "uses
+          # all the Full Game rules except the following" framing, their
+          # bases stay real, deliverable destinations for everyone else
+          # even though OPC/RCC themselves never operate. OSR/MR's own
+          # bases, when the expansion rule is on, are exactly as real and
+          # permanent as any of these 13 -- see optional_hexes.
+          placement_entities.each { |entity| place_home_token(entity) }
 
-          # Mark every eligible starting base with the generic "may get a
-          # station" placeholder (§7.42) -- edge-touching starting bases are
-          # excluded, and AL's isn't eligible until it forms (station_eligible?
-          # picks it up separately in form_asteroid_league! below), but a
-          # base a company creates later is unconditionally eligible (see
-          # place_base!).
-          starting_base_hexes.each do |hex_id|
-            hex = hex_by_id(hex_id)
-            add_station_slot_marker!(hex) if station_eligible?(hex)
-          end
+          # §13a: "The two group 'C' Corporations, the Outer Planet
+          # Consortium and the Ring Construction Corp., are not used."
+          # Dropped from @corporations *after* their bases are placed
+          # above (see that comment) so they never operate, never appear
+          # on the stock market, and never show up in any other
+          # bookkeeping that iterates @corporations, while their bases
+          # remain in play.
+          @corporations.reject! { |c| %w[OPC RCC].include?(c.id) } if optional_short_game
+
+          # §13b: On-Site Refining and Mining Robotics only exist under
+          # the New Corporations expansion rule (or the Variant Start
+          # Packet, which implies it) -- same "drop from @corporations,
+          # base stays real" pattern as OPC/RCC above, just gated the
+          # opposite way (present unless the rule is *off*). NOTE: this
+          # wires entities.rb data, the on/off toggle, and the starting-
+          # base placement -- still not yet implemented: OSR/MR "start
+          # the game already in play" with no normal IPO/float at all
+          # (today, with the rule on, they still wait for the ordinary
+          # group_c unlock and float like any other corp -- see ROADMAP
+          # 13b).
+          @corporations.reject! { |c| %w[OSR MR].include?(c.id) } unless optional_new_corporations
 
           return if optional_variant_start_pack
 
@@ -1628,17 +2025,26 @@ module Engine
           # (Growth Corp conversion, Phase 8, or AL merger, Phase 9) stops
           # applying the instant Phase V begins, regardless of whether
           # the original independent itself already closed on its own
-          # separate trigger long before now. Fast Buck never gets an
-          # entry here at all (no PILOT_NAMES key, its $15/OR income is
-          # unrelated and keeps flowing via @fast_buck_income_recipient),
-          # so clearing the whole hash can't accidentally touch that.
+          # separate trigger long before now.
           # Found live in browser: growth_corp_pilots kept returning
           # entries past Phase V, even though the Phase V event's own log
           # text already (incorrectly) claimed this was handled.
-          return if @growth_corp_pilot.empty?
+          #
+          # Fast Buck's $15/OR treasury income counts as its pilot
+          # certificate too (confirmed with the user -- an earlier reading
+          # of this code treated it as a separate, permanent perk instead,
+          # which was wrong), so it stops the same way: clearing
+          # @fast_buck_income_recipient makes pay_fast_buck_treasury's
+          # `recipient&.floated?` guard a no-op from here on, whether FB
+          # was absorbed via Growth Corp conversion or an AL merger.
+          had_pilots = !@growth_corp_pilot.empty?
+          had_fast_buck_income = !@fast_buck_income_recipient.nil?
+          return unless had_pilots || had_fast_buck_income
 
-          @log << 'All inherited pilot bonuses are removed'
+          @log << 'All inherited pilot bonuses are removed' if had_pilots
+          @log << "Fast Buck's treasury income stops" if had_fast_buck_income
           @growth_corp_pilot = {}
+          @fast_buck_income_recipient = nil
         end
 
         def event_group_b_corps_available!
@@ -1752,6 +2158,7 @@ module Engine
         def independent_must_merge?(minor)
           return false unless @asteroid_league_formed
           return false unless minor.minor?
+          return false if minor.closed?
           return false unless minor.trains.empty?
 
           cheapest = depot.depot_trains.map(&:price).min
@@ -1768,14 +2175,6 @@ module Engine
           return unless owner
 
           @asteroid_league_formed = true
-          # AL's home is now a normal base like any other -- newly eligible
-          # for a station (station_eligible?) -- so it needs the same "may
-          # get a station" placeholder every other eligible base received
-          # at setup.
-          Array(@al_corporation.coordinates).each do |hex_id|
-            hex = hex_by_id(hex_id)
-            add_station_slot_marker!(hex) if station_eligible?(hex)
-          end
 
           share_price = stock_market.par_prices.find { |pp| pp.price == 125 }
           stock_market.set_par(@al_corporation, share_price)
@@ -1835,8 +2234,14 @@ module Engine
           # -- a decline followed by accepting a subsequent offer, the
           # Phase 5 forced merge, or a bankruptcy-forced merge -- gives the
           # owner nothing unless the independent still owns a ship at the
-          # moment of merger -- confirmed with the user.
-          owner_gets_half = first_opportunity || !minor.trains.empty?
+          # moment of merger -- confirmed with the user. Short Game
+          # exception (§13a): "Independent owners receive 1/2 of their
+          # cash-on-hand only if they join the Asteroid League when it
+          # first forms (regardless of whether they still possess a
+          # spaceship if they join later)" -- the "still owns a ship"
+          # exception for a later merge simply doesn't exist under this
+          # optional rule; only the first-opportunity case ever pays out.
+          owner_gets_half = first_opportunity || (!optional_short_game && !minor.trains.empty?)
           # .round guards against a non-integer minor.cash -- money here
           # should always be whole dollars, but this is defensive in case
           # some earlier turn's arithmetic left a fractional residue (found
@@ -1853,18 +2258,36 @@ module Engine
           total_cash = minor.cash.round
           half_cash = owner_gets_half ? (total_cash + 1) / 2 : 0
           al_cash = total_cash - half_cash
-          minor.spend(half_cash, owner) if half_cash.positive?
-          minor.spend(al_cash, @al_corporation) if al_cash.positive?
+          # check_positive: false on top of the .positive? guards themselves
+          # (not just belt-and-suspenders) -- matches Step::Dividend#
+          # payout_entity's own zero-guard + check_positive: false pairing
+          # for the same "split revenue between multiple parties, some
+          # shares legitimately zero" shape. Found live in browser: a
+          # zero-cash independent's merge raised "Cannot spend zero or
+          # negative money in Spender.spend(0)" from one of these two
+          # calls despite total_cash/half_cash/al_cash all replaying as
+          # clean zero Integers server-side -- never reproduced outside
+          # the browser's own Opal runtime, so the guard alone isn't
+          # trustworthy enough here; check_positive: false makes a $0
+          # transfer a harmless no-op no matter what.
+          minor.spend(half_cash, owner, check_positive: false) if half_cash.positive?
+          minor.spend(al_cash, @al_corporation, check_positive: false) if al_cash.positive?
 
           reserved_share = @al_reserved_shares[minor.id]
           reserved_share.buyable = true
           share_pool.buy_shares(owner, reserved_share, exchange: :free)
 
-          minor.trains.dup.each do |train|
-            minor.trains.delete(train)
-            train.owner = @al_corporation
-            @al_corporation.trains << train
-          end
+          # transfer (not a manual owner-reassign loop) -- it also
+          # invalidates Game::Base's own @crowded_corps memoization
+          # (checked by Step::DiscardTrain#active?/crowded_corps to force
+          # an over-limit discard). A manual loop bypasses that
+          # invalidation entirely, so a merge that pushes AL over its own
+          # train_limit (§9g -- AL's own train_limit is real, just like
+          # any corp's) went completely undetected until something else
+          # happened to touch @crowded_corps later -- found live in
+          # browser: AL sitting at 5 ships with its own limit at 4, no
+          # discard ever prompted.
+          transfer(:trains, minor, @al_corporation)
 
           # Extra, uncounted base -- same as a Growth Corp's inherited base
           # (Phase 8): never pushed into @base_hexes[@al_corporation], so
@@ -1918,6 +2341,14 @@ module Engine
         # them (Phase 8).
         # Growth Corp conversion is only available in Phases 2-3, and never
         # once the Asteroid League has formed (§8).
+        # §13d: "Growth Corporations still may not be launched during Phase
+        # I even so" -- already true unconditionally, variant or not: a
+        # corp only ever becomes a Growth Corp via the trade-in-an-
+        # independent conversion path (form_growth_corporation!, which sets
+        # capitalization = :incremental as ITS OWN result -- see below), and
+        # that path is already gated to Phases 2-3 here regardless of any
+        # group-partition timeline. No separate check needed under
+        # optional_variant_start_pack.
         def growth_conversion_allowed?
           %w[2 3].include?(phase.name) && !@asteroid_league_formed
         end
@@ -1945,6 +2376,28 @@ module Engine
           price_10 = stock_market.par_prices.find { |pp| pp.price == 10 }
 
           corp.capitalization = :incremental
+
+          # §13c's ipo_owner migration (Game#setup) runs at game start,
+          # before any corp's eventual capitalization is knowable -- every
+          # corp still shows :full at that point (this one only becomes
+          # :incremental right here, via conversion), so under
+          # optional_stock_repurchases it was already swept into the bank
+          # along with every genuinely full-cap corp. Reclaim it now: this
+          # corp hasn't parred/floated yet, so nothing but the bank could
+          # possibly hold any of its shares at this exact moment -- safe
+          # to move all of them back unconditionally. Without this,
+          # SharePool#buy_shares' own incremental-cap payment routing
+          # (keyed on `bundle.owner.corporation?`) never matches, since
+          # the shares stay bank-owned forever, and every share a player
+          # buys from this corp's own IPO box silently pays the bank
+          # instead of the corp -- found live: a Growth Corp showing only
+          # its inherited independent's treasury cash, none of what
+          # players had actually paid for its shares.
+          if corp.ipo_owner != corp
+            corp.ipo_owner = corp
+            bank.shares_by_corporation[corp].dup.each { |share| transfer_treasury_share!(share, corp) }
+          end
+
           stock_market.set_par(corp, par_67)
           # set_par (above) also pushes corp onto par_67.corporations, which
           # is what actually draws a token on the stock market chart --
@@ -1959,11 +2412,12 @@ module Engine
 
           minor.spend(minor.cash, corp) if minor.cash.positive?
 
-          minor.trains.dup.each do |train|
-            minor.trains.delete(train)
-            train.owner = corp
-            corp.trains << train
-          end
+          # transfer (not a manual owner-reassign loop) -- see
+          # merge_independent_into_al!'s identical fix/comment for why: a
+          # manual loop never invalidates Game::Base's own @crowded_corps
+          # memoization, so a conversion that pushes the new Growth Corp
+          # over its own train_limit would go completely undetected.
+          transfer(:trains, minor, corp)
 
           # The independent's base transfers as an EXTRA base -- never
           # pushed into @base_hexes[corp], so base_limit/base_cost (both
@@ -2053,9 +2507,34 @@ module Engine
           abilities(company, :shares) do |ability|
             ability.shares.each do |share|
               if share.president
-                stock_market.set_par(share.corporation, share_price)
-                share_pool.buy_shares(player, share, exchange: :free)
-                after_par(share.corporation)
+                if optional_variant_start_pack
+                  # §13d: "TSI's par price is player-chosen" -- and must be
+                  # chosen immediately, interrupting the auction right when
+                  # ST is bought (confirmed with the user -- waiting for
+                  # the ordinary ipo/par UI, which only ever becomes
+                  # reachable once WaterfallAuction stops blocking for
+                  # *everyone*, was too late whenever other companies were
+                  # still unsold). `@round.companies_pending_par` is the
+                  # base engine's own mechanism for exactly this shape (a
+                  # private grants a president's cert, its buyer must
+                  # immediately pick a par price before anyone else can
+                  # act) -- already wired into stock_round via
+                  # G2038::Step::CompanyPendingPar (this game's own
+                  # subclass, fixing the base version's `corporation.
+                  # shares.first` to `ipo_shares.first` -- needed since
+                  # optional_variant_start_pack always implies
+                  # optional_stock_repurchases, which relocates an unparred
+                  # full-cap corp's shares to the bank at setup), which is
+                  # positioned *before* WaterfallAuction in that array so
+                  # it wins Round::Base#process_action's first-blocking-
+                  # step lookup and genuinely blocks everyone else's turn
+                  # until this resolves.
+                  @round.companies_pending_par << company
+                else
+                  stock_market.set_par(share.corporation, share_price)
+                  share_pool.buy_shares(player, share, exchange: :free)
+                  after_par(share.corporation)
+                end
               else
                 # Suppress president-share swap: TSI_0 must only move when ST is bought.
                 # Without this, buying TSI_2+TSI_3 triggers a swap that pulls TSI_0 out of
@@ -2066,19 +2545,378 @@ module Engine
           end
         end
 
+        # TSI is never parrable through the *ordinary* cash-par UI, baseline
+        # or variant -- its president's cert only ever comes from ST's own
+        # `shares` ability (see after_buy_company above), either an
+        # immediate fixed-price grant (baseline) or a forced player choice
+        # via G2038::Step::CompanyPendingPar (optional_variant_start_pack).
+        # Without this, nothing stops any player from cash-parring TSI
+        # directly through the ordinary par UI before ST is even bought --
+        # a real gap in both modes.
+        #
+        # The exception below is required, not just belt-and-suspenders:
+        # assets/app/view/game/{par,form_corporation}.rb both gate their
+        # own price-selection buttons behind this exact method ("Cannot
+        # Par" otherwise) -- CompanyPendingPar#process_par itself never
+        # calls can_par? at all, but the UI the player actually clicks
+        # through to submit that Par action does, for every corp. Found
+        # live: the interrupt correctly blocked every other player, but
+        # the intended buyer saw "Cannot Par" too, with no way to ever
+        # submit a price. `round.respond_to?` guards against Operating-
+        # round contexts, where companies_pending_par was never declared
+        # (round_state only merges keys the current round's own steps
+        # opted into) and would otherwise raise via method_missing.
+        def can_par?(corporation, parrer)
+          if corporation.id == 'TSI'
+            pending = round.respond_to?(:companies_pending_par) &&
+              round.companies_pending_par.find { |c| c.id == 'ST' }
+            return false unless pending && pending.owner == parrer
+          end
+
+          super
+        end
+
         def optional_short_game
           @optional_rules&.include?(:optional_short_game)
+        end
+
+        # §13a: "Remove $6,000 and 2 Phase II ships from the game." Phase
+        # I/II ships are physically double-sided tokens (one face '4/3',
+        # the other its '6/2' variant -- confirmed in the rules text:
+        # "printed on opposite sides of the same certificate"), so
+        # there's a single pool of 10 to remove 2 from, not two separate
+        # counts for the base name and its variant.
+        # §13b: "Add one Phase III, one Phase V and three Phase VI
+        # spaceships" once OSR/MR are in play -- on top of the base
+        # game's own counts, additive with the Short Game's -2 to '4/3'
+        # (though the two can never actually combine in practice --
+        # optional_new_corporations and optional_short_game are mutually
+        # exclusive, enforced in setup).
+        NEW_CORPORATIONS_EXTRA_TRAINS = { '5/4' => 1, '7/6' => 1, '9/7' => 3 }.freeze
+
+        def num_trains(train)
+          count = super
+          count -= 2 if optional_short_game && train[:name] == '4/3'
+          count += self.class::NEW_CORPORATIONS_EXTRA_TRAINS[train[:name]] || 0 if optional_new_corporations
+          # §13d: "+2 Phase I ships" -- same double-sided-token pool as
+          # '4/3'/'6/2' above, just added to '3/2''s own '5/1'-variant pool
+          # instead of removed from it.
+          count += 2 if optional_variant_start_pack && train[:name] == '3/2'
+          count
         end
 
         def optional_variant_start_pack
           @optional_rules&.include?(:optional_variant_start_pack)
         end
 
-        # Suggest Route / Accept Route is on by default; the optional rule
-        # is phrased as an opt-out (checking it turns the assist off) so
-        # the common case needs no setup step, per the user.
-        def autorouter_enabled?
-          !@optional_rules&.include?(:disable_autorouter)
+        # The Variant Start Packet always brings the other two expansion
+        # rules along with it (per the expansion text's own setup: "Add
+        # the two Corporations... Use the optional rule Stock
+        # Repurchases..."), so each of these returns true whether its own
+        # box was checked directly or only the Start Packet's was.
+        def optional_new_corporations
+          optional_variant_start_pack || @optional_rules&.include?(:optional_new_corporations)
+        end
+
+        # §13b: with OSR/MR in play, Phase VI ('9/7') needs *two* Phase V
+        # ships bought first, not the base game's one -- shared by
+        # Step::BuyTrain#buyable_trains (the ordinary purchase list) and
+        # #discountable_trains_for below (the separate exchange-discount
+        # UI, assets/app/view/game/buy_trains.rb) so both actually agree.
+        # Found live in browser: buyable_trains alone correctly hid 9/7
+        # from the plain purchase list after only one Phase V ship, but
+        # the base engine's own discountable_trains_for (which reads
+        # @depot.depot_trains + Train#discount directly, never consulting
+        # this step override at all) still offered a 9/5->9/7 Exchange
+        # button regardless.
+        def phase_vi_unlocked?
+          return true unless optional_new_corporations
+
+          phase_v_bought = @depot.trains.count { |t| %w[7/6 9/5].include?(t.name) && t.owner != @depot }
+          phase_v_bought >= 2
+        end
+
+        def discountable_trains_for(corporation)
+          trains = super
+          return trains if phase_vi_unlocked?
+
+          trains.reject { |_train, discount_train, _variant_name, _price| discount_train.name == '9/7' }
+        end
+
+        # §13b: On-Site Refining's and Mining Robotics' starting bases are
+        # plain pre-printed base hexes with no mine/ore content at all --
+        # exactly like every other corp's home (TSI's K9, MM's A1, etc.),
+        # not a randomly-explored asteroid tile. Confirmed with the user
+        # after two wrong earlier guesses (a fixed hex with no setup
+        # change, then a real explored mine tile) -- this one holds:
+        # `optional_hexes` (below) is what actually makes B14/O13 exist as
+        # real base hexes at all; from there they go through the exact
+        # same `place_home_token`/`coordinates:` flow as any other corp,
+        # so this base is also automatically uncounted against
+        # base_limit/bases.size the same way every other corp's home
+        # already is (home placement never touches @base_hexes -- only
+        # place_base! does).
+        #
+        # These two hexes don't exist as cities at all without this rule
+        # -- unlike OPC/RCC (whose bases are part of the standard 13 and
+        # exist regardless of any optional rule), B14/O13 are ordinary
+        # unexplored blue hexes in the Full Game as printed. `optional_hexes`
+        # (see Game::Base's own "use to modify hexes based on optional
+        # rules" comment) is the designated override point -- moves both
+        # coordinates from `blue` to `gray` only when the rule is active,
+        # so a Full Game without the expansion keeps its normal 100
+        # unexplored blue hexes untouched. Builds fresh arrays/hashes
+        # rather than mutating HEXES's own (frozen) nested structures.
+        def optional_hexes
+          return game_hexes unless optional_new_corporations
+
+          hexes = game_hexes.dup
+          hexes[:blue] = { hexes[:blue].keys.first - self.class::OSR_MR_HOME_HEXES => '' }
+          hexes[:gray] = { hexes[:gray].keys.first + self.class::OSR_MR_HOME_HEXES => 'city=revenue:0' }
+          hexes
+        end
+
+        # §13b: `init_hexes` (base.rb) builds every corp's home-hex
+        # *reservation* from `reservation_corporations` (default:
+        # `corporations`) -- and it does this *before* `setup` ever runs,
+        # so OSR/MR are still sitting in `@corporations` at that point
+        # regardless of whether optional_new_corporations is on (the
+        # exclusion in `setup` happens later). Without this override,
+        # B14/O13 correctly stay ordinary blank hexes (optional_hexes
+        # above), but still end up with a stray, city-less reservation
+        # label for OSR/MR floating over them -- found live in browser as
+        # a bare "OSR" text label and generic gray marker with no real
+        # base underneath, on a Full Game with the rule off entirely.
+        def reservation_corporations
+          return super if optional_new_corporations
+
+          super.reject { |c| %w[OSR MR].include?(c.id) }
+        end
+
+        def optional_stock_repurchases
+          optional_variant_start_pack || @optional_rules&.include?(:optional_stock_repurchases)
+        end
+
+        # §13c rule 3: standard engine redeem/issue hooks (see
+        # Step::StockRepurchase/Step::IssueShares -- the same reusable
+        # mechanism 1817/1822/1846 use for their own corporate share
+        # dealing). Buyback-only: `issuable_shares` always returns []
+        # since nothing in this rule lets a corp sell treasury shares
+        # for cash, only buy its own back. Bundles come straight from
+        # `bundles_for_corporation(share_pool, entity)` -- shares
+        # currently sitting in the open market, priced at the entity's
+        # own current `share_price` via each Share's own default
+        # price_per_share (no override needed here, unlike rule 1's
+        # Growth-Corp-box pricing above, which is a genuinely different
+        # price source) -- filtered to whatever the corp's own treasury
+        # can actually afford.
+        def redeemable_shares(entity)
+          return [] unless optional_stock_repurchases && entity.corporation?
+
+          bundles_for_corporation(share_pool, entity).reject { |bundle| entity.cash < bundle.price }
+        end
+
+        def issuable_shares(_entity)
+          []
+        end
+
+        # Basic share move with no payment/president-change side effects
+        # -- mirrors 1862's own Game#transfer_share, used the same way
+        # here: once at setup to relocate a corp's still-unsold shares
+        # to the bank (see the ipo_owner switch in #setup above).
+        def transfer_treasury_share!(share, new_owner)
+          corp = share.corporation
+          corp.share_holders[share.owner] -= share.percent
+          corp.share_holders[new_owner] += share.percent
+          share.owner.shares_by_corporation[corp].delete(share)
+          new_owner.shares_by_corporation[corp] << share
+          share.owner = new_owner
+        end
+
+        # §13c rule 1: "All shares in the Growth Corporation share box
+        # (only) are bought at the higher of that Corporation's par or
+        # current stock value" -- i.e. this codebase's own established
+        # "Treasury Shares" concept (Corporation#treasury_shares), for
+        # the specific case of a Growth Corp/AL's still-unsold IPO
+        # shares. Without this rule, those are always priced at par
+        # (Share#price_per_share reads par_price for as long as owner ==
+        # ipo_owner, see form_growth_corporation!'s own comment on that),
+        # never reflecting a market price that's since climbed above it.
+        # ShareBundle#share_price (settable, nil by default) is the
+        # designed override point -- falls back to the normal per-share
+        # calculation whenever left unset. Scoped to `share_holder ==
+        # corporation` (i.e. actually querying the corp's own IPO/
+        # treasury shares, not some other holder's bundles of it) and
+        # `capitalization == :incremental` (Growth Corps and the AL,
+        # both of which price their own unsold shares via ipo_owner --
+        # an ordinary Public corp's shares were never IPO-owned this way
+        # in the first place, so this never applies to one just because
+        # it's holding some Treasury Shares back via a rule-3 buyback).
+        def bundles_for_corporation(share_holder, corporation, shares: nil)
+          bundles = super
+          return bundles unless optional_stock_repurchases && share_holder == corporation &&
+            corporation.capitalization == :incremental
+
+          price = [corporation.par_price.price, corporation.share_price.price].max
+          bundles.each { |b| b.share_price = price }
+          bundles
+        end
+
+        # A Growth Corp's (or AL's) still-unsold shares sit with the corp
+        # itself (Game#form_growth_corporation! resets ipo_owner to self
+        # right at conversion -- see that method's own comment), the exact
+        # same place a redeemed Treasury Share ends up; per the user
+        # they're conceptually one and the same holding, so the corp card's
+        # own "Shareholder" table should say so instead of splitting them
+        # into a separate "IPO" row. An ordinary Public corp's unsold
+        # shares (still genuinely at the bank, or self pre-repurchases)
+        # keep the standard "IPO" label -- only capitalization ==
+        # :incremental corps get the rename.
+        def ipo_name(entity = nil)
+          return super unless entity&.corporation? && entity.capitalization == :incremental
+
+          'Treasury'
+        end
+
+        # Opt-in hook for assets/app/view/game/hex.rb: whether this tile
+        # should get the starfield pattern (its own per-hex, randomly-
+        # rotated <defs><pattern>, built entirely in hex.rb) instead of
+        # a flat color -- "open space" is the actual state a still-
+        # unexplored hex (blue), an explored asteroid mine, and a base
+        # station all represent here, not just an unused map color the
+        # way blue or gray might be in a track game. Not `tile.color ==
+        # :gray` on its own -- that would also catch every corp's home
+        # hex before a base is actually placed there, which shouldn't
+        # get this. `mine_tile?`/`base_tile?` below are the precise
+        # checks (by tile name), shared with hex.rb's own asteroid_rock/
+        # ring_station gating.
+        def hex_fill_override(tile)
+          tile&.color == :blue || mine_tile?(tile) || base_tile?(tile)
+        end
+
+        # Opt-in hook for assets/app/view/game/hex.rb: white hex borders
+        # read better against the starfield backdrop than the engine's
+        # default black -- per the user.
+        def hex_border_color
+          'white'
+        end
+
+        # Opt-in hook for assets/app/view/game/hex.rb: whether to draw
+        # the generative asteroid-rock silhouette behind an explored
+        # mine tile's own city/revenue circle (see hex.rb#asteroid_rock).
+        def mine_tile?(tile)
+          tile && self.class::MINE_DATA.key?(tile.name)
+        end
+
+        # Opt-in hook for assets/app/view/game/hex.rb: whether to draw
+        # the rotating-ring-station art behind a placed base's own city/
+        # token (see hex.rb#ring_station). Two ways a hex ends up with a
+        # base: '2023' is the one gray tile code `place_base!` ever lays
+        # down for a base created during play; every corp/minor's
+        # starting home base, though, is never laid at all -- it's
+        # preprinted directly on its own hex from setup (see map.rb's
+        # `gray` HEXES entry, placed via the generic engine's
+        # place_home_token, not place_base!) -- so it needs its own
+        # check by hex id (starting_base_hexes) rather than tile name.
+        # AL is itself one of the CORPORATIONS entries (see entities.rb),
+        # so its own H10 home is technically in starting_base_hexes too --
+        # but H10 is also a transshipment point, and stays one (satellite
+        # art, see transshipment_hex?) right up until the League actually
+        # forms and takes it over as a normal base "like any other" (same
+        # cutover transshipment_hex? itself already makes) -- so this
+        # excludes it until that flips, then includes it.
+        #
+        # The `hex_by_id` identity check guards against detached preview
+        # tiles (Lucky's tile-choice popup, the standard TileSelector fan)
+        # -- these are wrapped in a throwaway Engine::Hex always named
+        # 'A1' (see `delivery_bonus`'s own comment on the same quirk),
+        # which coincidentally collides with Mars Mining's real home
+        # coordinate. Without this, a Lucky redraw preview showing an
+        # ordinary mine tile started rendering the ring-station base art
+        # on top of it -- found live in browser.
+        def base_tile?(tile)
+          return false unless tile
+          return true if tile.name == '2023'
+          return false unless tile.hex && starting_base_hexes.include?(tile.hex.id)
+          return false unless tile.hex == hex_by_id(tile.hex.id)
+
+          !(Array(@al_corporation.coordinates).include?(tile.hex.id) && !@asteroid_league_formed)
+        end
+
+        # Opt-in hook for assets/app/view/game/hex.rb: how many separate
+        # mines (and so how many asteroid-rock silhouettes, one per
+        # city) this tile has -- 1 or 2.
+        def mine_count(tile)
+          self.class::MINE_DATA[tile.name]&.size || 0
+        end
+
+        # Opt-in hook for assets/app/view/game/part/revenue.rb: pushes a
+        # transshipment point's printed revenue box to the bottom of the
+        # hex, leaving the center clear for the satellite icon (hex.rb).
+        def offboard_forced_bottom?(hex)
+          transshipment_hex?(hex.id)
+        end
+
+        # Opt-in hook for assets/app/view/game/part/revenue.rb: H10's
+        # printed "gray" phase box would otherwise show "$0" -- accurate
+        # (transshipment_hex? already stops paying it the moment the AL
+        # forms, well before gray phase could ever be reached), but
+        # misleading, since the hex becomes the AL's own home base at
+        # that exact point rather than a transshipment point worth
+        # nothing. "AL" is clearer, and can never be confused for a
+        # real payable value since gray phase can't arrive before the
+        # AL is forced to form (Phase 4's asteroid_league_must_form!).
+        def revenue_text_override(hex, phase)
+          'AL' if hex.id == 'H10' && phase == :gray
+        end
+
+        # Opt-in hooks for assets/app/view/game/part/location_name.rb: the
+        # generic engine's black-on-translucent-white Location Names label
+        # (the map's own "Location Names" toggle) reads fine against every
+        # other game's light hex backgrounds, but is illegible against
+        # G2038's dark starfield -- flip to white text on a dark box.
+        def location_name_text_color
+          '#ffffff'
+        end
+
+        def location_name_background_color
+          '#0a1128'
+        end
+
+        # Opt-in hook for assets/app/view/game/tile.rb's Hex Coordinates
+        # and Tile Numbers map toggles -- same reasoning as location_
+        # name_text_color just above: hardcoded black text reads fine on
+        # every other game's light hex backgrounds, illegible against
+        # G2038's dark starfield.
+        def map_text_color
+          '#ffffff'
+        end
+
+        # Opt-in hook for assets/app/view/game/part/city.rb: hides H10's
+        # empty AL-reserved city slot for as long as the hex is still
+        # acting as a transshipment point -- the token circle read as
+        # "a base is already here" well before the AL exists to occupy
+        # it. Once the AL actually forms and takes H10 over as its home
+        # base, transshipment_hex? flips to false and the city (with
+        # the AL's real token) renders normally from that point on.
+        def hide_city?(hex, _city)
+          hex && transshipment_hex?(hex.id)
+        end
+
+        # Opt-in hook for assets/app/view/game/part/revenue.rb: the
+        # opposite lifecycle from hide_city? above -- H10's printed
+        # transshipment value (and the gray-phase "AL" override, see
+        # revenue_text_override) is only ever meaningful while the hex
+        # is still acting as a transshipment point. Once the League
+        # actually forms and takes it over as a normal base (revenue:0,
+        # same as every other base), that printed box is stale/
+        # misleading and should disappear entirely -- a real base
+        # doesn't show a revenue box at all (Part::Revenue#should_render?
+        # already skips a plain 0/nil revenue; this covers H10's
+        # lingering non-zero transshipment value once it no longer
+        # applies).
+        def hide_revenue?(hex)
+          hex && Array(@al_corporation.coordinates).include?(hex.id) && @asteroid_league_formed
         end
       end
     end

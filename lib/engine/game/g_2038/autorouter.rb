@@ -48,13 +48,21 @@ module Engine
         # guaranteeing a proven-global optimum) rather than inventing a new
         # standard for this game specifically.
         #
-        # Safe to be generous now that a click of "Suggest Route" is a
-        # local, unrecorded computation (see Step::Route#suggest_route!'s
+        # Safe to be generous now that a click of "Auto" is a local,
+        # unrecorded computation (see Step::Route#build_ship_route!'s
         # caller in ShipSelector) rather than a real action baked into
         # replay forever -- this cost is paid once, by the player who
         # asked for it, not on every future page load.
         DEFAULT_TIMEOUT = 30.0
         NODES_PER_TIME_CHECK = 500
+
+        # How long a single synchronous chunk (#run_chunk!) is allowed to
+        # run before yielding back to the caller -- only relevant to the
+        # chunked/async entry point (#start_async!/#run_chunk!) used by
+        # Step::Route's live-progress "Auto" flow; #suggest_route (the
+        # synchronous entry point) ignores this entirely and just runs
+        # straight through to completion or @deadline, same as always.
+        CHUNK_DURATION = 0.2
 
         def initialize(game)
           @game = game
@@ -66,6 +74,72 @@ module Engine
         # the deadline cut the search short (the result is still the best
         # candidate found, just not provably optimal).
         def suggest_route(entity, train, timeout: DEFAULT_TIMEOUT)
+          start!(entity, train, timeout: timeout)
+          run_chunk!(Float::INFINITY)
+          finish!
+        end
+
+        # Public: async/chunked equivalent of #suggest_route, for a caller
+        # that wants to show live progress (Step::Route's "Auto" button --
+        # see its own comment for why: the browser can't repaint mid-
+        # search otherwise, since this is single-threaded JS and Opal has
+        # no Fiber to suspend a deep native recursion with). Runs one
+        # CHUNK_DURATION-bounded slice of the exact same search
+        # #suggest_route runs synchronously, calls `on_progress` with
+        # whatever @best is so far, and either schedules another chunk
+        # (via a real setTimeout, so the browser gets to repaint/handle
+        # events in between) or calls `on_complete` with the final Result
+        # once the work stack empties or the deadline passes. Correctness
+        # is identical to #suggest_route -- this only changes *when* the
+        # work happens, never what work happens or in what order (the
+        # explicit @work_stack below preserves the exact same depth-first
+        # visiting order the old native recursion did).
+        #
+        # Pull-based rather than the push/callback shape you might expect
+        # (an earlier version of this scheduled its own setTimeout chain
+        # internally) -- Step::Route's auto_route_all_tick! is itself
+        # already a one-unit-of-work-per-call loop driven by an outer
+        # setTimeout chain (see ship_selector.rb), and that outer loop is
+        # what decides whether a tick's result is :built/:searching/:done
+        # and whether to submit -- so this just hands back one chunk's
+        # worth of progress per call and lets the existing caller keep
+        # driving, instead of running a second, competing scheduler.
+        def start_chunk!(entity, train, timeout: DEFAULT_TIMEOUT)
+          start!(entity, train, timeout: timeout)
+        end
+
+        # Runs one CHUNK_DURATION-bounded slice of the current search --
+        # returns true once genuinely finished (call #finish_chunk! next),
+        # false if there's still work left (call again next tick).
+        def run_one_chunk!
+          run_chunk!(CHUNK_DURATION)
+        end
+
+        def finish_chunk!
+          finish!
+        end
+
+        # Public: cheap, admissible upper bound on this one ship's best
+        # possible revenue, ignoring ordering entirely (as if it had the
+        # whole board to itself) -- every hold filled with the single best
+        # mine or transshipment value reachable anywhere, ignoring MP cost
+        # and ignoring that an earlier ship in the same ordering may have
+        # already claimed the best of it. Deliberately loose (a real
+        # search would find less), never tight -- but safe for Step::
+        # Route#try_ordering!'s own cross-ordering pruning, where an
+        # over-estimate can only ever fail to prune a hopeless ordering
+        # early, never wrongly discard a genuinely-better one. Doesn't
+        # touch @entity/@work_stack/etc. -- safe to call mid-search, or on
+        # ships that haven't been searched at all yet.
+        def solo_ceiling(entity, train)
+          holds = @game.cargo_holds_for_train(train)
+          per_slot = [max_reachable_mine_value(entity), max_transshipment_value(train)].max
+          holds * per_slot
+        end
+
+        private
+
+        def start!(entity, train, timeout:)
           @entity = entity
           @train = train
           @full_mp = @game.ship_distance(entity, train)
@@ -92,13 +166,48 @@ module Engine
           # this trivial, always-available baseline.
           seed_transshipment_baseline!
 
-          launch_hexes(entity).each { |hex| search(hex, @full_mp, [], [], [], [hex]) }
+          # One shared LIFO work stack for every launch hex, instead of a
+          # separate native-recursive #search call per launch hex --
+          # pushed in reverse so popping (LIFO) visits them in the same
+          # order the old `launch_hexes(entity).each { |hex| search(...) }`
+          # did. Each entry is exactly the tuple the old #search(hex,
+          # mp_left, cargo, used, refueled, path) took as arguments --
+          # nothing else was ever implicit in the native call stack.
+          @work_stack = launch_hexes(entity).reverse_each.map { |hex| [hex, @full_mp, [], [], [], [hex]] }
+        end
+
+        def finish!
           @best&.timed_out = @timed_out
           @best&.elapsed = (Time.now - @started_at).round(2)
           @best
         end
 
-        private
+        # Runs work off @work_stack until it's empty, the real search
+        # @deadline passes, or `chunk_duration` seconds of wall clock have
+        # elapsed (whichever first) -- returns true once the search is
+        # genuinely finished (stack empty or @timed_out), false if there's
+        # still work left for a future chunk. Pass Float::INFINITY to run
+        # straight through without a chunk boundary at all (the
+        # synchronous #suggest_route path).
+        def run_chunk!(chunk_duration)
+          # Time + Float::INFINITY raises FloatDomainError (Ruby can't
+          # convert an infinite Float to a Rational, which Time#+ needs
+          # internally) -- so the "run straight through, no chunk
+          # boundary at all" case (the synchronous #suggest_route path,
+          # which passes Float::INFINITY) can't compute a real deadline
+          # the normal way. nil here just means "never break early below".
+          chunk_deadline = Time.now + chunk_duration unless chunk_duration.infinite?
+          nodes_this_chunk = 0
+          until @work_stack.empty? || @timed_out
+            process_node!(@work_stack.pop)
+            nodes_this_chunk += 1
+            next if nodes_this_chunk < NODES_PER_TIME_CHECK
+
+            nodes_this_chunk = 0
+            break if chunk_deadline && Time.now > chunk_deadline
+          end
+          @work_stack.empty? || @timed_out
+        end
 
         def deadline_exceeded?
           @nodes_since_check += 1
@@ -119,7 +228,7 @@ module Engine
         # combinations, just hop count.
         def seed_transshipment_baseline!
           launch_hexes(@entity).each do |start|
-            dist, predecessor = plain_bfs(start)
+            dist, predecessor = @game.hex_bfs(start)
 
             @game.class::TRANSSHIPMENT_HEXES.each do |hex_id|
               next unless @game.transshipment_hex?(hex_id)
@@ -130,25 +239,6 @@ module Engine
               record_if_better(path, [{ hex_id: hex_id, mine_idx: nil, ore: nil, value: value }])
             end
           end
-        end
-
-        def plain_bfs(start)
-          dist = { start.id => 0 }
-          predecessor = {}
-          queue = [start]
-
-          until queue.empty?
-            hex = queue.shift
-            hex.neighbors.each_value do |neighbor|
-              next if neighbor.empty || dist.key?(neighbor.id)
-
-              dist[neighbor.id] = dist[hex.id] + 1
-              predecessor[neighbor.id] = hex
-              queue << neighbor
-            end
-          end
-
-          [dist, predecessor]
         end
 
         def reconstruct_path(start, target_id, predecessor)
@@ -208,16 +298,24 @@ module Engine
         # needed so a route that loops back to the same hex can't pick the
         # same mine twice within its own candidate flight). refueled: array
         # of hex_ids already topped off this candidate flight.
-        def search(hex, mp_left, cargo, used, refueled, path)
-          # Checked FIRST and unconditionally (a cheap boolean once
-          # @timed_out latches true) rather than only pruning this call's
-          # own further expansion -- `search` is invoked from loops in
-          # every ancestor frame (this method's own neighbor loop, and
-          # suggest_route's launch_hexes loop), which keep calling search
-          # again for remaining siblings regardless of how deep a prior
-          # branch got before timing out. Only a check this early makes
-          # the whole call tree unwind promptly once the deadline passes,
-          # instead of merely stopping one branch at a time.
+        #
+        # Iterative, not recursive: this used to be two mutually-recursive
+        # methods (search/branch_pickups) directly using the native Ruby
+        # call stack for backtracking. Rewritten onto an explicit
+        # @work_stack (see #start!) so a chunked/async caller (#resume_async!)
+        # can pause between chunks and resume later -- there's no
+        # coroutine/Fiber in Opal to suspend a deep native recursion
+        # mid-flight, so the call stack itself can't be the thing holding
+        # search state across a yield. Every value that used to be an
+        # argument to search/branch_pickups is now exactly one @work_stack
+        # entry; nothing else was ever implicit in the native frames.
+        # Pushing children in *reverse* order preserves the exact same
+        # depth-first visiting order the old recursion had (LIFO pop of a
+        # reverse-pushed list visits first-pushed-last first, same as the
+        # first `.each` iteration recursing immediately used to).
+        def process_node!(state)
+          hex, mp_left, cargo, used, refueled, path = state
+
           return if @timed_out
           return if deadline_exceeded?
 
@@ -249,6 +347,7 @@ module Engine
           return if bound(cargo) <= (@best&.revenue || 0)
 
           prev_hex = path[-2]
+          children = []
 
           ordered_neighbors(hex).each do |neighbor|
             next if neighbor.empty
@@ -272,8 +371,13 @@ module Engine
               next_refueled = refueled + [neighbor.id]
             end
 
-            branch_pickups(neighbor, next_mp, cargo, used, next_refueled, path + [neighbor])
+            next_path = path + [neighbor]
+            pickup_options(neighbor, cargo.size, used).each do |extra_cargo, extra_used|
+              children << [neighbor, next_mp, cargo + extra_cargo, used + extra_used, next_refueled, next_path]
+            end
           end
+
+          children.reverse_each { |child| @work_stack.push(child) }
         end
 
         # Cheap ordering hint, not a correctness mechanism: still visits
@@ -319,13 +423,9 @@ module Engine
         # take neither, either, or both) -- collecting is always optional,
         # never mandatory, since holding a slot open for a better find
         # later can be the right call, the same tradeoff a human player
-        # faces (loads can't be jettisoned once aboard).
-        def branch_pickups(hex, mp_left, cargo, used, refueled, path)
-          pickup_options(hex, cargo.size, used).each do |extra_cargo, extra_used|
-            search(hex, mp_left, cargo + extra_cargo, used + extra_used, refueled, path)
-          end
-        end
-
+        # faces (loads can't be jettisoned once aboard). Called directly
+        # from process_node! now (each combo becomes one @work_stack
+        # entry) rather than through its own recursive branch_pickups.
         def pickup_options(hex, cargo_size, used)
           state = @game.mine_state[hex.id]
           return [[[], []]] unless state
