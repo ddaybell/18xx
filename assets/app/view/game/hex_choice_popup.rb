@@ -10,28 +10,15 @@ module View
     # a dismiss button. Mirrors TileConfirmation's positioning/style but is
     # driven by an arbitrary Lib::HexChoicePopup instead of a single tile.
     # A choice's value is a text label (rendered as a button, as before),
-    # an Engine::Tile (rendered as a small clickable tile preview instead
-    # -- G2038's Lucky redraw, which needs real tile art rather than a
-    # text description), or a {ore:, value:} Hash (rendered as a small
-    # ore-colored icon -- G2038's double-mine claim popup, so the two
-    # mines on a hex read at a glance instead of needing to parse an
-    # abbreviated text label).
+    # an Engine::Tile (rendered as a small clickable tile preview instead),
+    # or a {ore:, value:} Hash (rendered as a small ore-colored icon
+    #  -- G2038's double-mine claim popup, so the two mines on a hex read at a
+    # glance instead of needing to parse an abbreviated text label).
     class HexChoicePopup < Snabberb::Component
       include Actionable
       include Lib::Settings
 
-      # Mirrors View::Game::Corporation::CLAIM_MINE_COLOR (itself a local
-      # copy of Part::City::MINE_ORE_COLOR's values) -- kept as its own
-      # copy rather than a shared reference, same reasoning as that
-      # constant's own comment: this file has no other reason to depend
-      # on either of those.
       CLAIM_MINE_COLOR = { n: [200, 40, 40], i: [40, 100, 210], r: [40, 150, 70] }.freeze
-      # Mirrors Part::City::MINE_VALUE_RANGE/#mine_color's white-blend
-      # tint exactly -- a mine's popup icon needs to look like the same
-      # mine on the hex (pale for a low-value mine, more saturated for a
-      # high one), not a flat, fully-saturated color regardless of value.
-      # Found live in browser: an untinted $20 Nickel circle read as a
-      # much more intense red than the hex's own pale-pink mine circle.
       MINE_VALUE_RANGE = (10..70)
 
       def tinted_mine_color(ore, value)
@@ -62,14 +49,8 @@ module View
       BOTTOM_EDGE_MARGIN = 220
 
       # Bounds how wide the popup can grow regardless of label length --
-      # long choice text (e.g. BuyInfrastructure's "Claim Rare mine,
-      # revenue $20 ($60)") wraps onto additional lines instead of
-      # extending the row sideways past this width. Found live in
-      # browser: a fixed-width single-row layout meant EDGE_MARGIN would
-      # have needed to track the *longest possible label any step might
-      # ever show* to guarantee no clipping -- wrapping sidesteps that
-      # entirely, since the popup's width is now bounded independent of
-      # content.
+      # long choice text wraps onto additional lines instead of
+      # extending the row sideways past this width.
       POPUP_MAX_WIDTH = 220
 
       def render
@@ -80,10 +61,6 @@ module View
           color: '#FFFFFF',
           filter: 'drop-shadow(3px 3px 2px #888)',
           padding: '4px 8px',
-          # Not nowrap -- a long label (e.g. BuyInfrastructure's "Claim
-          # Rare mine, revenue $20 ($60)") needs to wrap onto a second
-          # line within its own button rather than forcing the whole
-          # popup wider than POPUP_MAX_WIDTH to fit one unbroken line.
           whiteSpace: 'normal',
           maxWidth: "#{POPUP_MAX_WIDTH}px",
         }

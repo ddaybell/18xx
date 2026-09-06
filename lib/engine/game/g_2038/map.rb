@@ -15,11 +15,13 @@ module Engine
         # -- and therefore the random rotation `Game#explore_hex!` applies for
         # visual variety -- is actually respected. Without any path at all,
         # the engine's default path-less-multi-city placement kicks in
-        # instead, which ignores rotation entirely. `track:thin` keeps it as
-        # inconspicuous as this mechanism allows; `HIDE_TILE_TRACK` (see
-        # assets/app/view/game/part/track.rb) hides it outright except while
-        # a route highlight is active, same as it would for real track.
+        # instead, which ignores rotation entirely. 
         MINE_LINK = 'path=a:_0,b:_1,track:thin'
+
+        # Note that many elements here have defined color attributes, but those
+        # attributes are not actually displayed on the screen.  Instead, we have
+        # custom rendering logic in /18xx/assets/app/view/game/hex_g2038.rb which
+        # renders the custom starfield and icon images used in this game.
 
         # Mine city revenue: displayed value is the UNCLAIMED value; the claimed
         # value (paid only to the claim owner) lives in MINE_DATA and is applied
@@ -202,15 +204,14 @@ module Engine
             # same hex, alongside the offboard part that actually carries
             # the transshipment value; the other four have no city at all.
             # H10 pays a flat $30 that drops to $0 once gray tiles unlock
-            # at Phase 4, unlike the real $30->$60 increase the other
-            # three in its group get -- confirmed with the user: the AL is
-            # always formed by Phase 4 (asteroid_league_must_form is a
+            # at Phase 4.  
+            
+            # The AL is always formed by Phase 4 (asteroid_league_must_form is a
             # Phase 4 event), and its own base replaces this transshipment
             # point the moment AL forms (Game#transshipment_hex?'s
             # existing @asteroid_league_formed check already stops paying
             # it out in the revenue logic regardless of what the tile
-            # displays), so a genuine $60 here would be misleading. Ideally
-            # this would show no gray box at all rather than a $0 one, but
+            # displays). Ideally this would show no gray box at all rather than a $0 one, but
             # a bare integer (no phase-color key at all) renders through a
             # different view component (Part::SingleRevenue, generic
             # small-item placement) instead of Part::MultiRevenue's

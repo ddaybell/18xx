@@ -3567,6 +3567,16 @@ module Engine
         [:map_legend]
       end
 
+      # Same idea as map_legends above, for the Tiles tab instead of the
+      # map -- a list of method-name symbols this game defines, each
+      # returning legend table data in the exact shape View::Game::
+      # MapLegend#render_legend already expects. Empty by default (no
+      # legend section at all, unlike map_legends' placeholder default)
+      # since most games have no need for a Tiles-tab table.
+      def tile_manifest_legends
+        []
+      end
+
       def train_purchase_name(train)
         train.name
       end
@@ -3577,6 +3587,18 @@ module Engine
       # it needs to say the word itself, not a specific train's own name.
       def train_word
         'train'
+      end
+
+      # Whether the map should dim hexes purely by whether they're a valid
+      # target for the CURRENT viewing browser session, rather than for
+      # whoever's turn it currently is (the traditional behavior). Opt-in;
+      # false for every game -- see View::Game::MapG2038#dim_by_hex_validity?
+      # for the motivating case (a game whose route-building step goes
+      # fully client-side/local after the first click, so a non-active
+      # viewer's browser never receives the updates that would make
+      # hex-validity dimming mean anything to them).
+      def dim_only_active_player?
+        false
       end
 
       # If a game overrides this to true, then if the possible actions for the current entity include any of

@@ -101,7 +101,7 @@ module Engine
           # as Step::BuyInfrastructure's own highlight_base_hexes/
           # highlight_station_hexes (placing a free TS/VA/RS base, station,
           # or claim wants the same "where do I already have infrastructure"
-          # context, per the user). No sub_phase gate needed here -- unlike
+          # context). No sub_phase gate needed here -- unlike
           # BuyInfrastructure, this step only ever runs while a corp
           # actually has a usable free-placement ability, per its own
           # class comment.

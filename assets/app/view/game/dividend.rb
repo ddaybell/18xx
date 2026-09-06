@@ -77,14 +77,12 @@ module View
             h(:button, { style: { margin: '0.2rem 0' }, on: { click: click }, attrs: { id: button_id } }, text),
           ])
 
-          row = [
+          h(:tr, [
             button,
             h('td.padded_number', [@game.format_currency(corp_income)]),
             h('td.padded_number', [@game.format_currency(option[:per_share])]),
-          ]
-          row << h(:td, [direction]) if entity.share_price
-
-          h(:tr, row)
+            h(:td, [direction]),
+          ])
         end
 
         div_props = {
@@ -126,24 +124,16 @@ module View
           penalties,
           h(:table, table_props, [
             h(:thead, [
-              h(:tr, header_cells(entity, share_props)),
+              h(:tr, [
+                h('th.no_padding', 'Dividend'),
+                h(:th, 'Treasury'),
+                h(:th, share_props, 'Per Share'),
+                h(:th, 'Stock Moves'),
+              ]),
             ]),
             h(:tbody, payout_options),
           ]),
         ])
-      end
-
-      # Minors never have a share price (Minor#share_price is always nil), so
-      # a "Stock Moves" column has nothing to show for them -- drop it
-      # rather than print "None" on every row.
-      def header_cells(entity, share_props)
-        cells = [
-          h('th.no_padding', 'Dividend'),
-          h(:th, 'Treasury'),
-          h(:th, share_props, 'Per Share'),
-        ]
-        cells << h(:th, 'Stock Moves') if entity.share_price
-        cells
       end
 
       def corporation_interest_penalty?(entity)

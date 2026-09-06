@@ -19,14 +19,10 @@ module Engine
           # starts. The rule text ties this to the independent's own
           # turn ending shipless, not to a shipless check firing whenever
           # any *other* company's turn happens to end with this
-          # independent up next in rotation -- found live in browser:
-          # OPC bought an independent's last ship on OPC's own turn, and
-          # the independent was force-merged immediately afterward,
-          # never getting the turn (and BuyTrain opportunity) it was
-          # owed. Checked in after_end_of_turn instead of skip_entity?,
-          # so the independent's own turn (Route auto-skips with no
-          # ships, but BuyTrain still runs -- the owner could choose to
-          # buy it a replacement ship there) happens first.
+          # independent up next in rotation. Checked in after_end_of_turn 
+          # instead of skip_entity?, so the independent's own turn (Route 
+          # auto-skips with no ships, but BuyTrain still runs -- the owner 
+          # could choose to buy it a replacement ship there) happens first.
           def after_end_of_turn(operator)
             super
 
@@ -43,11 +39,10 @@ module Engine
           # mechanics) and going through them one by one either misbehaves
           # (Dividend's default "withhold" still moves the share price
           # even off $0 revenue) or just adds noise (a string of "TSI
-          # skips ..." lines). Confirmed with the user: once Route
-          # finishes, silently end the turn instead. While Route is still
-          # the live decision (blocking), this falls through to the
-          # ordinary behavior unchanged -- only takes over once nothing
-          # is left to decide there.
+          # skips ..." lines). Once Route finishes, silently end the turn 
+          # instead. While Route is still the live decision (blocking), 
+          # this falls through to the ordinary behavior unchanged -- only 
+          # takes over once nothing is left to decide there.
           def skip_steps
             entity = @entities[@entity_index]
             return super unless @game.tsi_pre_float?(entity)
@@ -61,23 +56,28 @@ module Engine
           private
 
           def pay_fast_buck_treasury
-            # Fast Buck earns $15 per OR into its own treasury, not to its
-            # owner -- and once it's been absorbed (Growth Corp conversion
-            # or an AL merger), the same $15 follows it into whichever corp
-            # now holds that treasury (Game#fast_buck_income_recipient,
-            # reassigned at absorption time). Reading the recipient via
-            # that indirection rather than @game.minor_by_id('FB') directly
-            # matters because Minor#close! unconditionally sets FB's own
-            # @floated to false -- paying FB itself post-absorption would
+            # Whichever company entities.rb marks as a treasury_income
+            # source (Fast Buck today; Game#treasury_income_source_sym)
+            # earns its flat amount per OR into its own treasury, not to
+            # its owner -- and once it's been absorbed (Growth Corp
+            # conversion or an AL merger), the same amount follows it into
+            # whichever corp now holds that treasury (Game#
+            # fast_buck_income_recipient, reassigned at absorption time).
+            # Reading the recipient via that indirection rather than
+            # @game.minor_by_id(source_sym) directly matters because
+            # Minor#close! unconditionally sets the source's own @floated
+            # to false -- paying it directly post-absorption would
             # silently stop the income forever instead of continuing it.
             recipient = @game.fast_buck_income_recipient
             return unless recipient&.floated?
 
-            @game.bank.spend(15, recipient)
-            if recipient.id == 'FB'
-              @game.log << "Fast Buck receives #{@game.format_currency(15)} into its treasury"
+            amount = @game.fast_buck_income_amount
+            @game.bank.spend(amount, recipient)
+            if recipient.id == @game.treasury_income_source_sym
+              @game.log << "#{recipient.name} receives #{@game.format_currency(amount)} into its treasury"
             else
-              @game.log << "#{recipient.name} receives #{@game.format_currency(15)} from Fast Buck's income"
+              source_name = @game.company_by_id(@game.treasury_income_source_sym)&.name
+              @game.log << "#{recipient.name} receives #{@game.format_currency(amount)} from #{source_name}'s income"
             end
           end
         end

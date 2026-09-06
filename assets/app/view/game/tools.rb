@@ -7,6 +7,7 @@ require 'view/game/game_details'
 require 'view/game/notepad'
 require 'view/game/actionable'
 require 'view/game/auto_router_settings'
+require 'view/game/g_2038/auto_router_settings'
 
 module View
   module Game
@@ -24,7 +25,7 @@ module View
           h(Notepad),
           h(RenameHotseat),
           *render_tools,
-          h(AutoRouterSettings),
+          h(@game.respond_to?(:autorouter) ? G2038::AutoRouterSettings : AutoRouterSettings),
           h(GameData, actions: @game.raw_actions.map(&:to_h)),
           h(GameDetails),
           *help_links,

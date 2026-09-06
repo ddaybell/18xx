@@ -7,7 +7,7 @@ module Engine
     module G2038
       module Step
         # Forces AE's owner to explicitly form-or-decline the Asteroid
-        # League once eligible (Phase 3-4) -- confirmed with the user this
+        # League once eligible (Phase 3-4).  This
         # must interrupt play and force a real yes/no, not sit as a
         # take-it-or-leave-it side option. The generic engine's
         # `choose_ability` mechanism (Step::SpecialChoose) can only ever be
@@ -21,16 +21,13 @@ module Engine
         # Modeled directly on MergeIntoLeague's same shape: overrides
         # active_entities/active? (bypassing the Passer/@passed default,
         # same reason MergeIntoLeague does -- eligibility can begin
-        # partway through a round, since buying the Phase III train is
+        # partway through a round, since buying the Phase III ship is
         # itself an OR action) and a round_state flag that resets for free
         # on every new round instance, giving "ask again next round" (per
-        # EVENTS_TEXT: "...or at the beginning of each Operating round
-        # thereafter"). Confirmed with the user this is Operating-round-
-        # only -- wired only into `operating_round`, never `stock_round`
-        # (trains, and so Phase III itself, are only ever bought during an
-        # OR anyway, so the very first ask always lands here regardless; a
-        # re-ask after a decline simply waits for the next OR to begin
-        # rather than the intervening SR).
+        # EVENTS_TEXT: "...or at the beginning of each Stock or Operating
+        # round thereafter" -- confirmed with the user this means BOTH
+        # round types, not just OR; wired into both stock_round and
+        # operating_round in game.rb for exactly this reason).
         #
         # Named `al_formation_declined`, not `declined` -- both this step
         # and MergeIntoLeague are wired into the same operating_round, and
@@ -80,7 +77,7 @@ module Engine
           def choices
             {
               FORM => 'Form the Asteroid League',
-              DECLINE => 'Decline (asked again next OR)',
+              DECLINE => 'Decline (asked again next round)',
             }
           end
 

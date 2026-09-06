@@ -7,7 +7,7 @@ module Engine
     module G2038
       module Step
         # Bases, refueling stations, and claims (§7.4) -- the "Purchases"
-        # portion of the OR sequence, alongside G2038::Step::BuyTrain.
+        # portion of the OR sequence, alongside G2038::Step::BuyShip.
         # Reuses the same choose-per-target-hex pattern as Route, since
         # there's no existing "buy a marker" step compatible with G2038's
         # non-graph-based (hex-BFS) reachability model.
@@ -74,20 +74,12 @@ module Engine
             @claims_this_round = Hash.new(0)
           end
 
-          # Opt-in hooks for assets/app/view/game/hex.rb: while this
+          # Provides opt-in hooks for assets/app/view/game/hex.rb: while this
           # entity is actively choosing a base/station/claim location,
           # its own already-placed bases and stations both get
-          # highlighted, regardless of which of the three this entity is
-          # currently placing -- per the user, seeing existing bases is
-          # just as useful while placing a station (and vice versa) as
-          # it is while placing the matching type. Split into two
-          # methods (rather than one combined list, like this used to
-          # be) so hex.rb can draw them differently -- a base gets the
-          # generic hex-border highlight, a station gets a highlight
-          # around its own teardrop icon instead, so the two read as
-          # different things at a glance per the user.
-          # Its starting home included, not just ones placed via
-          # place_base! -- both are real tokens in entity.tokens.
+          # highlighted.  A base gets the generic hex-border highlight, 
+          # a station gets a highlight around its own teardrop icon instead, 
+       
           def highlight_base_hexes(entity)
             return [] unless entity&.operator?
             return [] unless %i[base station claim].include?(@sub_phase[entity])
@@ -95,8 +87,6 @@ module Engine
             entity.tokens.filter_map { |t| t.city&.hex&.id }.uniq
           end
 
-          # There's no "starting" refueling station -- those are only
-          # ever bought (Game#station_hexes).
           def highlight_station_hexes(entity)
             return [] unless entity&.operator?
             return [] unless %i[base station claim].include?(@sub_phase[entity])
@@ -302,7 +292,7 @@ module Engine
           # Bases and refueling stations are only buyable "after Phase I"
           # (Sequence of Play card) -- reuses the same phase status flag
           # that already gates private-company purchases and inter-company
-          # train buying (@game.after_phase_1?), since all unlock at the
+          # ship buying (@game.after_phase_1?), since all unlock at the
           # same Phase II transition. Claims have no such marker on the
           # card, so they're available from Phase 1.
           def after_phase_1?
@@ -378,13 +368,13 @@ module Engine
           end
 
           # Corporations may buy an already-claimed mine directly from the
-          # independent holding it, at a flat price -- confirmed with the
-          # user: available from Phase 2 on (same start as bases/stations,
-          # since claims themselves have no such gate but this transfer
-          # does), still counts against the buyer's lifetime claim_limit
-          # like any other claim it ends up holding, but is NOT limited by
-          # the per-round escalating schedule/count (@claims_this_round)
-          # above since it's a flat-price transfer, not a new placement.
+          # independent holding it, at a flat price: available from Phase 2 
+          # on (same start as bases/stations, since claims themselves have 
+          # no such gate but this transfer does), still counts against the 
+          # buyer's lifetime claim_limit like any other claim it ends up 
+          # holding, but is NOT limited by the per-round escalating schedule/
+          # count (@claims_this_round) above since it's a flat-price transfer, 
+          # not a new placement.
           # `minor_by_id` returns nil for a corp-owned mine (including one
           # this entity already owns itself), so this naturally only ever
           # offers independent-held claims. Gated on can_buy_companies_or_claims?
@@ -395,7 +385,9 @@ module Engine
             result = {}
             return result unless @game.can_buy_companies_or_claims?
             return result unless claims_placed_lifetime(entity) < @game.claim_limit(entity)
-            return result if entity.cash < @game.class::INDEPENDENT_CLAIM_PRICE
+
+            price = @game.independent_claim_price(entity)
+            return result if entity.cash < price
 
             @game.hexes_in_range(entity).each do |hex|
               state = @game.mine_state[hex.id]
@@ -406,8 +398,7 @@ module Engine
                 next unless seller
 
                 result["#{BUY_CLAIM}#{hex.id}_#{idx}"] =
-                  "Buy #{ORE_NAMES[mine[:ore]]} claim from #{seller.name} "\
-                  "(#{@game.format_currency(@game.class::INDEPENDENT_CLAIM_PRICE)})"
+                  "Buy #{ORE_NAMES[mine[:ore]]} claim from #{seller.name} (#{@game.format_currency(price)})"
               end
             end
             result

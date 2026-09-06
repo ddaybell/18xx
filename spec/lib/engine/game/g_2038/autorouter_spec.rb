@@ -79,7 +79,7 @@ describe Engine::Game::G2038::Autorouter do
   # deliverable_destination?/transshipment_value) for scoring so this
   # tests the *search*, not a second copy of the revenue math.
   def brute_force_best_revenue(game, entity, train, start_hexes, full_mp)
-    holds = game.cargo_holds_for_train(train)
+    holds = game.cargo_holds_for_ship(train)
     best = 0
 
     explore = lambda do |hex, mp_left, cargo, used, refueled, path|
@@ -159,7 +159,7 @@ describe Engine::Game::G2038::Autorouter do
       # combination that happens to produce exactly this MP value.
       allow(game).to receive(:ship_distance).and_return(full_mp)
 
-      pruned_result = game.autorouter.suggest_route(entity, train, timeout: 5.0)
+      pruned_result = game.autorouter.suggest_route(entity, train)
       pruned_revenue = pruned_result&.revenue || 0
 
       start_hexes = entity.tokens.filter_map { |t| t.city&.hex }.uniq

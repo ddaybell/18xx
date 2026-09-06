@@ -3,7 +3,7 @@
 module Engine
   module Game
     module G2038
-      # Component 3 of the "optimal set" autorouter (see AI_CONTEXT.md/
+      # Component 3 of the autorouter (see AI_CONTEXT.md/
       # conversation history for the full design) -- given a list of
       # candidate slots (Game#candidate_slots, each tagged with an
       # admissible value ceiling) and a hold count, lazily generates
@@ -83,13 +83,9 @@ module Engine
         def push(combo)
           # A plain string key, not the combo array itself -- MRI Ruby
           # has an optimized native path for hashing/comparing arrays as
-          # Hash keys, but Opal (this code's real runtime -- see
-          # OptimalAutorouter's own note on this) has to emulate that on
+          # Hash keys, but Opal has to emulate that on
           # top of JavaScript, which has no native array-value-equality
-          # hashing at all. Found live in browser: a real comparison run
-          # was SLOWER on the new engine than the old one, completely
-          # contradicting server-side Ruby benchmarking that showed the
-          # opposite -- string keys are natively fast hash/Map keys in
+          # hashing at all. String keys are natively fast hash/Map keys in
           # both MRI and JS, so this is a portable fix, not a JS-only one.
           key = combo.join(',')
           return if @visited[key]

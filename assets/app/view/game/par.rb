@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
 require 'view/game/actionable'
+require 'view/game/g_2038/par_g2038'
 
 module View
   module Game
     class Par < Snabberb::Component
       include Actionable
+      # For G2038: Growth Corp exchange buttons.
+      include ParG2038
 
       needs :corporation
       needs :corporation_to_par, default: nil, store: true
@@ -102,33 +105,6 @@ module View
         targets.flat_map do |target|
           render_par(target)
         end
-      end
-
-      # Opt-in hook (G2038 Phase 8): an alternate way to start this
-      # corporation by trading in an owned independent instead of paying
-      # cash -- one button per eligible independent, shown alongside the
-      # normal par-price buttons above.
-      def render_growth_exchange
-        return [] unless @step.respond_to?(:growth_exchange_choices)
-
-        choices = @step.growth_exchange_choices(@current_entity, @corporation)
-        return [] if choices.empty?
-
-        buttons = choices.map do |choice, label|
-          props = {
-            style: {
-              width: 'calc(17.5rem/6)',
-              padding: '0.2rem',
-            },
-            on: { click: -> { process_action(Engine::Action::Choose.new(@current_entity, choice: choice)) } },
-          }
-          h('button.small.par_price', props, label)
-        end
-
-        [h(:div, [
-          h('div.inline', { style: { marginTop: '0.5rem' } }, 'Exchange Independent: '),
-          *buttons,
-        ])]
       end
 
       def render

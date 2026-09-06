@@ -11,11 +11,14 @@ require 'view/game/part/revenue'
 require 'view/game/part/towns'
 require 'view/game/part/track'
 require 'view/game/part/upgrades'
+require 'view/game/g_2038/tile_g2038'
 
 module View
   module Game
     class Tile < Snabberb::Component
       include Lib::Settings
+      # For G2038:  tile-name text color override.
+      include TileG2038
 
       needs :game, default: nil
       needs :tile
@@ -173,20 +176,6 @@ module View
         h(:g, [
           h(:text, props, @tile.name),
           ])
-      end
-
-      # Opt-in hook, same pattern/reasoning as Part::LocationName's own
-      # location_name_text_color -- the hardcoded fill: 'black' above
-      # suits every other game's light hex backgrounds but is illegible
-      # against G2038's dark starfield. An inline `style:` override (not
-      # `attrs: { fill: }`) is required, not optional -- a plain SVG
-      # presentation attribute loses to a stylesheet class rule, an
-      # inline style wins over both. Returns {} (no override) for every
-      # other game, since they don't define the hook at all.
-      def map_text_color_style
-        return {} unless @game.respond_to?(:map_text_color) && (color = @game.map_text_color)
-
-        { fill: color }
       end
     end
   end

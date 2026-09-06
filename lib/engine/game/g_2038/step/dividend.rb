@@ -16,7 +16,7 @@ module Engine
           MINOR_DIVIDEND_TYPES = %i[split retain].freeze
 
           def dividend_types
-            current_entity.minor? ? self.class::MINOR_DIVIDEND_TYPES : self.class::CORP_DIVIDEND_TYPES
+            current_entity.minor? ? MINOR_DIVIDEND_TYPES : CORP_DIVIDEND_TYPES
           end
 
           def skip!
@@ -56,8 +56,8 @@ module Engine
             entity.operating_history[[@game.turn, @round.round_num]] =
               OperatingInfo.new(routes, action, revenue, @round.laid_hexes)
 
-            @game.close_companies_on_event!(entity, 'ran_train') unless @round.routes.empty?
-            entity.trains.each { |train| train.operated = true }
+            @game.close_companies_on_event!(entity, 'ran_ship') unless @round.routes.empty?
+            entity.trains.each { |ship| ship.operated = true }
             rust_obsolete_trains!(entity)
             @round.routes = []
             @round.extra_revenue = 0
@@ -84,15 +84,8 @@ module Engine
           # share-based path below (dividends_for_entity, ultimately
           # num_shares_of) silently finds nothing to pay every single
           # time, even though per_share here IS the owner's whole payout
-          # (a minor's total_shares is 1). Found live: the log showed a
-          # correct-looking "$X = $Y per share" for a split, but actually
-          # disbursed nothing -- the OLD log line quoted the nominal
-          # target revenue rather than what payout_shares had actually
-          # paid out, which is what let this go unnoticed until the fix
-          # for the half-pay rounding bug (this same file, `half`) made
-          # the log honest about the real total and the $0 became
-          # visible. Pay the owner directly instead of routing through
-          # the share-holder lookup that can never find them.
+          # (a minor's total_shares is 1).  Pay the owner directly instead 
+          # of routing through the share-holder lookup that can never find them.
           def payout_shares(entity, per_share)
             if entity.minor?
               owner = entity.owner

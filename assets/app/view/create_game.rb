@@ -137,8 +137,6 @@ module View
           type: :number,
           attrs: {
             value: @min_players || @min_p[title],
-            min: @min_p[title],
-            max: @max_p[title],
             required: true,
           },
           container_style: @mode == :hotseat ? { display: 'none' } : {},
@@ -152,8 +150,6 @@ module View
           type: :number,
           attrs: {
             value: @max_players || @max_p[title],
-            min: @min_p[title],
-            max: @max_p[title],
             required: true,
           },
           input_style: { width: '3.5rem' },
@@ -238,22 +234,6 @@ module View
       end
     end
 
-    def check_implies(sym)
-      return unless selected_game_or_variant
-      return if selected_game_or_variant::IMPLIES_RULES.empty?
-
-      selected_game_or_variant::IMPLIES_RULES.each do |trigger, implied|
-        next unless trigger == sym
-
-        implied.each do |s|
-          next if @optional_rules.include?(s)
-
-          @optional_rules << s
-          sync_rule(s)
-        end
-      end
-    end
-
     def toggle_optional_rule(sym)
       lambda do
         if (@optional_rules ||= []).include?(sym)
@@ -261,7 +241,6 @@ module View
         else
           @optional_rules << sym
           uncheck_mutex(sym)
-          check_implies(sym)
         end
         store(:optional_rules, @optional_rules)
       end

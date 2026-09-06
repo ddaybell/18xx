@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 require 'view/game/part/base'
+require 'view/game/g_2038/part/location_name_g2038'
 
 module View
   module Game
     module Part
       class LocationName < Base
-        needs :game, store: true, default: nil
+        # For G2038: name-placement/color hooks.
+        include LocationNameG2038
 
         LINE_HEIGHT = 15
         CHARACTER_WIDTH = 8
@@ -27,23 +29,6 @@ module View
           return [l_center, l_up40, l_down40] if @tile.towns.one? && @tile.cities.empty?
 
           if @tile.cities.one? && @tile.towns.empty?
-            # Trackless games (e.g. G2038): standardize every single-city
-            # hex's printed name near the top, regardless of how many
-            # token slots that city has -- the slots-based cases below
-            # otherwise produce inconsistent top/bottom/center placement
-            # per corp (each home base's own token-slot count picks a
-            # different branch), which reads as a bug on a map with no
-            # track to explain the difference. Confirmed with the user.
-            # A single forced choice, not a preference list: offering
-            # [l_top, l_bottom, ...] still lets render_location's own
-            # cost-based arbitration reject l_top in favor of a fallback
-            # when something else on that hex already "costs" the top
-            # region -- found live in browser, corp hexes with extra
-            # content kept landing on l_bottom regardless of the ordering
-            # here. l_up40 (not the more extreme l_top, whose ~70px offset
-            # -- scaled 1.1x by render_part -- ran past the hex's own
-            # edge and clipped) is the same tuned-and-proven position
-            # already used as a safe non-center fallback below.
             return [l_up40] if hide_tile_track?
 
             return case @tile.cities.first.slots
@@ -119,16 +104,7 @@ module View
             'stroke-width': 0.5,
           }
 
-          # Opt-in hook: .tile__text's own `fill: black` (main.css) suits
-          # every other game's light hex backgrounds, but is illegible on
-          # G2038's dark starfield -- text_props' `style:` (an inline
-          # style attribute) is needed, not `attrs: { fill: }`, since a
-          # plain SVG presentation attribute loses to a stylesheet class
-          # rule; an inline style wins over both.
-          text_props = {}
-          if @game.respond_to?(:location_name_text_color) && (color = @game.location_name_text_color)
-            text_props[:style] = { fill: color }
-          end
+          text_props = location_name_text_props
 
           rendered_name = @name_segments.map.with_index do |segment, index|
             x = 0
@@ -163,21 +139,10 @@ module View
         def render_background_box
           width, height = box_dimensions
 
-          # Opt-in hook: pairs with location_name_text_color above -- a
-          # white background box behind white text would be illegible,
-          # so a game overriding the text color gets to override this
-          # too (G2038 uses a dark box, matching its starfield).
-          background_color =
-            if @game.respond_to?(:location_name_background_color) && (color = @game.location_name_background_color)
-              color
-            else
-              BACKGROUND_COLOR
-            end
-
           attrs = {
             height: height,
             width: width,
-            fill: background_color,
+            fill: location_name_background_color,
             'fill-opacity': BACKGROUND_OPACITY,
             stroke: 'none',
             x: -width / 2,
@@ -231,10 +196,6 @@ module View
         end
 
         private
-
-        def hide_tile_track?
-          @game&.class&.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
-        end
 
         def l_top
           case layout

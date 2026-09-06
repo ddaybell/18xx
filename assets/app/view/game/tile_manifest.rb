@@ -4,6 +4,7 @@
 
 require 'lib/settings'
 require 'view/tiles'
+require 'view/game/map_legend'
 
 module View
   module Game
@@ -14,7 +15,9 @@ module View
       needs :tile_selector, default: nil, store: true
 
       def render
-        h(:div, [render_tile_manifest, render_toggle_button])
+        legends = @game.tile_manifest_legends
+        legend = legends.empty? ? nil : h(MapLegend, game: @game, legend_methods: legends)
+        h(:div, [render_tile_manifest, render_toggle_button, legend].compact)
       end
 
       def render_tile_selector(remaining, tile, shift: 0)

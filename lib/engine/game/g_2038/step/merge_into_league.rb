@@ -13,16 +13,31 @@ module Engine
         # `declined` array that naturally resets every new round instance --
         # giving "one pass per round" for free with no extra bookkeeping.
         #
-        # Timing (confirmed with the user): the instant the AL forms, every
-        # remaining independent gets one offer, clockwise from the AL
-        # president -- this can land in whichever round type AL happened to
-        # form in. After that, only independents who've *never* been offered
-        # a choice may be offered one during a Stock round (the one true
-        # initial pass); anyone who already declined only gets re-offered at
-        # the start of an Operating round, every OR, for as long as they
-        # remain unmerged. `@game.al_independents_ever_offered` (permanent,
-        # not round-scoped) is what distinguishes "never offered yet" from
-        # "declined previously" for this Stock-round restriction.
+        # Timing: the instant the AL forms, the game stops and every
+        # remaining independent is immediately asked in turn, clockwise
+        # from the AL president -- an atomic, uninterruptible sequence
+        # (this step's own `active?`/`blocking?` force it, so nothing else
+        # can happen until every one of them has answered) that completes
+        # entirely within whichever round type AL happened to form in --
+        # confirmed with the user there is no scenario where an
+        # independent avoids this first-time offer or has it deferred to
+        # a later round. Every one of them ends this initial sweep
+        # recorded in `@game.al_independents_ever_offered` (permanent, not
+        # round-scoped), whether they merged or declined.
+        #
+        # After that, independents can only merge one further way: any
+        # remaining decliner gets asked again at the start of every
+        # Operating round, for as long as they stay unmerged -- never
+        # during a Stock round. The `@round.stock?` filter below is what
+        # enforces that: `@round.declined` resets on every new round
+        # instance, so without also excluding anyone already in
+        # `al_independents_ever_offered`, a later Stock round would see a
+        # fresh, empty local `declined` and wrongly treat a long-ago
+        # decliner as a brand-new candidate. It's never restrictive during
+        # the initial sweep itself (`ever_offered` starts empty then), so
+        # that sweep always completes in one round regardless of type --
+        # this filter's only real job is blocking OR-only re-offers from
+        # leaking into a Stock round.
         class MergeIntoLeague < Engine::Step::Base
           ACTIONS = %w[choose].freeze
           MERGE = 'merge'
@@ -78,7 +93,7 @@ module Engine
             raise GameError, "Invalid choice: #{choice}" unless choices.key?(choice)
 
             first_opportunity = !@game.al_independents_ever_offered.include?(entity.id)
-            @game.al_independents_ever_offered << entity.id unless @game.al_independents_ever_offered.include?(entity.id)
+            @game.record_al_independent_offered!(entity)
 
             if choice == MERGE
               @game.merge_independent_into_al!(entity, first_opportunity: first_opportunity)
@@ -90,10 +105,8 @@ module Engine
 
           private
 
-          # Clockwise from the AL president, always -- confirmed with the
-          # user this doesn't depend on who formed the AL or whose turn it
-          # currently is. Stable sort keeps same-owner independents
-          # adjacent, so a player who owns 2+ gets asked about all of them
+          # Clockwise from the AL president, always. Stable sort keeps same-owner 
+          # independents adjacent, so a player who owns 2+ gets asked about all of them
           # back to back before rotating to the next player.
           def sort_by_owner_rotation(candidates)
             return candidates if candidates.empty?

@@ -22,11 +22,13 @@ module Engine
           # $125/par_1 is the Asteroid League's own fixed par
           # (Game#form_asteroid_league!, via stock_market.set_par). Neither
           # should appear among the regular 67/77/88/100 par choices.
+          SPECIAL_PAR_PRICES = [10, 125].freeze
+
           def get_par_prices(entity, corp)
-            super.reject { |p| [10, 125].include?(p.price) }
+            super.reject { |p| SPECIAL_PAR_PRICES.include?(p.price) }
           end
 
-          # Base can_buy_any_from_ipo?/can_ipo_any? look at corporation.shares
+          # The Base can_buy_any_from_ipo?/can_ipo_any? methods look at corporation.shares
           # (shares literally owned by the corporation object) to find what's
           # still buyable pre-sellout -- correct only when ipo_owner == self,
           # true for every game except this one. Once optional_stock_
@@ -35,9 +37,7 @@ module Engine
           # corporation.shares goes permanently empty, even for a corp
           # nobody has parred yet -- can_ipo_any? and can_buy_any_from_ipo?
           # then find nothing to buy/par for ANY corporation, for ANY
-          # player, for the rest of the game (found live: right after the
-          # last private sold, the whole Stock round returned empty actions
-          # for every player and fell straight through into the first OR).
+          # player, for the rest of the game.
           # corporation.ipo_shares (Corporation#ipo_shares, `@ipo_owner.
           # shares.select { corporation == self }`) tracks the *right*
           # holder regardless of where ipo_owner points, exactly the same
@@ -45,12 +45,19 @@ module Engine
           # G1862::Step::BuySellParShares#can_buy_any_from_ipo?/
           # #can_ipo_any?) -- process_par (base class) already gets this
           # right on its own via ipo_shares.first, so only these two
-          # discovery methods need the override. Deliberately NOT also
-          # exposing genuine treasury shares (corporation.shares, shares
-          # actually bought back into the corp via StockRepurchase) here --
-          # the rules describe those as parked in the Growth Corporation
-          # box, not up for resale, and Game#issuable_shares already
-          # enforces that (always []).
+          # discovery methods need the override. Deliberately doesn't
+          # also check genuine treasury shares (corporation.shares,
+          # shares actually bought back into the corp via StockRepurchase)
+          # here -- they're meant to be buyable, and the standard
+          # render_treasury_shares/can_buy? path (assets/app/view/game/
+          # buy_sell_shares.rb) already handles that on its own once
+          # buy_shares is available for any reason. This override only
+          # needs to widen the "is there ANYTHING to buy/par at all" gate
+          # to see IPO shares correctly; it's not the thing standing
+          # between a player and a treasury share. Game#issuable_shares
+          # (always []) is unrelated -- that only blocks the OR Issue
+          # action (a corp voluntarily selling ITS OWN treasury shares
+          # for cash), not a player buying an existing one in the SR.
           def can_buy_any_from_ipo?(entity)
             @game.corporations.each do |corporation|
               next unless corporation.ipoed

@@ -39,10 +39,6 @@ module Engine
       PLAYER_RANGE = nil
       OPTIONAL_RULES = [].freeze
       MUTEX_RULES = [].freeze
-      # [[trigger_sym, [implied_sym, ...]], ...] -- checking trigger_sym on
-      # the launch screen also checks each implied_sym (create_game.rb's
-      # toggle_optional_rule). Opt-in per game, empty by default.
-      IMPLIES_RULES = [].freeze
 
       # terms to match with on the create games page; see keywords function for
       # values automatically considered as keywords

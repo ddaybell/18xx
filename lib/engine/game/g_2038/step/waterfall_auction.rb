@@ -124,13 +124,15 @@ module Engine
 
             minor.owner = player
             minor.float!
-            # $100 plus half of whatever was bid over $100 -- floored at 0,
-            # not just floor-divided, since the waterfall discount can push
-            # a winning price below the $100 face value (increase_discount!
-            # knocks $5 off every time all players pass on the cheapest
-            # company), and a below-$100 win should still capitalize at a
-            # flat $100, not less.
-            capital = [(price - 100) / 2, 0].max
+            # $100 plus half of whatever was bid over $100. No floor needed
+            # here: every independent's face value is a fixed $100 (none
+            # affected by the Variant Start Packet's price swaps, which
+            # only touch non-minor privates like TS) and this game has no
+            # rule that ever discounts a company below face value --
+            # G2038::Step::WaterfallAuction#all_passed! fully overrides
+            # the base engine's own waterfall-discount mechanic, so `price`
+            # can never actually be less than 100.
+            capital = (price - 100) / 2
             @game.bank.spend(100 + capital, minor)
           end
 
