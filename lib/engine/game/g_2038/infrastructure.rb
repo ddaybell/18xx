@@ -140,7 +140,7 @@ module Engine
           corp_data(entity)&.dig(:claim_costs) || DEFAULT_CLAIM_COSTS
         end
 
-        # Per-ore claim-value bonus (Tiles tab's "Claim upgrade" chart) --
+        # Per-ore claim-value bonus (Map tab's "Claim upgrade" chart) --
         # every mine of a given ore gains the same fixed amount once
         # claimed, regardless of which tile it's on (see MINE_DATA: e.g.
         # every :n mine goes unclaimed 10/claimed 50, unclaimed 20/claimed
@@ -153,7 +153,11 @@ module Engine
           end
         end
 
-        def tile_manifest_legends
+        def show_map_legend?
+          true
+        end
+
+        def map_legends
           [:claim_upgrade_legend]
         end
 
@@ -164,10 +168,10 @@ module Engine
         # comments.
         CLAIM_UPGRADE_ORE_COLOR = { n: '#c82828', i: '#2864d2', r: '#289646' }.freeze
 
-        # Tiles tab legend (see Game::Base#tile_manifest_legends/
-        # View::Game::MapLegend#render_legend for the shape this returns)
-        # -- one row per ore, showing the fixed value bonus claiming a
-        # mine of that ore grants (see claim_ore_upgrade_amounts above).
+        # Map tab legend (see Game::Base#map_legends/View::Game::
+        # MapLegend#render_legend for the shape this returns) -- one row
+        # per ore, showing the fixed value bonus claiming a mine of that
+        # ore grants (see claim_ore_upgrade_amounts above).
         def claim_upgrade_legend(font_color, _yellow, green, _brown, _gray, _red, action_processor: nil)
           cell_style = {
             border: '1px solid',

@@ -3567,16 +3567,6 @@ module Engine
         [:map_legend]
       end
 
-      # Same idea as map_legends above, for the Tiles tab instead of the
-      # map -- a list of method-name symbols this game defines, each
-      # returning legend table data in the exact shape View::Game::
-      # MapLegend#render_legend already expects. Empty by default (no
-      # legend section at all, unlike map_legends' placeholder default)
-      # since most games have no need for a Tiles-tab table.
-      def tile_manifest_legends
-        []
-      end
-
       def train_purchase_name(train)
         train.name
       end

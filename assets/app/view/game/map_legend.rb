@@ -8,15 +8,9 @@ module View
       include Actionable
       include Lib::Settings
       needs :game, store: true
-      # Which of @game's methods to call for legend table data -- defaults
-      # to @game.map_legends (the map's own legend section) so every
-      # existing caller is unaffected; a caller elsewhere (e.g. the Tiles
-      # tab's own legend section) can pass a different list of method
-      # names instead.
-      needs :legend_methods, default: nil
 
       def render
-        h(:div, (@legend_methods || @game.map_legends).map { |method| render_legend(method) })
+        h(:div, @game.map_legends.map { |method| render_legend(method) })
       end
 
       def render_legend(method)
