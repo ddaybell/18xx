@@ -430,59 +430,13 @@ module Engine
         # spaceships. Rather than duplicating any of that logic just to
         # change a word, rewrite whatever it logged after the fact; cheap
         # and safe since every action already routes through here.
-        #
-        # Also where the exploration-undo warning (Decision B / ROADMAP
-        # Phase 4i) is injected: an Undo whose action.is_a?(Action::Undo)
-        # short-circuits Game::Base#process_action into `clone(@raw_actions)`
-        # -- a brand new Game instance, replayed from scratch -- rather than
-        # mutating self, so any warning has to be computed from *this*
-        # (pre-undo) instance's still-intact @log, then appended as a
-        # genuine follow-up action on the *returned* (post-undo) instance.
-        # A real Action::Message is the vehicle because it's the one action
-        # type Game::Base.filtered_actions guarantees can never itself be
-        # undone (`when 'message'`), so the warning survives every future
-        # replay of this game once it's added -- not just the live moment.
         def process_action(action, **kwargs)
           action = Action::Base.action_from_h(action, self) if action.is_a?(Hash)
-
-          if action.is_a?(Action::Undo)
-            # Action::Base#to_h memoizes into @_h the first time it's ever
-            # called on a given action instance -- exploration_undo_warning
-            # below calls .to_h on this same action (to compare
-            # filtered_actions before/after), and if that happens before
-            # Game::Base#process_action assigns action.id (its very first
-            # line, inside `super`), the memoized hash permanently misses
-            # its 'id' key. That corrupts every later .to_h call on this
-            # SAME object too, including the one `super` itself relies on
-            # to append this action to @raw_actions for the real clone --
-            # actions without an id blow up process_to_action's replay
-            # ("comparison of Integer with nil failed") for every future
-            # load of this game, not just this one. Assigning the id
-            # first (the exact value `super` would assign anyway)
-            # means the first .to_h call -- whichever code makes it --
-            # caches the correct hash from the start.
-            action.id ||= current_action_id + 1
-            warning = exploration_undo_warning(action)
-            result = super
-            notify_undo_exploration_warning!(result, action, warning) if warning
-            return result
-          end
 
           before = @log.size
           result = super
           rewrite_new_log_lines!(before)
           result
-        end
-
-        # Step::Message#actions requires a player entity -- action.entity
-        # here can be a corporation (undoing mid-OR-turn), so resolve to
-        # whoever's actually behind it the same way the rest of the game
-        # already does (Game::Base#acting_for_entity, e.g. a corp's
-        # president), or Step::Message would never match as the blocking
-        # step and raise instead.
-        def notify_undo_exploration_warning!(result, action, warning)
-          messenger = action.entity.player? ? action.entity : result.acting_for_entity(action.entity)
-          result.process_action(Action::Message.new(messenger, message: warning))
         end
 
         # @log[before..] can be nil, not [] -- a submitted ship flight
@@ -520,38 +474,6 @@ module Engine
           return message unless match
 
           "#{match[1]} (ST private owner) operates TSI's Probe"
-        end
-
-        # Whether this specific undo reaches back far enough to un-happen
-        # an exploration -- reuses Game::Base.filtered_actions itself (the
-        # exact logic that decides what an undo removes) rather than
-        # guessing from the raw action's shape: running it once on the
-        # actions so far, and once with this undo appended, shows exactly
-        # which action ids flip from kept to undone. Cross-referencing
-        # those ids against @log (still the live, pre-undo log at this
-        # point -- every entry is already tagged with the action_id that
-        # produced it, GameLog::Entry#action_id) finds any "explores
-        # <hex>:" line among them. Deliberately reports only who and which
-        # hex, not what was found there.
-        def exploration_undo_warning(undo_action)
-          before_filtered, = self.class.filtered_actions(@raw_actions)
-          after_filtered, = self.class.filtered_actions(@raw_actions + [undo_action.to_h])
-
-          newly_undone_ids = before_filtered.each_index
-                                             .select { |i| before_filtered[i] && !after_filtered[i] }
-                                             .map { |i| before_filtered[i]['id'] }
-          return if newly_undone_ids.empty?
-
-          crossed = @log.filter_map do |entry|
-            next unless newly_undone_ids.include?(entry.action_id)
-            next unless entry.message.is_a?(String)
-
-            match = entry.message.match(/^(.+?) explores (\S+):/)
-            match && "#{match[1]} explored #{match[2]}"
-          end
-          return if crossed.empty?
-
-          "Undo reversed an exploration -- #{crossed.join('; ')}"
         end
 
         def shipify_log(message)
