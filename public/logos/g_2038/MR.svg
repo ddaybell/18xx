@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
   <circle cx="100" cy="100" r="100" fill="#FA8072"/>
-  <text x="100" y="86" text-anchor="middle" font-weight="700" font-size="68" font-family="Arial" fill="#000" textLength="120" lengthAdjust="spacingAndGlyphs">MR</text>
-  <text x="100" y="120" text-anchor="middle" font-weight="700" font-size="24" font-family="Arial" fill="#000" textLength="110" lengthAdjust="spacingAndGlyphs">Mining</text>
-  <text x="100" y="150" text-anchor="middle" font-weight="700" font-size="24" font-family="Arial" fill="#000" textLength="140" lengthAdjust="spacingAndGlyphs">Robotics</text>
+  <text x="40" y="94" text-anchor="start" font-size="32" font-family="Arial" fill="#000" textLength="120" lengthAdjust="spacing"><tspan font-weight="700">M</tspan><tspan font-weight="400">ining</tspan></text>
+  <text x="40" y="132" text-anchor="start" font-size="32" font-family="Arial" fill="#000" textLength="130" lengthAdjust="spacing"><tspan font-weight="700">R</tspan><tspan font-weight="400">obotics</tspan></text>
 </svg>

@@ -295,7 +295,7 @@ module View
 
         text_attrs = {
           x: 50, y: 76, 'text-anchor': 'middle', 'font-weight': 700, 'font-size': 26,
-          'font-family': 'Arial', fill: '#ffffff',
+          'font-family': 'Arial', fill: '#000000',
         }
         shape << h(:text, { attrs: text_attrs }, owner.id)
         shape
