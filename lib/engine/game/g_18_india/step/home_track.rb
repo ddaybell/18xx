@@ -13,6 +13,7 @@ module Engine
 
           def actions(entity)
             return [] unless entity == pending_entity
+            return super unless entity.name == 'GIPR'
 
             actions = []
             actions << 'place_token' if any_open_cities?
@@ -30,6 +31,8 @@ module Engine
           end
 
           def description
+            return super unless pending_entity.name == 'GIPR'
+
             "Lay home token in open city or upgrade town for #{pending_entity.name}"
           end
 
