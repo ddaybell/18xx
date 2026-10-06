@@ -359,6 +359,25 @@ module Engine
           # gone for good, not available to be drawn again.
           add_extra_tile(tile) if tile.unlimited
           @tiles.delete(tile)
+
+          # A double-mine tile models each mine as its own City part (no
+          # engine token is ever placed there -- claim ownership lives in
+          # @mine_state, already cleared above), so laying '2023' (a single
+          # city) over one triggers Hex#lay's move_tokens_to_new_tile_
+          # multi_city! path. That method has a real bug: reading
+          # tokens[new_city] to check for an unmapped city's tokens
+          # inserts an empty-array entry as a side effect, so the "is
+          # there anything left to migrate" check (tokens.empty?) reads
+          # false even though nothing was ever added -- it then falls into
+          # a raise that itself references undefined locals (tile/token),
+          # crashing as `undefined method 'token' for the Hex`. This is
+          # unreachable in every other 18xx game (no other game shrinks a
+          # multi-city tile down like a mine-to-base placement does), so
+          # nothing else has ever tripped it. Since there are genuinely no
+          # tokens to migrate here, sidestep the buggy multi-city path
+          # entirely by dropping the tile to a single city first --
+          # Hex#lay then takes its plain single-city branch instead.
+          hex.tile.cities.slice!(1..) if hex.tile.cities.size > 1
           hex.lay(tile)
           tile.cities.first.place_token(entity, token, check_tokenable: false)
           @log << "#{entity.name} places a #{free ? 'free ' : ''}base at #{hex.id}"\
