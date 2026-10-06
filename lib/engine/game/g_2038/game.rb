@@ -745,6 +745,23 @@ module Engine
           entity.respond_to?(:id) && entity.id == 'TSI' && !entity.floated?
         end
 
+        # The Probe rusts like any other ship (TRAINS' rusts_on: %w[4/3
+        # 6/2]) the moment someone buys a Phase 3 ship -- ordinary
+        # Game::Base#rust! behavior, unrelated to TSI ever floating.
+        # Normally unreachable (see setup_probe!'s own comment on why ST
+        # being player-owned always floats TSI in the same purchase), but
+        # the Variant Start Packet can change which privates fund TSI's
+        # float, making a real pre-float window -- and Phase 3 -- both
+        # reachable together. Once that happens, ST's owner has nothing
+        # left to fly: every `tsi_pre_float?` call site that hands them
+        # control (operating_order/acting_for_entity/Round::Operating#
+        # skip_entity? below) must also check this, or TSI keeps getting a
+        # turn with no ship and no real corporate turn to fall back to --
+        # found live: the round got stuck on exactly this turn.
+        def probe_available?
+          @probe && !@probe.rusted
+        end
+
         # While TSI hasn't floated, the Probe's exploration bonus goes to the
         # owner of the ST private (who is flying it), not to TSI's treasury
         # (§6, Let's Play sheet).
@@ -1579,6 +1596,11 @@ module Engine
           # giving TSI a turn at all rather than crash on a nil
           # acting_for_entity.
           return order unless company_by_id('ST')&.owner&.player?
+          # Nothing left to fly once the Probe has rusted (see
+          # probe_available?'s own comment) -- there's no ordinary
+          # corporate turn to fall back to either, since TSI still hasn't
+          # floated, so this turn would have nothing whatsoever to offer.
+          return order unless probe_available?
 
           order.insert(@minors.count(&:floated?), tsi)
           order
@@ -1588,7 +1610,14 @@ module Engine
         # is acted on by the owner of the ST private, per the rules -- not by
         # TSI's nominal president (TSI has no real president until it floats).
         def acting_for_entity(entity)
-          if tsi_pre_float?(entity)
+          # Round::Operating#skip_entity? (see g_2038/round/operating.rb)
+          # is the authoritative guard that keeps this from ever being
+          # reached for a Probe-less pre-float TSI -- this check is
+          # defense in depth, since falling through to `super` below
+          # would return TSI's own (likely nil, pre-float) owner instead
+          # of raising, silently mis-assigning the turn rather than
+          # loudly failing.
+          if tsi_pre_float?(entity) && probe_available?
             st_owner = company_by_id('ST')&.owner
             # Same bank-vs-real-owner distinction as probe_bonus_recipient
             # above -- a leftover, never-bought ST is bank-owned, not a

@@ -12,6 +12,29 @@ module Engine
             pay_fast_buck_treasury
           end
 
+          # TSI's pre-float turn only exists to let ST's owner fly the
+          # Probe (see Game#tsi_pre_float?/#probe_available?) -- if the
+          # Probe has since rusted (buying a Phase 3 ship rusts it same as
+          # any other ship, independent of TSI ever floating; see
+          # probe_available?'s own comment on why the Variant Start
+          # Packet can make this reachable), there's nothing left for that
+          # turn to do and no normal corporate turn to fall back to
+          # either, since TSI still hasn't floated. Skipping the entity
+          # here -- the same mechanism `closed?` already uses -- routes
+          # straight past `start_operating`'s `acting_for_entity(entity)
+          # .name` log line entirely, rather than reaching it with nothing
+          # valid to hand control to. Game#operating_order also stops
+          # inserting TSI once the Probe is gone, but that only takes
+          # effect on the *next* round built from scratch -- this is what
+          # catches the Probe rusting *during* a round where TSI's turn
+          # was already queued before that happened (found live: the
+          # round got stuck exactly this way).
+          def skip_entity?(entity)
+            return true if @game.tsi_pre_float?(entity) && !@game.probe_available?
+
+            super
+          end
+
           # An independent that owns no ship and can't afford the cheapest
           # one left in the Depot must merge into the AL (§7.39/Phase 9f)
           # -- but only once it's had its own turn and is *still* shipless
