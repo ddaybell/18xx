@@ -42,7 +42,7 @@ module View
         [75, 24, 1.1, 0.85], [12, 38, 0.7, 0.55], [29, 45, 1.4, 0.95], [46, 41, 0.6, 0.5],
         [58, 50, 1.0, 0.75], [71, 44, 0.8, 0.65], [5, 58, 1.2, 0.9], [22, 63, 0.7, 0.6],
         [37, 70, 1.5, 1.0], [50, 66, 0.6, 0.45], [64, 72, 1.0, 0.8], [77, 60, 0.9, 0.7],
-        [14, 76, 0.8, 0.6], [33, 15, 0.5, 0.4], [55, 78, 1.1, 0.85], [8, 25, 0.6, 0.5],
+        [14, 76, 0.8, 0.6], [33, 15, 0.5, 0.4], [55, 78, 1.1, 0.85], [8, 25, 0.6, 0.5]
       ].freeze
 
       # A handful of warm-tinted specks among the white stars, matching
@@ -147,22 +147,58 @@ module View
             # paneled segments at each end -- closer to the physical
             # tiles' own compact, integrated satellite silhouette than
             # the earlier separate-wings-and-boxy-body layout
-            h(:rect, attrs: { x: -32, y: -4, width: 64, height: 8, fill: '#c9ccd1', stroke: '#5a5f66',
-                               'stroke-width': 1.25 }),
-            h(:rect, attrs: { x: -32, y: -4, width: 14, height: 8, fill: '#3a6b8a', stroke: '#1a3a4a',
-                               'stroke-width': 1 }),
-            h(:rect, attrs: { x: 18, y: -4, width: 14, height: 8, fill: '#3a6b8a', stroke: '#1a3a4a',
-                               'stroke-width': 1 }),
+            h(:rect, attrs: {
+                x: -32,
+                y: -4,
+                width: 64,
+                height: 8,
+                fill: '#c9ccd1',
+                stroke: '#5a5f66',
+                'stroke-width': 1.25,
+              }),
+            h(:rect, attrs: {
+                x: -32,
+                y: -4,
+                width: 14,
+                height: 8,
+                fill: '#3a6b8a',
+                stroke: '#1a3a4a',
+                'stroke-width': 1,
+              }),
+            h(:rect, attrs: {
+                x: 18,
+                y: -4,
+                width: 14,
+                height: 8,
+                fill: '#3a6b8a',
+                stroke: '#1a3a4a',
+                'stroke-width': 1,
+              }),
             # central hub
-            h(:rect, attrs: { x: -6, y: -9, width: 12, height: 18, rx: 2, fill: '#c9ccd1', stroke: '#5a5f66',
-                               'stroke-width': 1.5 }),
+            h(:rect, attrs: {
+                x: -6,
+                y: -9,
+                width: 12,
+                height: 18,
+                rx: 2,
+                fill: '#c9ccd1',
+                stroke: '#5a5f66',
+                'stroke-width': 1.5,
+              }),
             # short stalk up to the ring dish, mounted centrally above
             # the boom rather than off to one side
             h(:line, attrs: { x1: 0, y1: -9, x2: 0, y2: -18, stroke: '#c9ccd1', 'stroke-width': 1.5 }),
             # ring dish, viewed at an angle (a flattened ellipse), with a
             # small center hub -- the "ring" look, per the physical tiles
-            h(:ellipse, attrs: { cx: 0, cy: -25, rx: 12, ry: 7, fill: 'none', stroke: '#e8ecef',
-                                  'stroke-width': 2.25 }),
+            h(:ellipse, attrs: {
+                cx: 0,
+                cy: -25,
+                rx: 12,
+                ry: 7,
+                fill: 'none',
+                stroke: '#e8ecef',
+                'stroke-width': 2.25,
+              }),
             h(:circle, attrs: { cx: 0, cy: -25, r: 1.5, fill: '#e8ecef' }),
           ])
       end
@@ -175,7 +211,7 @@ module View
       # hand-placed to avoid an obviously-regular outline. [x, y,
       # radius], all relative to hex-center.
       ASTEROID_BUMPS = [
-        [0, -42, 52], [-36, -12, 46], [34, -16, 44], [-22, 28, 46], [24, 32, 42], [0, 6, 50],
+        [0, -42, 52], [-36, -12, 46], [34, -16, 44], [-22, 28, 46], [24, 32, 42], [0, 6, 50]
       ].freeze
 
       # Small darker craters scattered across the rock's face: [x, y,
@@ -188,7 +224,7 @@ module View
       # visible band regardless of scale.
       ASTEROID_CRATERS = [
         [-16, -24, 11], [22, -10, 8], [-6, 16, 12], [30, 18, 7], [-32, 8, 7], [8, -40, 7], [-40, -30, 6],
-        [40, -22, 15], [-30, 40, 13], [48, 22, 11],
+        [40, -22, 15], [-30, 40, 13], [48, 22, 11]
       ].freeze
 
       # Single-mine tiles: one rock at hex-center, shrunk to 55% (per
@@ -294,8 +330,13 @@ module View
         return shape unless owner
 
         text_attrs = {
-          x: 50, y: 76, 'text-anchor': 'middle', 'font-weight': 700, 'font-size': 26,
-          'font-family': 'Arial', fill: '#000000',
+          x: 50,
+          y: 76,
+          'text-anchor': 'middle',
+          'font-weight': 700,
+          'font-size': 26,
+          'font-family': 'Arial',
+          fill: '#000000',
         }
         shape << h(:text, { attrs: text_attrs }, owner.id)
         shape
@@ -331,8 +372,14 @@ module View
         end
         modules = (0...RING_STATION_SPOKE_COUNT).map do |i|
           h(:rect, attrs: {
-              x: -5, y: -(RING_STATION_RING_R + 3), width: 10, height: 8, rx: 1.5,
-              fill: '#6b6f78', stroke: '#3d4047', 'stroke-width': 0.75,
+              x: -5,
+              y: -(RING_STATION_RING_R + 3),
+              width: 10,
+              height: 8,
+              rx: 1.5,
+              fill: '#6b6f78',
+              stroke: '#3d4047',
+              'stroke-width': 0.75,
               transform: "rotate(#{(i * (360 / RING_STATION_SPOKE_COUNT)) + slot_angle})",
             })
         end
@@ -360,19 +407,49 @@ module View
           end
 
         h(:g, { key: 'g2038-ring-station', attrs: { transform: "rotate(#{rotation})" } }, [
-            h(:circle, attrs: { cx: 0, cy: 0, r: RING_STATION_RING_R, fill: 'none',
-                                 stroke: '#5c6068', 'stroke-width': RING_STATION_RING_WIDTH }),
-            h(:circle, attrs: { cx: 0, cy: 0, r: RING_STATION_RING_R + (RING_STATION_RING_WIDTH / 2.0),
-                                 fill: 'none', stroke: '#a7abb3', 'stroke-width': 1 }),
-            h(:circle, attrs: { cx: 0, cy: 0, r: RING_STATION_RING_R - (RING_STATION_RING_WIDTH / 2.0),
-                                 fill: 'none', stroke: '#3d4047', 'stroke-width': 1 }),
+            h(:circle, attrs: {
+                cx: 0,
+                cy: 0,
+                r: RING_STATION_RING_R,
+                fill: 'none',
+                stroke: '#5c6068',
+                'stroke-width': RING_STATION_RING_WIDTH,
+              }),
+            h(:circle, attrs: {
+                cx: 0,
+                cy: 0,
+                r: RING_STATION_RING_R + (RING_STATION_RING_WIDTH / 2.0),
+                fill: 'none',
+                stroke: '#a7abb3',
+                'stroke-width': 1,
+              }),
+            h(:circle, attrs: {
+                cx: 0,
+                cy: 0,
+                r: RING_STATION_RING_R - (RING_STATION_RING_WIDTH / 2.0),
+                fill: 'none',
+                stroke: '#3d4047',
+                'stroke-width': 1,
+              }),
             *modules,
             *spokes,
             *[teardrop].compact,
-            h(:circle, attrs: { cx: 0, cy: 0, r: RING_STATION_CORE_R, fill: '#9aa0aa',
-                                 stroke: '#4a4e57', 'stroke-width': 2 }),
-            h(:circle, attrs: { cx: 0, cy: 0, r: RING_STATION_HUB_R, fill: 'none',
-                                 stroke: '#6b6f78', 'stroke-width': 1.5 }),
+            h(:circle, attrs: {
+                cx: 0,
+                cy: 0,
+                r: RING_STATION_CORE_R,
+                fill: '#9aa0aa',
+                stroke: '#4a4e57',
+                'stroke-width': 2,
+              }),
+            h(:circle, attrs: {
+                cx: 0,
+                cy: 0,
+                r: RING_STATION_HUB_R,
+                fill: 'none',
+                stroke: '#6b6f78',
+                'stroke-width': 1.5,
+              }),
           ])
       end
 
@@ -453,7 +530,9 @@ module View
         h(:circle, {
             key: 'g2038-existing-station-highlight',
             attrs: {
-              cx: ox, cy: oy, r: STATION_HIGHLIGHT_RADIUS,
+              cx: ox,
+              cy: oy,
+              r: STATION_HIGHLIGHT_RADIUS,
               'fill-opacity': 0,
               pathLength: 100,
               'stroke-dasharray': 8,
