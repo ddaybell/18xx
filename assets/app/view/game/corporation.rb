@@ -4,7 +4,6 @@ require 'lib/settings'
 require 'view/game/actionable'
 require 'view/game/alternate_corporations'
 require 'view/game/companies'
-require 'view/game/g_2038/corporation_g2038'
 
 module View
   module Game
@@ -12,8 +11,6 @@ module View
       include Actionable
       include AlternateCorporations
       include Lib::Settings
-      # For G2038: claims/base/station/pilot-info rendering.
-      include CorporationG2038
 
       needs :user, default: nil, store: true
       needs :bids, default: nil
