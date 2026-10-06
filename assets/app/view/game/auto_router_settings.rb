@@ -4,17 +4,22 @@ require 'user_manager'
 require 'lib/settings'
 require 'lib/storage'
 require 'view/form'
+require 'view/game/g_2038/auto_router_settings_g2038'
 
 module View
   module Game
     class AutoRouterSettings < Form
       include Lib::Settings
       include UserManager
+      # Used by G2038 -- see auto_router_settings_g2038.rb.
+      include AutoRouterSettingsG2038
 
       needs :path_timeout, store: true, default: 30
       needs :route_timeout, store: true, default: 10
 
       def render_content
+        return render_single_phase_content if @game.respond_to?(:autorouter)
+
         fields = [
           render_input(
             'Path timeout:',
