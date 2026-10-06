@@ -67,7 +67,29 @@ module Engine
             false
           end
 
+          # Base's own version only ever asks "can this player afford SOME
+          # corp's cheapest cash par price" -- wrong here on its own, since
+          # a Growth Corp conversion (see choice_available?/Game#
+          # form_growth_corporation!) starts a corp for FREE (an owned
+          # independent traded in, exchange: :free -- no cash changes
+          # hands at all). Without this override, a player holding a
+          # convertible independent but unable to afford ANY corp's
+          # cheapest cash par lost 'par' from `actions` entirely --
+          # and since the growth-exchange buttons only ever render
+          # *inside* the Par component (par.rb's render_growth_exchange),
+          # which itself only ever mounts when round/stock.rb's
+          # render_pre_ipo sees 'par' in @current_actions (see its own
+          # `case type when :par` branch) -- losing 'par' silently hid
+          # the exchange option too, even though it needs no cash at all.
+          # Found live: a player one cash-par short of affording ANY
+          # corporation couldn't see VP's own Exchange Independent button
+          # either, only regaining it once a share sale happened to push
+          # their cash over SOME corp's cheapest price -- a coincidence
+          # that happened to work, not what was actually gating the
+          # button.
           def can_ipo_any?(entity)
+            return true if choice_available?(entity)
+
             !bought? && @game.corporations.any? do |c|
               @game.can_par?(c, entity) && can_buy?(entity, c.ipo_shares.first&.to_bundle)
             end
@@ -167,6 +189,35 @@ module Engine
             # actually land in @round.current_actions for `bought?` (above)
             # to find.
             track_action(action, corp)
+          end
+
+          # The base engine's own action_is_shenanigan? (lib/engine/step/
+          # buy_sell_par_shares.rb) -- which should_stop_applying_program
+          # consults for every OTHER player's historical action before
+          # letting a programmed "auto-pass" continue -- only recognizes
+          # Par/BuyShares/SellShares/TakeLoan. A growth-corp conversion
+          # dispatches via Action::Choose instead, so it fell through to
+          # the generic "Unknown action choose disabling for safety"
+          # catch-all: accurate (a growth exchange changes share
+          # ownership and launches a corp, exactly the kind of thing
+          # autopass should stop for) but unhelpfully vague about WHY.
+          # Found live: another player's autopass silently cancelled with
+          # that bland message the moment someone traded in an
+          # independent for a corp's president's certificate. corporation
+          # here is already the newly-formed corp, not the Choose
+          # action's own target -- should_stop_applying_program looks it
+          # up from @round.players_history, which process_choose's own
+          # track_action(action, corp) call above deliberately files this
+          # action under. Kept short on purpose (just the corp, not who
+          # or which independent) -- per the user, that's what the log
+          # itself is for; this message only needs to say WHY autopass
+          # stopped, not re-report the whole event.
+          def action_is_shenanigan?(entity, other_entity, action, corporation, share_to_buy)
+            if action.is_a?(Action::Choose) && action.choice.to_s.start_with?(GROW)
+              return "#{corporation.name} formed as Growth Corporation"
+            end
+
+            super
           end
         end
       end
