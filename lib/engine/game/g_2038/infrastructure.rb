@@ -131,8 +131,15 @@ module Engine
         def claim_details(entity)
           @mine_state.flat_map do |hex_id, state|
             state[:mines].select { |m| m[:owner] == entity.id }
-                          .map { |m| { hex_id: hex_id, ore: m[:ore], value: m[:claimed], used: m[:used],
-                                        free: m[:free] || false } }
+                          .map do |m|
+              {
+                hex_id: hex_id,
+                ore: m[:ore],
+                value: m[:claimed],
+                used: m[:used],
+                free: m[:free] || false,
+              }
+            end
           end
         end
 
@@ -184,8 +191,10 @@ module Engine
 
           rows = claim_ore_upgrade_amounts.sort.map do |ore, amount|
             [
-              { text: CLAIM_UPGRADE_ORE_NAMES[ore],
-                props: { style: cell_style.merge(backgroundColor: CLAIM_UPGRADE_ORE_COLOR[ore], color: 'white') } },
+              {
+                text: CLAIM_UPGRADE_ORE_NAMES[ore],
+                props: { style: cell_style.merge(backgroundColor: CLAIM_UPGRADE_ORE_COLOR[ore], color: 'white') },
+              },
               { text: format_currency(amount), props: { style: cell_style } },
             ]
           end

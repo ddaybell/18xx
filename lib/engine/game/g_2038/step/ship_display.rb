@@ -139,14 +139,21 @@ module Engine
             # doing nothing when clicked.
             locked = !can_cancel && !is_pending
             locking_ship = locking_ship_for(ship) if locked
-            { choice: nil, blocked: false, locked: locked, select_ship: (can_cancel ? ship : nil),
-              label: ship_label(ship), selected: is_selected, ship_id: ship.id,
+            {
+              choice: nil,
+              blocked: false,
+              locked: locked,
+              select_ship: (can_cancel ? ship : nil),
+              label: ship_label(ship),
+              selected: is_selected,
+              ship_id: ship.id,
               stats: stats && route_stats(stats[:explored], stats[:cargo]),
               revenue: route && @game.format_currency(route.revenue),
               color_index: route_color_index(entity, ship),
               locked_by_label: locking_ship && ship_label(locking_ship),
               locked_by_color_index: locking_ship && route_color_index(entity, locking_ship),
-              found_at: @auto_all_found_at&.dig(ship.id) }
+              found_at: @auto_all_found_at&.dig(ship.id),
+            }
           end
 
           # A ship that hasn't run this OR yet -- either the live,
@@ -196,11 +203,19 @@ module Engine
             # symmetric way targeting a completed route already drops
             # this ship's own selection.
             offer_local_deselect = !mid_flight && !real_choice && @selected_completed_ship_id
-            { choice: real_choice, deselect_completed: offer_local_deselect,
+            {
+              choice: real_choice,
+              deselect_completed: offer_local_deselect,
               blocked: mid_flight && !is_selected,
-              select_ship: nil, label: ship_label(ship), selected: is_selected, ship_id: ship.id,
-              stats: live_stats, revenue: live_revenue, color_index: route_color_index(entity, ship),
-              preview: is_preview }
+              select_ship: nil,
+              label: ship_label(ship),
+              selected: is_selected,
+              ship_id: ship.id,
+              stats: live_stats,
+              revenue: live_revenue,
+              color_index: route_color_index(entity, ship),
+              preview: is_preview,
+            }
           end
 
           # Public: {ship => hexes} for every still-unrun ship's own
@@ -240,7 +255,8 @@ module Engine
           # render_route_lines) so it reads as "still under test," never
           # confusable with a real, finished route.
           def auto_route_all_preview_hexes(entity)
-            return [nil, nil] unless auto_route_all_active?(entity) && @auto_all_final_ship
+            return [nil, nil] unless auto_route_all_active?(entity)
+            return [nil, nil] unless @auto_all_final_ship
 
             hexes = @game.autorouter.best_hexes
             return [nil, nil] unless hexes
@@ -413,9 +429,7 @@ module Engine
               # refuel timing would just silently vanish on replay. Same
               # graceful-skip-if-no-longer-available guard as the pickup
               # dispatch above.
-              if suggestion[:refueled_hex_ids].include?(to.id) && choices.key?(Route::REFUEL)
-                local_choose!(entity, Route::REFUEL)
-              end
+              local_choose!(entity, Route::REFUEL) if suggestion[:refueled_hex_ids].include?(to.id) && choices.key?(Route::REFUEL)
             end
           end
 
@@ -439,7 +453,8 @@ module Engine
           # centered, for everything else (leaves the hex's own top-standardized label/
           # single mine circle/city token clear.
           def ship_marker(entity)
-            return nil unless entity == current_entity && !@trace.empty?
+            return nil unless entity == current_entity
+            return nil if @trace.empty?
 
             ship = current_ship(entity)
             return nil unless ship

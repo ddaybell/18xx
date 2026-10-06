@@ -42,14 +42,15 @@ module Engine
           # starts. The rule text ties this to the independent's own
           # turn ending shipless, not to a shipless check firing whenever
           # any *other* company's turn happens to end with this
-          # independent up next in rotation. Checked in after_end_of_turn 
-          # instead of skip_entity?, so the independent's own turn (Route 
-          # auto-skips with no ships, but BuyTrain still runs -- the owner 
+          # independent up next in rotation. Checked in after_end_of_turn
+          # instead of skip_entity?, so the independent's own turn (Route
+          # auto-skips with no ships, but BuyTrain still runs -- the owner
           # could choose to buy it a replacement ship there) happens first.
           def after_end_of_turn(operator)
             super
 
-            return unless operator.minor? && @game.independent_must_merge?(operator)
+            return unless operator.minor?
+            return unless @game.independent_must_merge?(operator)
 
             @game.merge_independent_into_al!(operator)
           end
@@ -62,16 +63,16 @@ module Engine
           # mechanics) and going through them one by one either misbehaves
           # (Dividend's default "withhold" still moves the share price
           # even off $0 revenue) or just adds noise (a string of "TSI
-          # skips ..." lines). Once Route finishes, silently end the turn 
-          # instead. While Route is still the live decision (blocking), 
-          # this falls through to the ordinary behavior unchanged -- only 
+          # skips ..." lines). Once Route finishes, silently end the turn
+          # instead. While Route is still the live decision (blocking),
+          # this falls through to the ordinary behavior unchanged -- only
           # takes over once nothing is left to decide there.
           def skip_steps
             entity = @entities[@entity_index]
             return super unless @game.tsi_pre_float?(entity)
 
             route_step = @steps.find { |s| s.is_a?(G2038::Step::Route) }
-            return super if route_step&.active? && route_step.blocking?
+            return super if route_step&.active? && route_step&.blocking?
 
             @steps.each { |s| s.pass! unless s == route_step }
           end

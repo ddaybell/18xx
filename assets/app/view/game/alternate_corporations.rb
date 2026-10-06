@@ -577,13 +577,13 @@ module View
 
       # Used by G2038: implements the claims strip, mine-colored claim circles, the
       # base/station infrastructure strip, and the inherited-pilot-ability
-      # line on a corporation's card. 
+      # line on a corporation's card.
 
       def infrastructure_tokens_body
         home = @corporation.tokens.first
         tokens_body = [[logo_for_user(@corporation), home&.used, @corporation.coordinates]]
         tokens_body.concat(infra_entries(:bases, @game.base_hexes(@corporation), logo_for_user(@corporation),
-                                          reserved: @game.reserved_base_count(@corporation)))
+                                         reserved: @game.reserved_base_count(@corporation)))
         # Extra bases beyond the corp's own lifetime allotment -- inherited
         # from a Growth Corp conversion or an AL merger, or
         # granted by Tunnel Systems' free-base ability.
@@ -591,7 +591,9 @@ module View
         tokens_body.concat(infra_entries(:stations, @game.station_hexes(@corporation), @game.station_logo(@corporation)))
         # Extra stations beyond the corp's own placement list -- granted by
         # Vacuum Associates' free-station ability.
-        tokens_body.concat(@game.extra_station_hexes(@corporation).map { |hex_id| [@game.station_logo(@corporation), true, hex_id] })
+        tokens_body.concat(@game.extra_station_hexes(@corporation).map do |hex_id|
+                             [@game.station_logo(@corporation), true, hex_id]
+                           end)
         tokens_body.sort_by! { |t| t[1] ? 1 : -1 }
       end
 
@@ -632,7 +634,7 @@ module View
       # more for each free claim actually placed (Robot Smelters' one-time
       # ability) -- those don't consume a counted slot (see
       # Game#claims_placed_lifetime's own comment) but are still real,
-      # placed claims that need to actually show up here. A played claim 
+      # placed claims that need to actually show up here. A played claim
       # gets its own mine-colored circle, an unplaced/reserved slot still gets the
       # generic flag look.
       def render_claims_display
@@ -647,7 +649,7 @@ module View
         logo = @game.claim_logo(@corporation)
         reserved = @game.reserved_claim_count(@corporation)
         entries = placed.map { |detail| [:placed, detail] }
-        entries.concat([limit.to_i - counted_placed.size, 0].max.times.map do
+        entries.concat(Array.new([limit.to_i - counted_placed.size, 0].max) do
           if reserved.positive?
             reserved -= 1
             [:unplaced, [logo, true, 'Res.']]
@@ -688,7 +690,7 @@ module View
         white_blend = 0.82 - (0.42 * t)
 
         r, g, b = base.map { |c| ((c * (1 - white_blend)) + (255 * white_blend)).round.clamp(0, 255) }
-        format('#%02x%02x%02x', r, g, b)
+        format('#%<r>02x%<g>02x%<b>02x', r: r, g: g, b: b)
       end
 
       def render_claim_column(ore, value, hex_id, used, free = false)
@@ -724,8 +726,12 @@ module View
       end
 
       USED_MINE_MARK_LINE = {
-        position: 'absolute', top: '50%', left: '50%',
-        width: '85%', height: '2px', background: '#ffffff',
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        width: '85%',
+        height: '2px',
+        background: '#ffffff',
       }.freeze
 
       def render_used_mine_mark

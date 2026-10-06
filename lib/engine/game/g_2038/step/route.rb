@@ -102,10 +102,12 @@ module Engine
             # trailing blank line adds breathing room before the ship list
             # renders below it. A plain '' would collapse to zero height, so
             # use a non-breaking space to force real line height.
-            blank_line = " "
+            blank_line = ' '
             return [*lines, blank_line] if @cargo.empty?
 
-            loads = @cargo.map { |c| "#{c[:ore] ? ORE_NAMES[c[:ore]] : 'Transshipment credit'} (#{@game.format_currency(c[:value])})" }
+            loads = @cargo.map do |c|
+              "#{c[:ore] ? ORE_NAMES[c[:ore]] : 'Transshipment credit'} (#{@game.format_currency(c[:value])})"
+            end
                           .join(', ')
             lines[0] = "#{base} Cargo aboard: #{loads}."
             [*lines, blank_line]
@@ -182,7 +184,7 @@ module Engine
             # within the very same dispatch that just grew it), which
             # otherwise left that hex's mark never recorded and
             # undo_last_hex! silently rolling back one hex further than
-            # intended. 
+            # intended.
             @hexes_entered = 0
             # Non-nil while a local, unsubmitted flight has mutated real
             # game state (mine reveals, hex tiles, pickups, log lines) --
@@ -217,11 +219,11 @@ module Engine
           def actions(entity)
             return [] unless entity == current_entity
             return [] unless entity.operator?
-            # A company that owns no ships at all has nothing to confirm 
-            # here; skip straight past this step (and, since it'll earn 
-            # exactly $0, Dividend's own actions already auto-skips on 
-            # total_revenue.zero? too) rather than making the player 
-            # click Submit All Routes for a turn that could never have 
+            # A company that owns no ships at all has nothing to confirm
+            # here; skip straight past this step (and, since it'll earn
+            # exactly $0, Dividend's own actions already auto-skips on
+            # total_revenue.zero? too) rather than making the player
+            # click Submit All Routes for a turn that could never have
             # had anything in it.
             return [] if @game.route_trains(entity).empty?
 
@@ -230,7 +232,7 @@ module Engine
 
           # nil -- suppresses the generic Choose panel's "X:" header
           # entirely (see assets/app/view/game/choose.rb, which already
-          # treats a falsy choice_name as "no header"). 
+          # treats a falsy choice_name as "no header").
           def choice_name
             nil
           end
@@ -244,12 +246,13 @@ module Engine
           end
 
           # Dims everything that isn't a company base (i.e. a legal starting
-          # location) before launch, when it's actually useful to see which 
+          # location) before launch, when it's actually useful to see which
           # of this entity's bases are valid to fly from.
           def available_hex(entity, hex)
             return false unless entity == current_entity
             return true unless @trace.empty?
             return true unless current_ship(entity)
+
             choices.key?(hex.id)
           end
 
@@ -264,8 +267,8 @@ module Engine
           # ShipSelector's Submit button now covers it (see submit_ready?/
           # finish_and_submit_choice), so a route that could end here with
           # MP still left shows the same "Submit ($X)" button a route
-          # that already auto-finished from running out of MP does. `choices` 
-          # itself is unchanged: it's still the source of truth for hex-click 
+          # that already auto-finished from running out of MP does. `choices`
+          # itself is unchanged: it's still the source of truth for hex-click
           # validation and `process_choose`.
           def entity_choices(_entity)
             entity = current_entity
@@ -290,9 +293,9 @@ module Engine
           # This isn't just "exploration reveals hidden info" as a vague
           # principle (though the $10 bonus being paid immediately, not
           # deferred to Dividend, is one real reason on its own -- Cancel
-          # only being safe pre-payout). Exploring a hex draws real, 
-          # order-dependent randomness from the engine's single seeded RNG 
-          # stream.  Every tile reveal's rotation (Game#explore_hex!) and 
+          # only being safe pre-payout). Exploring a hex draws real,
+          # order-dependent randomness from the engine's single seeded RNG
+          # stream.  Every tile reveal's rotation (Game#explore_hex!) and
           # every Lucky/Ice Finder/Drill Hound "second draw" (Game#
           # borrow_second_tile, whose *candidate pool* is literally
           # "whichever hexes are still unexplored right now") both draw
@@ -385,7 +388,7 @@ module Engine
           # previously-selected one stopped being eligible (e.g. an
           # earlier ship's route got explored, locking the chain in front
           # of it -- see cancellable_ships).
-          def selected_completed_ship(entity)
+          def selected_completed_ship(_entity)
             return nil unless @selected_completed_ship_id
 
             cancellable_ships.find { |t| t.id == @selected_completed_ship_id }
@@ -455,13 +458,17 @@ module Engine
 
             if ships.one? && sources.size > 1
               ship = ships.first
-              return sources.to_h { |s| ["#{PILOT}#{s}_#{ship.id}", "Assign #{@game.class::PILOT_NAMES[s]}'s pilot to #{ship_label(ship)}"] }
+              return sources.to_h do |s|
+                       ["#{PILOT}#{s}_#{ship.id}", "Assign #{@game.class::PILOT_NAMES[s]}'s pilot to #{ship_label(ship)}"]
+                     end
                              .merge(sources.to_h { |s| ["#{PILOT_SKIP}#{s}", "Skip #{@game.class::PILOT_NAMES[s]}'s pilot"] })
             end
             return {} if ships.size <= 1
 
             source = sources.first
-            ships.to_h { |t| ["#{PILOT}#{source}_#{t.id}", "Assign #{@game.class::PILOT_NAMES[source]}'s pilot to #{ship_label(t)}"] }
+            ships.to_h do |t|
+              ["#{PILOT}#{source}_#{t.id}", "Assign #{@game.class::PILOT_NAMES[source]}'s pilot to #{ship_label(t)}"]
+            end
                   .merge(PILOT_SKIP + source => "Skip #{@game.class::PILOT_NAMES[source]}'s pilot")
           end
 
@@ -508,7 +515,8 @@ module Engine
             return nil unless unassigned_sources.one?
 
             assignable_ships = available_ships(entity) - @pilot_assignments.values
-            return nil unless assignable_ships.one? && assignable_ships.first == ship
+            return nil unless assignable_ships.one?
+            return nil unless assignable_ships.first == ship
 
             source = unassigned_sources.first
             @pilot_assignments[source] = ship
@@ -575,7 +583,8 @@ module Engine
               # confirm) when that would un-reveal a tile. Otherwise the
               # direct click already dispatches it (see compute_choices'
               # matching branch); no popup needed.
-              return nil unless @rollback&.dig(:finished) && hex == undo_click_hex
+              return nil unless @rollback&.dig(:finished)
+              return nil unless hex == undo_click_hex
               return { UNDO_HEX => undo_hex_label } if undoing_last_hex_reveals_tile?
 
               return nil
@@ -687,17 +696,18 @@ module Engine
             # to requiring a second click on the hex to see the tile
             # choice popup, even though move_to already set it up.
             explored_this_hex = choice == hex.id || choice == "#{SHORTCUT_EXPLORE}#{hex.id}"
-            return false unless explored_this_hex && needs_exploration?(hex)
+            return false unless explored_this_hex
+            return false unless needs_exploration?(hex)
 
             ship = current_ship(entity)
             pilot_source = entity.minor? ? entity.id : pilot_source_for_ship(entity, ship)
             @game.chain_explore_popup_sources.include?(pilot_source)
           end
 
-          # For the tile choice popup (e.g. Lucky's tile choice), shown 
-          # as real tile art (see assets/app/view/game/hex_choice_popup.rb, 
-          # which renders an Engine::Tile value as a clickable preview instead 
-          # of a text button) rather than the plain-text redraw_choices used 
+          # For the tile choice popup (e.g. Lucky's tile choice), shown
+          # as real tile art (see assets/app/view/game/hex_choice_popup.rb,
+          # which renders an Engine::Tile value as a clickable preview instead
+          # of a text button) rather than the plain-text redraw_choices used
           # as this hex's bare-id alias (see compute_choices) -- that alias only
           # exists so hex.rb's dispatch gate finds a key to look for a
           # popup at all; it's never dispatched directly since this popup
@@ -716,7 +726,9 @@ module Engine
           # rather than needing the popup above to disambiguate a
           # double-mine hex's two pickups.
           def city_choice(entity, city)
-            return nil unless entity == current_entity && !@trace.empty? && city.hex == @trace.last
+            return nil unless entity == current_entity
+            return nil if @trace.empty?
+            return nil unless city.hex == @trace.last
 
             key = "#{PICKUP}#{city.tile.cities.index(city)}"
             choices[key] ? key : nil
@@ -726,15 +738,18 @@ module Engine
           # back nil, so a click on a mine claimed by someone else gives an
           # explanatory flash instead of silently doing nothing.
           def mine_pickup_blocked_reason(entity, city)
-            return nil unless entity == current_entity && !@trace.empty? && city.hex == @trace.last
+            return nil unless entity == current_entity
+            return nil if @trace.empty?
+            return nil unless city.hex == @trace.last
 
             mine = @game.mine_state.dig(city.hex.id, :mines, city.tile.cities.index(city))
-            return nil unless mine&.dig(:owner) && mine[:owner] != entity.id
+            return nil unless mine&.dig(:owner)
+            return nil unless mine[:owner] != entity.id
 
             'Cannot pick up: mine claimed by another company.'
           end
 
-          # "Submit All Routes ($X)" whenever nothing's locally pending. 
+          # "Submit All Routes ($X)" whenever nothing's locally pending.
           # With every route built client-side, ending the
           # corp's turn is now always an explicit confirmation, regardless
           # of whether every ship has flown or the player is choosing to
@@ -817,7 +832,7 @@ module Engine
               # (ship_choices returns {} once @trace is non-empty), so
               # picking a different ship before actually launching always
               # means "never mind, fly this one instead," never a second,
-              # later choice worth keeping alongside the first. 
+              # later choice worth keeping alongside the first.
               @local_flight_log.reject! { |c| c.start_with?(SHIP) }
             end
             log_index = @local_flight_log.size
@@ -849,17 +864,17 @@ module Engine
           # nothing worth offering to cancel.
           #
           # Deliberately does NOT treat a just-made pilot assignment as
-          # "local, discardable" state -- PILOT is excluded from 
+          # "local, discardable" state -- PILOT is excluded from
           # local_choose? precisely because it's always its own separately-
-          # recorded real action, never a preview (see assign_pilot!'s own 
-          # comment on the bug that came from treating it as local anyway: 
-          # the real Undo button/ctrl+z defers to local_undo?, which mirrors 
-          # this method, so a pilot pick being reported as "local" made Undo 
-          # silently discard it client-side instead of issuing a real 
-          # Action::Undo against the recorded action -- reloading the game 
-          # then replayed the *original*, never-actually-undone pairing and 
-          # rejected whatever the player picked next as invalid). Reconsidering 
-          # a pilot pick now goes through the same real Undo as undoing anything 
+          # recorded real action, never a preview (see assign_pilot!'s own
+          # comment on the bug that came from treating it as local anyway:
+          # the real Undo button/ctrl+z defers to local_undo?, which mirrors
+          # this method, so a pilot pick being reported as "local" made Undo
+          # silently discard it client-side instead of issuing a real
+          # Action::Undo against the recorded action -- reloading the game
+          # then replayed the *original*, never-actually-undone pairing and
+          # rejected whatever the player picked next as invalid). Reconsidering
+          # a pilot pick now goes through the same real Undo as undoing anything
           # else already committed, which correctly rewrites the action log
           # instead of only this browser's own memory.
           def local_pass?(entity)
@@ -991,7 +1006,7 @@ module Engine
           # right now.  Either the flight has already finished (running
           # out of MP auto-finishes it; so does a previous click of this
           # same button), or it's simply sitting on a hex where finishing
-          # is currently a legal move.  Read-only -- safe to call on every 
+          # is currently a legal move.  Read-only -- safe to call on every
           # render, unlike finish_and_submit_choice below.
           def submit_ready?(entity)
             return false unless entity == current_entity
@@ -1010,13 +1025,13 @@ module Engine
             entity == current_entity && (@rollback&.dig(:hex_marks)&.size || 0) > 1
           end
 
-          # Public: undoes the most recently entered hex, leaving the 
-          # ship back at the hex before it, free to fly a different 
-          # direction from there. Implemented as a full rollback (the 
-          # exact same one Cancel/local_pass! uses) followed by replaying 
-          # every local choice up to (not including) the discarded hex's 
-          # own move -- see local_choose!'s hex_marks comment. Deliberately 
-          # not a second, narrower undo path: reusing rollback_local_flight! 
+          # Public: undoes the most recently entered hex, leaving the
+          # ship back at the hex before it, free to fly a different
+          # direction from there. Implemented as a full rollback (the
+          # exact same one Cancel/local_pass! uses) followed by replaying
+          # every local choice up to (not including) the discarded hex's
+          # own move -- see local_choose!'s hex_marks comment. Deliberately
+          # not a second, narrower undo path: reusing rollback_local_flight!
           # wholesale means this can never drift out of sync with what a full
           # Cancel already knows how to reverse (explored tiles, the
           # deferred exploration bonus, pickups, PRNG state).
@@ -1065,9 +1080,9 @@ module Engine
 
           # Public: the Submit button's label -- the route's real,
           # already-computed revenue if it's already finished, or a live
-          # preview of what finishing right now would earn otherwise. 
-          # Ending a route with MP still available looks identical to 
-          # running out of MP: same button, same label, same code, 
+          # preview of what finishing right now would earn otherwise.
+          # Ending a route with MP still available looks identical to
+          # running out of MP: same button, same label, same code,
           # regardless of which way the flight actually ends. Read-only.
           def submit_button_label(entity)
             revenue =
@@ -1092,11 +1107,11 @@ module Engine
           end
 
           # Public: the Submit button's actual click handler. Finishes the
-          # flight locally first if it hasn't already and then returns the 
-          # self-contained choice to submit for real -- so ending a route 
-          # with MP still left takes the exact same one-click as a route 
-          # that already auto-finished from running out of MP, instead of 
-          # a separate Finish click before Submit even appears. Mutating -- 
+          # flight locally first if it hasn't already and then returns the
+          # self-contained choice to submit for real -- so ending a route
+          # with MP still left takes the exact same one-click as a route
+          # that already auto-finished from running out of MP, instead of
+          # a separate Finish click before Submit even appears. Mutating --
           # only call from a click handler, never from render (see submit_ready?/
           # submit_button_label for the read-only render-time checks).
           def finish_and_submit_choice(entity)
@@ -1207,7 +1222,7 @@ module Engine
           # to warn before a 4-ship click, the one case (AL only, Phases
           # IV-V) where the ranking phase's ordering count (4! = 24, even
           # after start_auto_route_all!'s own dedup/pruning) can still make
-          # a single click slow. Rather than engineer around a rare worst case, 
+          # a single click slow. Rather than engineer around a rare worst case,
           # just suggest flying one ship by hand first.
           def unfilled_ship_count(entity)
             available_ships(entity).count { |t| t.name != 'Probe' }
@@ -1298,16 +1313,26 @@ module Engine
 
               if c[:mine_idx]
                 mine = @game.mine_state.dig(c[:hex_id], :mines, c[:mine_idx])
-                next unless mine && !mine[:used] && (!mine[:owner] || mine[:owner] == entity.id)
+                next unless mine
+                next if mine[:used]
+                next if mine[:owner] && mine[:owner] != entity.id
 
-                cargo << { hex_id: c[:hex_id], mine_idx: c[:mine_idx], ore: mine[:ore],
-                           value: @game.pickup_value(entity, c[:hex_id], c[:mine_idx]) }
+                cargo << {
+                  hex_id: c[:hex_id],
+                  mine_idx: c[:mine_idx],
+                  ore: mine[:ore],
+                  value: @game.pickup_value(entity, c[:hex_id], c[:mine_idx]),
+                }
               else
                 hex = @game.hex_by_id(c[:hex_id])
                 next unless @game.transshipment_hex?(hex.id)
 
-                cargo << { hex_id: hex.id, mine_idx: nil, ore: nil,
-                           value: @game.transshipment_value(hex, ship) }
+                cargo << {
+                  hex_id: hex.id,
+                  mine_idx: nil,
+                  ore: nil,
+                  value: @game.transshipment_value(hex, ship),
+                }
               end
             end
 
@@ -1345,14 +1370,13 @@ module Engine
               cancel_route
             elsif choice.start_with?(CANCEL_COMPLETED)
               cancel_completed_route(entity, choice.delete_prefix(CANCEL_COMPLETED))
-            elsif choice == UNDO_HEX
-              undo_last_hex!(entity)
-            elsif @rollback&.dig(:finished) && choice == undo_click_hex&.id
-              # Only reachable once nothing else is offered (see
-              # compute_choices' finished-flight branch) -- a direct click
-              # on an already-finished, not-yet-submitted route's last
-              # hex, with nothing to un-reveal (the popup already
-              # intercepted the case where there was).
+            elsif choice == UNDO_HEX || (@rollback&.dig(:finished) && choice == undo_click_hex&.id)
+              # The second half of this condition is only reachable once
+              # nothing else is offered (see compute_choices' finished-
+              # flight branch) -- a direct click on an already-finished,
+              # not-yet-submitted route's last hex, with nothing to un-
+              # reveal (the popup already intercepted the case where
+              # there was).
               undo_last_hex!(entity)
             elsif choice.start_with?(REDRAW)
               resolve_redraw!(entity, choice)
@@ -1403,9 +1427,9 @@ module Engine
             # finished hex as a "choice", never the real launch hexes).
             # Since launch_at never validates its hex against the entity's
             # own tokens, that stale entry then gets silently accepted as
-            # a legitimate launch point.  Resetting here, unconditionally, 
-            # after every branch has run, guarantees the next `choices` 
-            # call is always freshly computed regardless of how many times 
+            # a legitimate launch point.  Resetting here, unconditionally,
+            # after every branch has run, guarantees the next `choices`
+            # call is always freshly computed regardless of how many times
             # something upstream recomputed and cached it mid-dispatch.
             @choices_memo = nil
           end
@@ -1419,12 +1443,13 @@ module Engine
             raise GameError, "Ambiguous pickup at #{choice}" if matches.size != 1
 
             match = matches.keys.first
-            if match == TRANSSHIP
+            case match
+            when TRANSSHIP
               pick_up_transshipment!(entity, @trace.last)
               finish_route(entity)
-            elsif match == REFUEL
+            when REFUEL
               refuel!(entity, @trace.last)
-            elsif match == UNDO_HEX
+            when UNDO_HEX
               undo_last_hex!(entity)
             else
               pick_up(entity, match.delete_prefix(PICKUP).to_i)
@@ -1456,6 +1481,7 @@ module Engine
           def compute_choices
             entity = current_entity
             return {} unless entity
+
             # A flight that finished locally but hasn't been submitted yet
             # blocks starting (or switching to) another ship -- at most one
             # flight is ever pending discard/submit at a time, so there's
@@ -1507,7 +1533,7 @@ module Engine
           # would otherwise narrow to size 1 and silently hand focus to
           # whatever ship comes next, even though the pending flight is
           # still what the player's looking at (its Submit/Cancel bar,
-          # its route on the map). 
+          # its route on the map).
           def current_ship(entity)
             return @rollback[:finished_ship] if @rollback&.dig(:finished_ship)
 
@@ -1571,7 +1597,8 @@ module Engine
               result[hex_id] = "Fly to #{hex_id} via shortest route (#{hops} hexes, no exploring)"
 
               hex = @game.hex_by_id(hex_id)
-              next unless needs_exploration?(hex) && entry[:remaining] >= 1
+              next unless needs_exploration?(hex)
+              next unless entry[:remaining] >= 1
 
               result["#{SHORTCUT_EXPLORE}#{hex_id}"] =
                 "Fly to #{hex_id} via shortest route and explore (#{hops} hexes, 1 extra MP; "\
@@ -1594,7 +1621,7 @@ module Engine
           # refueling on THIS pass or a LATER one is better depends on
           # MP spent at each visit (gain is capped at mp_spent, not
           # remaining capacity) -- something no single shortcut call can
-          # see ahead of time. 
+          # see ahead of time.
           def shortcut_paths(entity, ship)
             start = @trace.last
             mp = mp_left(entity, ship)
@@ -1789,7 +1816,7 @@ module Engine
           # so mines and transshipment points behave identically from the
           # player's perspective (click the hex you're already on to
           # collect).
-          def transshipment_choice(entity, ship, result)
+          def transshipment_choice(_entity, ship, result)
             return unless @game.transshipment_hex?(@trace.last.id)
             return if cargo_full?(ship)
 
@@ -1846,7 +1873,7 @@ module Engine
           end
 
           # Launching costs no MP -- the ship starts at its base, full tank.
-          def launch_at(entity, hex_id)
+          def launch_at(_entity, hex_id)
             @hexes_explored_this_trip = 0
             # Refueling stations already used this specific flight (§7.11:
             # a station only tops off a ship once per flight, not once per
@@ -1940,8 +1967,8 @@ module Engine
           # without collecting there, so picking it up requires an explicit
           # click on the hex, same as any other mine (see
           # transshipment_choice/alias_current_hex_pickup!/process_choose's
-          # TRANSSHIP branch below). Choosing to collect also ends the ship's 
-          # flight immediately -- unlike an ore pickup, which lets the ship 
+          # TRANSSHIP branch below). Choosing to collect also ends the ship's
+          # flight immediately -- unlike an ore pickup, which lets the ship
           # keep flying.
           def pick_up_transshipment!(entity, hex)
             return unless @game.transshipment_hex?(hex.id)
@@ -1981,7 +2008,7 @@ module Engine
           # unexplored hex and let the player pick which of the two to
           # actually place here (Decision D). If there's simply nothing
           # left to borrow from (end of the tile pool), fall back to
-          # placing the one tile already drawn.  Note that this should 
+          # placing the one tile already drawn.  Note that this should
           # never happen, since there are 106 tiles in the draw and only
           # 100 hexes on the map.
           def start_redraw!(hex_id, first_name)
@@ -2073,16 +2100,14 @@ module Engine
             route = Engine::Route.new(@game, @game.phase, ship, hexes: trace, revenue: revenue)
             @round.routes << route
             # The Probe never gets a recorded "last route" at all --
-            # It's a pure explorer, its route is a fresh player call every 
-            # time, never worth repeating. Every "Reset" path 
-            # (previous_route_available?/apply_previous_route!) already 
-            # gates on @game.last_route(t) being present before offering 
-            # anything, so simply never recording one here is enough to 
+            # It's a pure explorer, its route is a fresh player call every
+            # time, never worth repeating. Every "Reset" path
+            # (previous_route_available?/apply_previous_route!) already
+            # gates on @game.last_route(t) being present before offering
+            # anything, so simply never recording one here is enough to
             # exclude the Probe from all of them at once, the same single-
             # point fix suggestable? already applies for the Auto/Suggest button.
-            if trace.size > 1 && ship.name != 'Probe'
-              @game.record_last_route!(ship, trace, @cargo, @refueled_hexes)
-            end
+            @game.record_last_route!(ship, trace, @cargo, @refueled_hexes) if trace.size > 1 && ship.name != 'Probe'
 
             mines = mines_visited(@cargo)
             @log << "#{entity.name} runs #{ship_label(ship)} for #{@game.format_currency(revenue)} "\
@@ -2097,7 +2122,6 @@ module Engine
             @mp_spent = 0
             @selected_ship_id = nil
             update_trace_highlight
-            
           end
 
           def cancel_route
@@ -2181,7 +2205,7 @@ module Engine
           # assign_pilot!'s own comment on why a pilot pick is always
           # already-real, committed state by the time this could run, not
           # local preview state this method's job is to discard.
-          def rollback_local_flight!(entity = nil)
+          def rollback_local_flight!(_entity = nil)
             r = @rollback
             return unless r
 

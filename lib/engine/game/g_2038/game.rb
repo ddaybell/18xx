@@ -66,9 +66,9 @@ module Engine
         SHORT_GAME_BANK_CASH = 4_000
 
         CERT_LIMIT = { 3 => 22, 4 => 16, 5 => 13, 6 => 11 }.freeze
-        # §13a (short game): "The certificate limits are reduced." 
+        # §13a (short game): "The certificate limits are reduced."
         SHORT_GAME_CERT_LIMIT = { 3 => 17, 4 => 13, 5 => 10, 6 => 9 }.freeze
-        # §13b (extra companies variant): "The Certificate Limit is increased" 
+        # §13b (extra companies variant): "The Certificate Limit is increased"
         # once OSR/MR are in play mutually exclusive with the Short Game (see
         # optional_new_corporations' incompatibility check in setup).
         NEW_CORPORATIONS_CERT_LIMIT = { 3 => 27, 4 => 20, 5 => 16, 6 => 13 }.freeze
@@ -79,33 +79,60 @@ module Engine
         # companies -- cheaper certificates, and PI/TS/VA/RS/ST/AE income
         # unchanged. Critically, TS/VA/RS no longer grant a TSI share at
         # all in this variant (their `shares` ability is simply dropped);
-        # PI/ST/AE keep their existing abilities untouched. Only the overridden 
+        # PI/ST/AE keep their existing abilities untouched. Only the overridden
         # fields are listed -- game_companies below merges each of these onto its
         # matching COMPANIES entry by sym, leaving every other field (incl.
         # every non-listed company, FB/IF/DH/OC/TH/LY) untouched.
         VARIANT_START_PACK_COMPANIES = {
           'PI' => { value: 35, max_price: 35 },
-          'TS' => { value: 20, max_price: 20,
-                    desc: 'If owned by a corporation, may place 1 free Base on ANY explored and unclaimed tile.',
-                    color: nil,
-                    abilities: [
-                      { type: 'generic', subtype: 'free_base', description: 'Free base, any explored hex',
-                        when: 'owning_corp_or_turn', count: 1, remove: '5' },
-                    ] },
-          'VA' => { value: 40, max_price: 40,
-                    desc: 'If owned by a corporation, may place 1 free Refueling Station within range.',
-                    color: nil,
-                    abilities: [
-                      { type: 'generic', subtype: 'free_station', description: 'Free refueling station, in range',
-                        when: 'owning_corp_or_turn', count: 1, remove: '5' },
-                    ] },
-          'RS' => { value: 60, max_price: 60,
-                    desc: 'If owned by a corporation, may place 1 free Claim within range.',
-                    color: nil,
-                    abilities: [
-                      { type: 'generic', subtype: 'free_claim', description: 'Free claim, in range',
-                        when: 'owning_corp_or_turn', count: 1, remove: '5' },
-                    ] },
+          'TS' => {
+            value: 20,
+            max_price: 20,
+            desc: 'If owned by a corporation, may place 1 free Base on ANY explored and unclaimed tile.',
+            color: nil,
+            abilities: [
+                      {
+                        type: 'generic',
+                        subtype: 'free_base',
+                        description: 'Free base, any explored hex',
+                        when: 'owning_corp_or_turn',
+                        count: 1,
+                        remove: '5',
+                      },
+                    ],
+          },
+          'VA' => {
+            value: 40,
+            max_price: 40,
+            desc: 'If owned by a corporation, may place 1 free Refueling Station within range.',
+            color: nil,
+            abilities: [
+                      {
+                        type: 'generic',
+                        subtype: 'free_station',
+                        description: 'Free refueling station, in range',
+                        when: 'owning_corp_or_turn',
+                        count: 1,
+                        remove: '5',
+                      },
+                    ],
+          },
+          'RS' => {
+            value: 60,
+            max_price: 60,
+            desc: 'If owned by a corporation, may place 1 free Claim within range.',
+            color: nil,
+            abilities: [
+                      {
+                        type: 'generic',
+                        subtype: 'free_claim',
+                        description: 'Free claim, in range',
+                        when: 'owning_corp_or_turn',
+                        count: 1,
+                        remove: '5',
+                      },
+                    ],
+          },
           'ST' => { value: 160, revenue: 20 },
           'AE' => { value: 160, revenue: 30 },
         }.freeze
@@ -228,13 +255,13 @@ module Engine
         STATUS_TEXT = Base::STATUS_TEXT.merge(
           'can_buy_companies' =>
             ['Can Buy Companies', 'Corporations may buy private companies from players and buy claims from '\
-                                   'independents'],
+                                  'independents'],
           'can_buy_bases_stations' =>
             ['Can Buy Bases/Stations', 'Corporations may buy and place bases and refueling stations, and buy '\
-                                        'spaceships from other companies/corporations'],
+                                       'spaceships from other companies/corporations'],
           'can_form_growth_corps' =>
             ['Can Form Growth Corporations', 'Growth Corporations may be formed in Phases II and III, until the '\
-                                              'Asteroid League forms.'],
+                                             'Asteroid League forms.'],
         ).freeze
 
         # Spaceship names are movement/cargo_holds (e.g. '3/2' = 3 MP, 2 cargo holds),
@@ -462,13 +489,14 @@ module Engine
         # Round::Operating#start_operating logs "<acting player> operates
         # TSI" the same generic way as any normal corp's turn -- misleading
         # here, since TSI's pre-float turn is really just "the ST owner
-        # flies the Probe," not a full corporate turn. We rewrite that one 
-        # line to say so explicitly. Gated on tsi_pre_float? being true right 
-        # now (not just matching the text), so a genuinely-floated TSI's 
+        # flies the Probe," not a full corporate turn. We rewrite that one
+        # line to say so explicitly. Gated on tsi_pre_float? being true right
+        # now (not just matching the text), so a genuinely-floated TSI's
         # ordinary "X operates TSI" line is left alone.
         def tsi_pre_float_operates_message(message)
           tsi = corporation_by_id('TSI')
-          return message unless tsi && tsi_pre_float?(tsi)
+          return message unless tsi
+          return message unless tsi_pre_float?(tsi)
 
           match = message.match(/^(.+) operates TSI$/)
           return message unless match
@@ -532,11 +560,11 @@ module Engine
           end
         end
 
-        # There is no separate pre-game "auction phase" -- the very first 
-        # round is a normal Stock round, it just happens to also carry the 
-        # WaterfallAuction step (see stock_round below) since that's how 
-        # privates/independents get sold. The base engine's default 
-        # `init_round` (`new_auction_round`, a dedicated 
+        # There is no separate pre-game "auction phase" -- the very first
+        # round is a normal Stock round, it just happens to also carry the
+        # WaterfallAuction step (see stock_round below) since that's how
+        # privates/independents get sold. The base engine's default
+        # `init_round` (`new_auction_round`, a dedicated
         # Engine::Round::Auction) doesn't apply here.
         #
         # Can't just call new_stock_round -- its log line calls
@@ -570,13 +598,13 @@ module Engine
         #
         # CompanyPendingPar/WaterfallAuction -- elsewhere the sole contents
         # of a dedicated pre-game Auction round -- are folded directly into
-        # the ordinary Stock round instead. As long as any private/independent 
-        # remains unsold, WaterfallAuction blocks ahead of BuySellParShares 
-        # for whoever's turn comes up (its own `actions` goes empty the instant 
-        # nothing's left to sell, at which point a turn flows straight into 
-        # ordinary share buying with no extra step to pass through first) -- 
-        # and the Stock round ends the exact same way any SR ever does, via 
-        # Round::Stock's own all-entities-passed check, whether or not everything 
+        # the ordinary Stock round instead. As long as any private/independent
+        # remains unsold, WaterfallAuction blocks ahead of BuySellParShares
+        # for whoever's turn comes up (its own `actions` goes empty the instant
+        # nothing's left to sell, at which point a turn flows straight into
+        # ordinary share buying with no extra step to pass through first) --
+        # and the Stock round ends the exact same way any SR ever does, via
+        # Round::Stock's own all-entities-passed check, whether or not everything
         # happened to sell out first.
         def stock_round
           Engine::Round::Stock.new(self, [
@@ -856,8 +884,8 @@ module Engine
         end
 
         # AE stops counting as a certificate the moment the AL forms, even
-        # though it doesn't actually close until AL buys its first ship. 
-        # CERT_LIMIT_INCLUDES_PRIVATES (true, the base default) otherwise 
+        # though it doesn't actually close until AL buys its first ship.
+        # CERT_LIMIT_INCLUDES_PRIVATES (true, the base default) otherwise
         # counts every held private uniformly.
         def num_certs(entity)
           certs = super
@@ -1196,8 +1224,8 @@ module Engine
         # ability/abilities (Phase 8), named per source rather than a
         # generic "Pilot:" label -- nil if it wasn't formed via Growth Corp
         # conversion (or hasn't absorbed any independent yet). Joins
-        # multiple entries if the corp has more than one (e.g. AL). 
-        
+        # multiple entries if the corp has more than one (e.g. AL).
+
         def pilot_description(entity)
           sources = growth_corp_pilots(entity)
           return nil if sources.empty?
@@ -1356,7 +1384,8 @@ module Engine
         # codebase surface (a GameError at setup time, not a silent
         # ignore).
         def validate_optional_rule_combination!
-          return unless optional_short_game && optional_new_corporations
+          return unless optional_short_game
+          return unless optional_new_corporations
 
           raise GameError, 'The Short Game cannot be combined with New Corporations or the Variant Start Packet'
         end
@@ -1444,13 +1473,13 @@ module Engine
           # must NOT pay the corp dividends once this rule is active,
           # while genuinely repurchased "Treasury Shares" (rule 3) must.
           # Both currently show `owner == corp` with no way to tell them
-          # apart.  We follow the same pattern 1862 uses for its own 
-          # chartered/full-capitalization companies (Game#convert_to_full!): 
-          # point `ipo_owner` at the bank instead of the corp itself, so 
-          # a corp's *unsold* shares live with the bank while only genuinely 
-          # *repurchased* ones ever end up owned by the corp again. Every 
-          # G2038 corp starts `:full` capitalization; AL just switched to 
-          # `:incremental` immediately above (Growth Corps switch similarly 
+          # apart.  We follow the same pattern 1862 uses for its own
+          # chartered/full-capitalization companies (Game#convert_to_full!):
+          # point `ipo_owner` at the bank instead of the corp itself, so
+          # a corp's *unsold* shares live with the bank while only genuinely
+          # *repurchased* ones ever end up owned by the corp again. Every
+          # G2038 corp starts `:full` capitalization; AL just switched to
+          # `:incremental` immediately above (Growth Corps switch similarly
           # later, on formation) -- both correctly skipped here and left alone,
           # already handled by rule 1's own capitalization check
           # elsewhere. Must run *after* AL's own capitalization switch
@@ -1589,7 +1618,8 @@ module Engine
         # (§6). Once floated, TSI is already included via the default order.
         def operating_order
           order = super
-          return order unless (tsi = corporation_by_id('TSI')) && !tsi.floated?
+          return order unless (tsi = corporation_by_id('TSI'))
+          return order if tsi.floated?
           # No one to act for TSI's pre-float turn (flying the Probe) until
           # ST has a real (player) owner -- a leftover, never-bought ST
           # (Case 3) sits owned by the bank in the meantime, so skip
@@ -1652,7 +1682,7 @@ module Engine
           # applying the instant Phase V begins, regardless of whether
           # the original independent itself already closed on its own
           # separate trigger long before now.
-         
+
           # Fast Buck's $15/OR treasury income counts as its pilot
           # certificate too, so it stops the same way: clearing
           # @fast_buck_income_recipient makes pay_fast_buck_treasury's
@@ -1660,7 +1690,7 @@ module Engine
           # was absorbed via Growth Corp conversion or an AL merger.
           had_pilots = !@growth_corp_pilot.empty?
           had_fast_buck_income = !@fast_buck_income_recipient.nil?
-          return unless had_pilots || had_fast_buck_income
+          return if !had_pilots && !had_fast_buck_income
 
           @log << 'All inherited pilot bonuses are removed' if had_pilots
           @log << "Fast Buck's treasury income stops" if had_fast_buck_income
@@ -1761,7 +1791,8 @@ module Engine
         # price source) -- filtered to whatever the corp's own treasury
         # can actually afford.
         def redeemable_shares(entity)
-          return [] unless optional_stock_repurchases && entity.corporation?
+          return [] unless optional_stock_repurchases
+          return [] unless entity.corporation?
 
           bundles_for_corporation(share_pool, entity).reject { |bundle| entity.cash < bundle.price }
         end
@@ -1804,8 +1835,9 @@ module Engine
         # it's holding some Treasury Shares back via a rule-3 buyback).
         def bundles_for_corporation(share_holder, corporation, shares: nil)
           bundles = super
-          return bundles unless optional_stock_repurchases && share_holder == corporation &&
-            corporation.capitalization == :incremental
+          return bundles unless optional_stock_repurchases
+          return bundles unless share_holder == corporation
+          return bundles unless corporation.capitalization == :incremental
 
           price = [corporation.par_price.price, corporation.share_price.price].max
           bundles.each { |b| b.share_price = price }
@@ -1823,7 +1855,8 @@ module Engine
         # keep the standard "IPO" label -- only capitalization ==
         # :incremental corps get the rename.
         def ipo_name(entity = nil)
-          return super unless entity&.corporation? && entity.capitalization == :incremental
+          return super unless entity&.corporation?
+          return super unless entity.capitalization == :incremental
 
           'Treasury'
         end
@@ -1887,7 +1920,8 @@ module Engine
         def base_tile?(tile)
           return false unless tile
           return true if tile.name == '2023'
-          return false unless tile.hex && starting_base_hexes.include?(tile.hex.id)
+          return false unless tile.hex
+          return false unless starting_base_hexes.include?(tile.hex.id)
           # Self-contained check against the tile's OWN hex, never `self`'s
           # own hex_by_id -- this method can be called on a DIFFERENT game
           # instance than the one that actually owns `tile` (see

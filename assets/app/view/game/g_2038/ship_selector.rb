@@ -64,8 +64,8 @@ module View
         # better exists (see Autorouter#certified_bound) -- at which
         # point this ship's own search stops on its own.
         THEORETICAL_MAX_TOOLTIP = 'This value may never be obtainable. It is a theoretical maximum value assuming ' \
-                                   'full connectivity. This value decreases to the actual max, whereupon the ' \
-                                   'autorun ceases for this ship.'
+                                  'full connectivity. This value decreases to the actual max, whereupon the ' \
+                                  'autorun ceases for this ship.'
 
         def render
           step = @game.round.active_step
@@ -155,7 +155,7 @@ module View
           row_children = rows.map do |row|
             parts = row[:ship_id] == current_ship_id ? row_progress : nil
             render_row(step, entity, row, auto_running: auto_running, progress: parts,
-                                           show_progress_cols: show_progress_cols)
+                                          show_progress_cols: show_progress_cols)
           end
           # width: 'fit-content' -- without it the grid stretches to fill
           # the panel's full width, and with no `fr` tracks in
@@ -164,8 +164,14 @@ module View
           # opening a big gap before Explore instead of leaving it after
           # Revenue -- found live in browser as a wide blank stripe between
           # every ship's badge and its Explore count.
-          grid_style = { display: 'grid', gridTemplateColumns: row_grid_columns(show_progress_cols), columnGap: '0.5rem',
-                         rowGap: '0.1rem', alignItems: 'center', width: 'fit-content' }
+          grid_style = {
+            display: 'grid',
+            gridTemplateColumns: row_grid_columns(show_progress_cols),
+            columnGap: '0.5rem',
+            rowGap: '0.1rem',
+            alignItems: 'center',
+            width: 'fit-content',
+          }
           # Wrapped in its own horizontally-scrollable container -- found
           # live in browser (via Inspect Element): the Best/Max cells were
           # correctly in the DOM with correct widths all along, not a CSS
@@ -633,8 +639,10 @@ module View
         # doing that already drops this back to the cheap 3-ship case with
         # no engine changes at all.
         def four_ship_warning(step, entity)
-          return nil unless step.respond_to?(:unfilled_ship_count) && step.unfilled_ship_count(entity) >= 4
-          return nil unless @game.respond_to?(:warn_on_four_ships?) && @game.warn_on_four_ships?(entity)
+          return nil unless step.respond_to?(:unfilled_ship_count)
+          return nil unless step.unfilled_ship_count(entity) >= 4
+          return nil unless @game.respond_to?(:warn_on_four_ships?)
+          return nil unless @game.warn_on_four_ships?(entity)
 
           h(:div, { style: { fontSize: '80%', opacity: 0.7, flexBasis: '100%' } },
             'Auto may be slow with 4 ships -- consider flying one manually first.')
@@ -778,13 +786,14 @@ module View
         def force_render_on_auto_route_progress!(status)
           return unless status == :searching
 
-          if !@auto_tick_seen_final_phase
+          unless @auto_tick_seen_final_phase
             @auto_tick_seen_final_phase = true
             store(:game, @game)
           end
 
           current_best = @game.autorouter.best_so_far
-          return unless current_best && current_best != @auto_tick_last_rendered_best
+          return unless current_best
+          return if current_best == @auto_tick_last_rendered_best
 
           @auto_tick_last_rendered_best = current_best
           store(:game, @game)
@@ -862,7 +871,8 @@ module View
           step = @game.round.active_step
           entity = @game.round.current_entity
           empty = { progress: '', best: '', max: '', has_best: false }
-          return empty unless entity && step.respond_to?(:auto_route_all_elapsed)
+          return empty unless entity
+          return empty unless step.respond_to?(:auto_route_all_elapsed)
 
           elapsed = step.auto_route_all_elapsed(entity)
           return empty unless elapsed
@@ -1072,7 +1082,7 @@ module View
             wrapper_props[:on] = { click: -> { process_action(Engine::Action::Choose.new(entity, choice: row[:choice])) } }
           elsif selectable
             wrapper_props[:on] = {
-              click: -> {
+              click: lambda {
                 if row[:select_ship]
                   step.select_completed_ship!(row[:select_ship])
                 else
@@ -1083,13 +1093,13 @@ module View
             }
           elsif blocked
             wrapper_props[:on] = {
-              click: -> {
+              click: lambda {
                 store(:flash_opts, "Cannot switch ships mid-flight; please submit or cancel the active ship's route first.")
               },
             }
           elsif locked
             wrapper_props[:on] = {
-              click: -> {
+              click: lambda {
                 # Flash#render forwards `message` straight through as
                 # snabbdom children, so an array of strings/vnodes renders
                 # as rich content, same as a plain string would -- reuses
@@ -1117,7 +1127,11 @@ module View
           wrapper_props, clickable, selectable, blocked, locked = row_click_props(step, entity, row, auto_running)
 
           cursor = (clickable || blocked || selectable || locked) && !row[:selected] ? 'pointer' : 'default'
-          opacity = (clickable || selectable) ? 1.0 : ((blocked || locked) ? 0.7 : 1.0)
+          opacity = if clickable || selectable
+                      1.0
+                    else
+                      (blocked || locked ? 0.7 : 1.0)
+                    end
           # A passive preview (see Step::Route#ship_rows' `preview` flag) is
           # only ever informational -- what Reset *would* build, not a real
           # loaded/actionable route the way an active suggestion, an

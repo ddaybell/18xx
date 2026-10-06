@@ -72,7 +72,7 @@ module View
 
         @hexes.map! do |hex|
           clickable = @show_starting_map ? false : step&.available_hex(entity_or_entities, hex)
-          opacity = (clickable || !dim_by_hex_validity?) ? 1.0 : 0.5
+          opacity = clickable || !dim_by_hex_validity? ? 1.0 : 0.5
           h(
             Hex,
             hex: hex,
@@ -103,9 +103,9 @@ module View
               # extend toward the opposite side instead of overflowing
               # past the map's own boundary.
               h(HexChoicePopup, zoom: map_zoom,
-                                 near_right_edge: width - left < HexChoicePopup::EDGE_MARGIN,
-                                 near_top_edge: top < HexChoicePopup::EDGE_MARGIN,
-                                 near_bottom_edge: height - top < HexChoicePopup::BOTTOM_EDGE_MARGIN)
+                                near_right_edge: width - left < HexChoicePopup::EDGE_MARGIN,
+                                near_top_edge: top < HexChoicePopup::EDGE_MARGIN,
+                                near_bottom_edge: height - top < HexChoicePopup::BOTTOM_EDGE_MARGIN)
             elsif @tile_selector.is_a?(Lib::ExploreLockPrompt)
               width, height = map_size
               # Same edge-proximity technique as the HexChoicePopup branch

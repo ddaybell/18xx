@@ -164,7 +164,8 @@ module Engine
           # Called from par.rb: this player's exchange options specifically
           # for `corporation` (one button per owned independent).
           def growth_exchange_choices(entity, corporation)
-            return {} unless choice_available?(entity) && @game.growth_convertible_corporations.include?(corporation)
+            return {} unless choice_available?(entity)
+            return {} unless @game.growth_convertible_corporations.include?(corporation)
 
             @game.growth_convertible_minors(entity).each_with_object({}) do |minor, result|
               result["#{GROW}#{corporation.id}_#{minor.id}"] = "Exchange #{minor.name}"
@@ -176,8 +177,8 @@ module Engine
             _prefix, corp_id, minor_id = action.choice.split('_')
             corp = @game.corporation_by_id(corp_id)
             minor = @game.minor_by_id(minor_id)
-            unless corp && minor && @game.growth_convertible_corporations.include?(corp) &&
-                   @game.growth_convertible_minors(entity).include?(minor)
+            if !corp || !minor || !@game.growth_convertible_corporations.include?(corp) ||
+               !@game.growth_convertible_minors(entity).include?(minor)
               raise GameError, "Invalid growth conversion choice: #{action.choice}"
             end
 

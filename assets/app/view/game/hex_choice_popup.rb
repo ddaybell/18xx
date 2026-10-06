@@ -29,7 +29,7 @@ module View
         white_blend = 0.82 - (0.42 * t)
 
         r, g, b = base.map { |c| ((c * (1 - white_blend)) + (255 * white_blend)).round.clamp(0, 255) }
-        format('#%02x%02x%02x', r, g, b)
+        format('#%<r>02x%<g>02x%<b>02x', r: r, g: g, b: b)
       end
 
       needs :tile_selector, store: true
@@ -67,9 +67,10 @@ module View
         }
 
         buttons = @tile_selector.choices.map do |choice, label|
-          if label.is_a?(Engine::Tile)
+          case label
+          when Engine::Tile
             render_tile_choice(choice, label)
-          elsif label.is_a?(Hash)
+          when Hash
             render_claim_choice(choice, label)
           else
             h('button.no_margin', {
