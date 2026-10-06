@@ -89,9 +89,26 @@ module View
 
         step = @game.round.active_step
         actions = step&.actions(step&.current_entity) || []
-        # Route controls are disabled during dividend and run routes step
-        if (%w[run_routes dividend] & actions).any?
+        # Route controls are disabled during dividend and run routes step.
+        # G2038's own Route step never actually offers the 'run_routes'
+        # action type this check is looking for -- it's choose/pass-based
+        # instead (see g_2038/step/route.rb's own ACTIONS) -- so it needs
+        # its own way to recognize "this IS the game's route-running step,
+        # live and blocking right now," the same live_route_hexes opt-in
+        # hook map_g2038.rb's render_route_lines already uses to find this
+        # exact step.
+        g2038_running_routes = step.respond_to?(:live_route_hexes)
+        if (%w[run_routes dividend] & actions).any? || g2038_running_routes
           store(:historical_routes, []) if @historical_routes.any?
+          # G2038's own parallel store (see g2038_ship_routes?/
+          # map_controls_g2038.rb) needs the same reset -- otherwise a
+          # route picked from the dropdown for an earlier company (e.g.
+          # "Show Last Route For: MM") stays drawn on the map straight
+          # into the NEXT company's own live-routing turn, since this
+          # early return hides the dropdown but previously left whatever
+          # it last selected still stored (found live: MM's stale route
+          # line still showing while TSI was the one actually operating).
+          store(:historical_ship_routes, []) if @historical_ship_routes.any?
           return ''
         end
 

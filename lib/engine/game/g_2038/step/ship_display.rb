@@ -81,7 +81,19 @@ module Engine
             ships = slowest_first(entity, @game.route_trains(entity))
             return [] if ships.empty?
 
-            selected = current_ship_choice(entity)
+            # "Exactly one thing selected at a time" (see
+            # select_completed_ship!'s own comment) -- current_ship still
+            # auto-resolves to the sole remaining unrun ship regardless
+            # (it needs to, for actually building/reviewing that ship's
+            # route), but its row's highlight must defer to an
+            # explicitly-targeted completed route instead of both
+            # showing "selected" at once. Found live in browser: with
+            # exactly one unrun ship left, clicking a settled row to
+            # target it for "Clear Selected Route" left that lone unrun
+            # ship's own row still highlighted too, since current_ship's
+            # single-ship auto-resolve doesn't care what
+            # @selected_completed_ship_id is.
+            selected = @selected_completed_ship_id ? nil : current_ship_choice(entity)
             # Blocks switching ships both while actively flying and while
             # a just-finished flight is still awaiting Submit/Discard --
             # see compute_choices' matching guard.
@@ -150,18 +162,42 @@ module Engine
             if mid_flight && is_selected
               live_stats = route_stats(@hexes_explored_this_trip, @cargo)
               live_revenue = @game.format_currency(@game.trace_revenue(entity, ship, @trace, @cargo))
-            elsif (preview = preview_last_route(entity, ship))
+            elsif !@auto_fill_declined.include?(ship) && (preview = preview_last_route(entity, ship))
               # Not gated on !mid_flight -- a *different* ship's own
               # already-hand-flown-elsewhere-blocked row still has a
               # perfectly good preview to show; the player's just not
               # allowed to act on it right now (see `blocked` below), not
-              # that it stopped existing.
+              # that it stopped existing. IS gated on @auto_fill_declined
+              # -- "Clear All" (see Route#clear_all!) declines every
+              # still-unrun ship specifically so this preview stops
+              # showing, not just so auto-fill skips it.
               is_preview = true
               explored = preview[:hexes].count { |h| needs_exploration?(h) }
               live_stats = route_stats(explored, preview[:cargo])
               live_revenue = @game.format_currency(preview[:revenue])
             end
-            { choice: mid_flight ? nil : ship_choice, blocked: mid_flight && !is_selected,
+            # Real per-turn "pick this ship" action only exists once
+            # there's an actual choice to make -- ship_choices only has
+            # this key with 2+ still-unrun ships and nothing flying yet
+            # (a lone remaining ship auto-resolves as current with no
+            # action needed -- see current_ship). Treating the row as
+            # choice-clickable regardless of that used to be harmless
+            # (nothing ever prompted a click on an already-auto-current
+            # row), but became a genuine server-side "Invalid route
+            # choice" once the highlight fix above could leave that same
+            # lone row looking unselected (a completed route targeted
+            # instead -- see select_completed_ship!) and so worth
+            # clicking.
+            real_choice = ship_choice if !mid_flight && ship_choices(entity).key?(ship_choice)
+            # No real choice to make, but a completed route is still
+            # targeted for "Clear Selected Route" -- let the row still
+            # do something sensible on click: drop that targeting,
+            # purely locally (see deselect_completed_ship!), the same
+            # symmetric way targeting a completed route already drops
+            # this ship's own selection.
+            offer_local_deselect = !mid_flight && !real_choice && @selected_completed_ship_id
+            { choice: real_choice, deselect_completed: offer_local_deselect,
+              blocked: mid_flight && !is_selected,
               select_ship: nil, label: ship_label(ship), selected: is_selected, ship_id: ship.id,
               stats: live_stats, revenue: live_revenue, color_index: route_color_index(entity, ship),
               preview: is_preview }
@@ -187,6 +223,8 @@ module Engine
             return {} unless @trace.empty?
 
             slowest_first(entity, available_ships(entity)).each_with_object({}) do |ship, h|
+              next if @auto_fill_declined.include?(ship)
+
               route = preview_last_route(entity, ship)
               h[ship] = route[:hexes] if route
             end
@@ -255,9 +293,11 @@ module Engine
           # Public: whether this ship finished a run in some earlier OR
           # that "Modify"/"Submit" (see render_idle_controls) could
           # actually replay right now. Must agree with ship_rows' own
-          # is_preview check (both go through preview_last_route).
+          # is_preview check (both go through preview_last_route and the
+          # same @auto_fill_declined gate -- see Route#clear_all!).
           def previous_route_available?(entity)
             return false unless suggestable?(entity)
+            return false if @auto_fill_declined.include?(current_ship(entity))
 
             !preview_last_route(entity, current_ship(entity)).nil?
           end
@@ -320,7 +360,22 @@ module Engine
             @round.laid_hexes = []
 
             hexes = suggestion[:hexes]
-            cargo_by_hex = suggestion[:cargo].group_by { |c| c[:hex_id] }
+            # A once-only queue, not a static hex_id => [entries] lookup --
+            # each entry is removed the moment it's actually applied, so a
+            # route that revisits the same hex a second time purely for
+            # pathing (a real, valid pattern -- see the loop's own comment)
+            # finds nothing left pending there. Re-offering an already-
+            # applied pickup a second time used to be harmless (the mine
+            # was already marked used, so `choices` simply didn't offer it
+            # again) -- but pick_up now doubles as an undo whenever the
+            # SAME mine is still this ship's own cargo from earlier in this
+            # visit (see Route#pick_up/#undo_pickup!), so re-attempting it
+            # on a later revisit would silently UNDO the earlier pickup
+            # instead of no-op'ing (found live: a suggested/previous route
+            # that revisited one hex lost that hex's whole pickup this
+            # way, applying for noticeably less revenue than the search
+            # itself had found).
+            pending_cargo = suggestion[:cargo].dup
 
             local_choose!(entity, hexes.first.id)
 
@@ -340,7 +395,8 @@ module Engine
               local_choose!(entity, choice)
               next if @trace.empty?
 
-              (cargo_by_hex[to.id] || []).each do |c|
+              matches, pending_cargo = pending_cargo.partition { |c| c[:hex_id] == to.id }
+              matches.each do |c|
                 pickup_choice = c[:mine_idx] ? "#{Route::PICKUP}#{c[:mine_idx]}" : Route::TRANSSHIP
                 # Re-validate right before applying, same graceful-skip-if-
                 # no-longer-available philosophy as replay_cargo/Previous

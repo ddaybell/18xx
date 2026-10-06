@@ -14,7 +14,10 @@ module Engine
         # Entering an unexplored blue hex reveals its pre-assigned tile
         # immediately, so the player sees what they found before flying on.
         # Loads are picked up by explicit choice while on a mine hex — once
-        # aboard they cannot be jettisoned (§7.1), so choosing carefully matters.
+        # the ship has flown on, they cannot be jettisoned (§7.1). Clicking
+        # a just-picked-up mine again while the ship is still sitting on
+        # that same hex takes it back instead (see pick_up/undo_pickup!) --
+        # a same-visit misclick correction, not a rules exception.
         class Route < Engine::Step::Base
           include AutoRouteAll
           include ShipDisplay
@@ -47,6 +50,19 @@ module Engine
           # dispatch_choice! table that built it.
           SUBMIT_FLIGHT = 'submit_flight'
           FLIGHT_SEP = '~'
+          # "Accept All Routes" (ShipSelector#submit_all_routes!) packs
+          # every ship it's submitting into ONE choice too, same
+          # reasoning as SUBMIT_FLIGHT above -- each entry is itself a
+          # SUBMIT_FLIGHT-shaped fragment (everything after its own
+          # "submit_flight:"), joined by FLEET_SEP. Deliberately NOT
+          # built from auto_actions (see replay_submitted_all!'s own
+          # comment on the bug that came from trying that): which ships
+          # get swept in depends on @auto_fill_declined, which is purely
+          # local session UI state the server has no record of, so the
+          # decision has to be made once, client-side, and carried here
+          # as plain data -- never re-derived.
+          SUBMIT_ALL = 'submit_all'
+          FLEET_SEP = ';'
           # A dedicated choice key for undo_last_hex! (see its comment) --
           # never a real hex id, so it can be dispatched unambiguously
           # whether it arrives via a hex-choice popup's own button or as
@@ -71,16 +87,28 @@ module Engine
                    'While on a mine or transshipment point, click to pick up '\
                    'cargo. It cannot be jettisoned later. End route at a base '\
                    'or transshipment point to collect payment.'
+            lines = [base]
+            # Only relevant while the ship row currently on screen is
+            # showing its passive last-OR preview (see ship_selector.rb's
+            # render_idle_controls/ship_rows and Step::ShipDisplay#
+            # previous_route_available? -- the same check that decides
+            # whether that row renders italicized with Modify/Submit
+            # buttons at all), so this line only appears alongside those.
+            if previous_route_available?(current_entity)
+              lines << 'Previous route is italicized.  '\
+                       "'Accept' to accept that route, or click a base to start a new route."
+            end
             # View::Game::Help renders each array element as its own line; a
             # trailing blank line adds breathing room before the ship list
             # renders below it. A plain '' would collapse to zero height, so
             # use a non-breaking space to force real line height.
             blank_line = " "
-            return [base, blank_line] if @cargo.empty?
+            return [*lines, blank_line] if @cargo.empty?
 
             loads = @cargo.map { |c| "#{c[:ore] ? ORE_NAMES[c[:ore]] : 'Transshipment credit'} (#{@game.format_currency(c[:value])})" }
                           .join(', ')
-            ["#{base} Cargo aboard: #{loads}.", blank_line]
+            lines[0] = "#{base} Cargo aboard: #{loads}."
+            [*lines, blank_line]
           end
 
           def setup
@@ -99,6 +127,14 @@ module Engine
             # -- see cancel_completed_route/auto_actions' own comment.
             # Reset fresh each turn, same as everything else here.
             @auto_fill_declined = []
+            # Whether this entity has already confirmed the "exploring
+            # locks in every route submitted so far" warning once this
+            # turn -- see explore_would_lock_other_routes?/
+            # acknowledge_lock_warning!. The underlying risk (an explored
+            # route can never be safely reopened) doesn't change once
+            # warned about it, so re-showing the same popup before every
+            # later explore this turn would just be noise.
+            @lock_warning_acknowledged = false
             # This OR's Growth Corp pilot assignments (Phase 8): pilot
             # source string ('LY'/'TH'/etc) => the Ship it's assigned to.
             # Each inherited pilot gets its OWN ship -- never shared, never
@@ -365,6 +401,16 @@ module Engine
             @round.laid_hexes = []
           end
 
+          # Public: click handler for an unrun ship's row once it has no
+          # real per-turn "pick this ship" choice of its own (see
+          # ShipDisplay#unrun_ship_row's `offer_local_deselect`) -- purely
+          # local UI selection, same as select_completed_ship! above, just
+          # the other direction: drops whichever completed route was
+          # targeted for "Clear Selected Route" instead of setting it.
+          def deselect_completed_ship!
+            @selected_completed_ship_id = nil
+          end
+
           # Public: the real, recorded choice string ShipSelector's single
           # "Clear Ship" button submits for a targeted already-submitted
           # route -- keeps CANCEL_COMPLETED's exact format a route.rb-only
@@ -422,10 +468,27 @@ module Engine
           # Public: called from Game#pilot_source_for_ship for the actual
           # bonus checks (company_ore_bonus/ship_distance/
           # needs_second_draw?) -- returns which pilot source (if any) is
-          # assigned to this specific ship. Auto-assigns (and announces,
-          # once, via assign_pilot!) the sole remaining (source, ship)
-          # pairing once there's no real choice left, same idiom
-          # current_ship already uses for ship selection itself.
+          # assigned to this specific ship. Auto-*resolves* the sole
+          # remaining (source, ship) pairing once there's no real choice
+          # left, same idiom current_ship already uses for ship selection
+          # itself -- but records it quietly (no log line) rather than
+          # through assign_pilot!, unlike the two real-turn call sites
+          # below. This method is also reached from pure display/valuation
+          # code with no bearing on whose turn it is -- Game#trains_str
+          # (a corporation card's "Trains" line, rendered for every corp
+          # visible on screen, regardless of whose turn it is) and the
+          # autorouter's own valuation helpers both call ship_distance,
+          # which calls this. Logging from here meant merely rendering
+          # some *other* corp's card could silently resolve and announce
+          # a pairing mid-another-entity's-turn, timestamped to whatever
+          # action happened to be "current" at render time -- found live:
+          # a Growth Corp's pilot got "assigned" and logged while a
+          # different corporation was still actively taking its own
+          # turn, several rounds before the Growth Corp would really act.
+          # The real, correctly-timed announcement is resolve_
+          # unambiguous_pilots! (turn start, via setup) or the player's
+          # own explicit PILOT choice in process_choose -- both call
+          # assign_pilot! directly and still log as before.
           #
           # Excludes @pilots_skipped the same way pilot_choices already
           # does -- without this, a pilot the player explicitly declined
@@ -448,17 +511,24 @@ module Engine
             return nil unless assignable_ships.one? && assignable_ships.first == ship
 
             source = unassigned_sources.first
-            assign_pilot!(entity, source, ship)
+            @pilot_assignments[source] = ship
             source
           end
 
           # Records a pilot-ship pairing and announces it in the log --
-          # shared by the auto-assign paths above (unambiguous from the
-          # start of the turn, or becoming unambiguous mid-turn as ships
-          # finish flying) and the explicit PILOT choice in process_choose,
-          # so every pairing is announced exactly once regardless of how
-          # it was resolved.
+          # shared by resolve_unambiguous_pilots! (the real, turn-start
+          # auto-resolve) and the explicit PILOT choice in process_choose,
+          # so every real announcement happens exactly once, at a
+          # genuinely-current-entity's-own-turn moment. Guards against
+          # re-announcing a pairing pilot_source_for_ship already quietly
+          # recorded (see that method's own comment) -- since that path
+          # can run ahead of a real turn (display/valuation callers), the
+          # pairing may already be set by the time this runs for real;
+          # skip is correct rather than logging a stale "assignment" for
+          # something that happened at first-query time, not now.
           def assign_pilot!(entity, source, ship)
+            return if @pilot_assignments[source] == ship
+
             @pilot_assignments[source] = ship
             @log << "#{entity.name}: Pilot #{@game.class::PILOT_NAMES[source]} (#{source}) assigned to #{ship_label(ship)}"
           end
@@ -540,6 +610,7 @@ module Engine
           # direct neighbor or a shortcut destination) a second time.
           def explore_would_lock_other_routes?(entity, hex, choice)
             return false unless entity == current_entity
+            return false if @lock_warning_acknowledged
             # Not cancellable_ships -- that returns [] outright the
             # moment @trace isn't empty (mid-flight), which is exactly
             # when this question is actually being asked (see
@@ -547,6 +618,19 @@ module Engine
             return false if not_yet_locked_ships.empty?
 
             hex_choice_popup(entity, hex)&.[](choice) == 'Explore'
+          end
+
+          # Public: click handler for the ExploreLockPrompt's own Confirm
+          # button (assets/app/view/game/g_2038/explore_lock_prompt.rb) --
+          # purely local, same as everything else this entity's turn
+          # tracks client-side (@auto_fill_declined, @selected_ship_id,
+          # etc.) -- so explore_would_lock_other_routes? stops offering
+          # the popup for the rest of this entity's turn once they've
+          # confirmed it once. Never set on Cancel Explore -- backing out
+          # doesn't mean the warning's been seen and accepted, so the
+          # next real explore attempt should still ask.
+          def acknowledge_lock_warning!
+            @lock_warning_acknowledged = true
           end
 
           # Mid-flight version of the same "force a popup if undo would
@@ -595,7 +679,15 @@ module Engine
           # chain a bare independent does -- entity.id alone would only
           # ever match the independent itself.
           def chain_hex_choice_popup?(entity, hex, choice)
-            return false unless choice == hex.id && needs_exploration?(hex)
+            # A shortcut/transshipment jump's explore choice is
+            # "shortcut_explore_#{hex.id}", not the bare hex.id a direct
+            # adjacent move offers (see explore_key above) -- both still
+            # mean "this choice explores this hex," so both need to match
+            # here, or a shortcut-reached explore silently falls through
+            # to requiring a second click on the hex to see the tile
+            # choice popup, even though move_to already set it up.
+            explored_this_hex = choice == hex.id || choice == "#{SHORTCUT_EXPLORE}#{hex.id}"
+            return false unless explored_this_hex && needs_exploration?(hex)
 
             ship = current_ship(entity)
             pilot_source = entity.minor? ? entity.id : pilot_source_for_ship(entity, ship)
@@ -682,18 +774,27 @@ module Engine
           # replay_submitted_flight!. Everything that must still go
           # through the real pipeline, submitted immediately in its own
           # one and only click, is excluded: the self-contained
-          # SUBMIT_FLIGHT string itself; CANCEL_COMPLETED (undoing an
-          # *already-submitted* route from earlier this same turn, which
-          # is real state other clients need to see change); and PILOT
-          # (assigning a Growth Corp's inherited pilot to a specific
-          # ship) -- that's meant to survive a *different* ship's local
-          # route being discarded or submitted (see assign_pilot!'s own
-          # comment), which local batching can't actually guarantee.
-          # 
+          # SUBMIT_FLIGHT string itself; SUBMIT_ALL (same idea, for
+          # "Accept All Routes" -- see submit_all_choice/
+          # replay_submitted_all!, and the bug that comes from missing
+          # this exclusion: without it, process_local_action happily
+          # treats the whole already-fully-decided SUBMIT_ALL string as
+          # just another local hex click, dispatching it -- prefix and
+          # all -- straight through dispatch_choice!'s own validity
+          # check, which of course rejects it as "Invalid route
+          # choice"); CANCEL_COMPLETED (undoing an *already-submitted*
+          # route from earlier this same turn, which is real state other
+          # clients need to see change); and PILOT (assigning a Growth
+          # Corp's inherited pilot to a specific ship) -- that's meant to
+          # survive a *different* ship's local route being discarded or
+          # submitted (see assign_pilot!'s own comment), which local
+          # batching can't actually guarantee.
+          #
           def local_choose?(entity, choice)
             choice = choice.to_s
             entity == current_entity &&
               !choice.start_with?("#{SUBMIT_FLIGHT}:") &&
+              !choice.start_with?("#{SUBMIT_ALL}:") &&
               !choice.start_with?(CANCEL_COMPLETED) &&
               !choice.start_with?(PILOT)
           end
@@ -768,6 +869,64 @@ module Engine
 
           def local_pass!(entity)
             rollback_local_flight!(entity)
+          end
+
+          # Public: the "Clear All" button (ship_selector.rb, between
+          # Accept and Auto) -- discards both kinds of not-yet-real
+          # routing state in one click, rather than clearing ships one at
+          # a time:
+          #
+          # 1. Any local, in-progress-or-finished-but-unsubmitted flight
+          #    -- the same discard local_pass!/Reset already does -- but
+          #    ONLY if it hasn't explored anything yet. An explored trace
+          #    is left fully alone, same as Reset's own "un-reveals tile"
+          #    warning already protects against: exploring is real,
+          #    permanent information the player has already seen, and
+          #    this button is meant to be a safe, no-consequences reset,
+          #    not a second way to discard an explore.
+          # 2. Every still-unrun ship's own passive last-OR preview (see
+          #    unrun_ship_row/previous_route_available?, both declined-
+          #    aware via @auto_fill_declined) -- so the whole Ships panel
+          #    goes back to "nothing decided yet" instead of the player
+          #    needing to decline each ship's suggestion individually.
+          def clear_all!(entity)
+            local_pass!(entity) unless @explored_in_trace
+            @auto_fill_declined |= available_ships(entity)
+          end
+
+          # Public: whether the "Clear All" button (see clear_all! above)
+          # should even be offered right now. Per the user: available any
+          # time the panel is sitting at the route-level ship list (not
+          # focused on one individual ship) and there's no exploration
+          # block in the way -- regardless of how many *other* ships have
+          # already been submitted this OR (via Auto, hand-fly, or an
+          # earlier "Accept All Routes"/"Accept prior route" click).
+          # clear_all! itself already leaves every submitted route alone
+          # either way, so there's nothing unsafe about still offering it
+          # once some ships are already done -- it just means fewer
+          # ships are left for it to actually affect.
+          #
+          # 1. Once a ship's been selected -- local_pass?(entity), the
+          #    same test render_action_bar already uses to show the
+          #    hand-fly Submit/Reset bar -- that ship already has its own
+          #    Reset (cancel_flight_button), and Clear All discarding a
+          #    single selected-but-unflown ship on top would be a second,
+          #    redundant way to do the same thing.
+          # 2. Once the pending local flight (if any) has explored a tile
+          #    -- @explored_in_trace, the same guard clear_all! itself
+          #    already checks before discarding it -- offering a button
+          #    that would silently do nothing to the one thing a player
+          #    might expect it to clear is worse than not offering it.
+          #    local_pass?(entity) being false already implies there's no
+          #    pending trace to have explored anything in, so this is
+          #    belt-and-suspenders against the one state
+          #    (@rollback&.dig(:finished)) where a trace can be emptied
+          #    while @explored_in_trace is still true.
+          def clear_all_available?(entity)
+            return false if local_pass?(entity)
+            return false if @explored_in_trace
+
+            true
           end
 
           # Opt-in hook for assets/app/view/game/actionable.rb: same
@@ -929,7 +1088,7 @@ module Engine
           def previous_route_submit_label(entity)
             ship = current_ship(entity)
             preview = ship && preview_last_route(entity, ship)
-            preview ? "Submit (#{@game.format_currency(preview[:revenue])})" : 'Submit'
+            preview ? "Accept prior route (#{@game.format_currency(preview[:revenue])})" : 'Accept prior route'
           end
 
           # Public: the Submit button's actual click handler. Finishes the
@@ -943,6 +1102,104 @@ module Engine
           def finish_and_submit_choice(entity)
             local_choose!(entity, FINISH) if @trace.size > 1 && !@rollback&.dig(:finished)
             submit_flight_choice(entity)
+          end
+
+          # Public: "Accept All Routes" (ShipSelector#submit_all_routes!)
+          # click handler's own one-shot choice -- fully decided HERE,
+          # client-side, using this entity's own local state
+          # (@auto_fill_declined included, same as every per-ship
+          # decision ship_rows already shows) and packed into ONE
+          # SUBMIT_ALL choice (see the constant's own comment) rather
+          # than one real action per ship. nil once there's nothing at
+          # all to submit (nothing active/finished, no remaining ship
+          # has a viable, non-declined preview) -- the caller falls back
+          # to a plain Pass in that case, same as if nothing had ever
+          # been offered.
+          #
+          # An earlier version of this fix tried to build the per-ship
+          # list via auto_actions (see Engine::Round::Base#auto_actions)
+          # instead -- bundling each ship's submission as a follow-up
+          # action the ENGINE cascades automatically. That looked
+          # identical in every manual test but broke for real the first
+          # time a ship had actually been declined before the click:
+          # auto_actions is independently RE-COMPUTED and must match on
+          # both sides (see Game::Base#process_action's add_auto_actions/
+          # validate_auto_actions and auto_actions_match? -- the server
+          # re-derives it from scratch and rejects the action outright
+          # if it disagrees), but @auto_fill_declined is never a
+          # recorded action -- purely local session UI memory -- so the
+          # server's fresh, never-declined copy of this step always
+          # disagreed with the client's decline-aware one, failing with
+          # "Auto actions do not match" (found live: a real reported
+          # game, phil/VP). Packing the decision into plain data instead
+          # -- the same way a single hand-flown route already packs its
+          # whole hex sequence into one SUBMIT_FLIGHT choice rather than
+          # one action per hex -- sidesteps that mechanism (and its
+          # recorded-state-only requirement) entirely.
+          def submit_all_choice(entity)
+            fragments = []
+
+            if (choice = finish_and_submit_choice(entity))
+              fragments << choice.split(':', 2).last
+            end
+
+            available_ships(entity).each do |ship|
+              next unless apply_previous_route!(entity, ship)
+              next unless (choice = finish_and_submit_choice(entity))
+
+              fragments << choice.split(':', 2).last
+            end
+
+            return nil if fragments.empty?
+
+            "#{SUBMIT_ALL}:#{fragments.join(FLEET_SEP)}"
+          end
+
+          # The real, recorded handler for SUBMIT_ALL -- replays every
+          # packed-in ship exactly like replay_submitted_flight! would
+          # (rolling back first, then dispatching that ship's own hex
+          # sequence hop by hop with @committing true), one ship after
+          # another. Unlike that per-ship decision, whether the turn
+          # ends afterward is NOT packed into this choice -- see
+          # auto_actions below, which safely re-derives "nothing left
+          # but the terminal Pass" from recorded state alone (no
+          # @auto_fill_declined involved) once this choice has been
+          # processed.
+          def replay_submitted_all!(entity, choice)
+            _prefix, rest = choice.split(':', 2)
+            fragments = rest.to_s.split(FLEET_SEP)
+            raise GameError, 'Empty submitted flight' if fragments.empty?
+
+            @committing = true
+            fragments.each do |fragment|
+              rollback_local_flight!(entity)
+              fragment.split(FLIGHT_SEP).each { |c| dispatch_choice!(entity, c) }
+            end
+          ensure
+            @committing = false
+          end
+
+          # Public: the terminal Pass that ends "Accept All Routes,"
+          # bundled onto the SUBMIT_ALL choice's own auto_actions (see
+          # Engine::Round::Base#auto_actions/Engine::Step::Base#
+          # auto_actions, also used by several other games' own multi-
+          # step auto-cascades, e.g. G1840::Step::Route) so a single
+          # Undo reverts the whole click atomically -- both the ships
+          # AND the Pass -- instead of leaving some of it submitted.
+          # Safe to re-derive independently on both client and server
+          # (unlike the per-ship decision above) because it depends only
+          # on recorded state: @game.actions.last is literally the
+          # SUBMIT_ALL action that was just processed (process_action
+          # appends it before ever calling auto_actions), never on
+          # anything local-only like @auto_fill_declined.
+          def auto_actions(entity)
+            return unless entity == current_entity
+
+            last = @game.actions.last
+            return unless last.is_a?(Engine::Action::Choose)
+            return unless last.choice.to_s.start_with?("#{SUBMIT_ALL}:")
+
+            [Engine::Action::Pass.new(entity)]
           end
 
           # Public: how many still-unfilled, non-Probe ships a joint "Auto"
@@ -1062,6 +1319,7 @@ module Engine
             choice = action.choice
 
             return replay_submitted_flight!(entity, choice) if choice.to_s.start_with?("#{SUBMIT_FLIGHT}:")
+            return replay_submitted_all!(entity, choice) if choice.to_s.start_with?("#{SUBMIT_ALL}:")
 
             dispatch_choice!(entity, choice)
           end
@@ -1489,12 +1747,26 @@ module Engine
           end
 
           def pickup_choices(entity, ship, result)
-            return if cargo_full?(ship)
-
             state = @game.mine_state[@trace.last.id]
             return unless state
 
+            full = cargo_full?(ship)
             state[:mines].each_with_index do |mine, idx|
+              # This exact mine is already this ship's own cargo from
+              # earlier in this same visit -- offer it back as a takeback
+              # (see pick_up/undo_pickup!) instead of skipping it just
+              # because the mine itself now reads as used. Deliberately
+              # never gated by cargo_full? below: freeing a hold is
+              # exactly what taking a pickup back does, so it has to stay
+              # clickable even when the hold that pickup filled is the
+              # only thing making the ship full right now.
+              cargo_entry = @cargo.find { |c| c[:hex_id] == @trace.last.id && c[:mine_idx] == idx }
+              if cargo_entry
+                result["#{PICKUP}#{idx}"] = { ore: cargo_entry[:ore], value: cargo_entry[:value], undo: true }
+                next
+              end
+
+              next if full
               next if mine[:used]
               next if mine[:owner] && mine[:owner] != entity.id
 
@@ -1650,7 +1922,13 @@ module Engine
             pickup_choices(entity, ship, remaining_pickups)
             transshipment_choice(entity, ship, remaining_pickups)
             refuel_choice(entity, remaining_pickups)
-            return unless remaining_pickups.empty?
+            # pickup_choices now also offers takebacks for this ship's own
+            # already-collected cargo (see its own comment) -- those are
+            # never "something left to do" for auto-finish purposes, or a
+            # ship that's simply out of MP with cargo aboard would never
+            # auto-finish at all.
+            real_remaining = remaining_pickups.reject { |_key, value| value.is_a?(Hash) && value[:undo] }
+            return unless real_remaining.empty?
 
             finish_route(entity)
           end
@@ -1747,6 +2025,9 @@ module Engine
 
           def pick_up(entity, mine_idx)
             hex = @trace.last
+            existing = @cargo.find { |c| c[:hex_id] == hex.id && c[:mine_idx] == mine_idx }
+            return undo_pickup!(entity, hex, existing) if existing
+
             mine = @game.mine_state.dig(hex.id, :mines, mine_idx)
             value = @game.pickup_value(entity, hex.id, mine_idx)
             @cargo << { hex_id: hex.id, mine_idx: mine_idx, ore: mine[:ore], value: value }
@@ -1755,6 +2036,22 @@ module Engine
             @log << "#{entity.name} picks up #{ORE_NAMES[mine[:ore]]} at #{hex.id} "\
                     "(#{@game.format_currency(value)})"
             maybe_auto_finish!(entity, current_ship(entity))
+          end
+
+          # Reverses pick_up for a mine the ship picked up earlier in this
+          # very visit to this hex -- pickup_choices/city_choice only ever
+          # offer this back while `hex == @trace.last`, i.e. the ship
+          # hasn't flown anywhere since, so this is a same-visit misclick
+          # correction, not the jettison-after-the-fact this class's own
+          # top-of-file comment (and §7.1) rule out. Previously the only
+          # way back was the all-or-nothing global Undo, which also threw
+          # away the explore/moves that got the ship here -- often far
+          # more than the player meant to take back for one wrong pickup.
+          def undo_pickup!(entity, hex, cargo_entry)
+            @cargo.delete(cargo_entry)
+            @game.mark_mine_used!(hex.id, cargo_entry[:mine_idx], false)
+            @rollback[:pickups].delete([hex.id, cargo_entry[:mine_idx]]) if @rollback
+            @log << "#{entity.name} returns #{ORE_NAMES[cargo_entry[:ore]]} at #{hex.id}"
           end
 
           def finish_route(entity)

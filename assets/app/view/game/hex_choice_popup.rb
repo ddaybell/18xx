@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'lib/settings'
+require 'lib/explore_lock_prompt'
 require 'view/game/actionable'
 require 'view/game/hex'
 
@@ -212,19 +213,33 @@ module View
 
         if step.respond_to?(:explore_would_lock_other_routes?) &&
            step.explore_would_lock_other_routes?(entity, hex, choice)
-          # Closes the Explore/Skip popup itself here, rather than
-          # leaving it open alongside the warning banner (dispatch below
-          # only closes it once actually confirmed) -- two simultaneous,
-          # independent prompts (one hex-anchored, one a top banner) read
-          # as "which one do I answer first," and clicking Explore again
-          # in the still-open popup wouldn't have skipped the warning
-          # anyway, only re-shown an equivalent one. One prompt at a
-          # time: Confirm in the banner explores for real: anything else
-          # (the banner's own 3s auto-dismiss, or clicking away) abandons
-          # the click entirely, same as dismissing any other popup --
-          # clicking the hex again offers a fresh Explore/Skip choice.
-          store(:tile_selector, nil, skip: true)
-          store(:confirm_opts, { message: '⚠️ Explore locks all submitted routes', click: dispatch }, skip: false)
+          # Replaces the Explore/Skip popup itself with the warning
+          # (rather than leaving it open alongside a separate prompt) --
+          # one decision at a time, same as before. Per the user: this
+          # warning is consequential enough (exploring locks in every
+          # route already submitted this OR) that it shouldn't share the
+          # generic top-banner Confirm's fixed 3-second auto-dismiss,
+          # which silently abandoned the click with no way back except
+          # re-clicking the hex -- so it's its own hex-anchored prompt
+          # (View::Game::G2038::ExploreLockPrompt) with no timeout at
+          # all, persisting until Confirm or Cancel Explore is clicked.
+          # `dispatch` (the real process_action, plus its own follow-up-
+          # popup chaining) is carried into that prompt rather than run
+          # now, exactly as it was carried into the old banner's own
+          # `click:` callback.
+          #
+          # No `skip: true` here, unlike the old banner version -- that
+          # one paired its tile_selector clear with a SECOND store call
+          # (confirm_opts, skip: false) that did the actual re-render;
+          # this store is the only one happening here, so it has to
+          # trigger the render itself. Without it, this component (still
+          # showing the Explore/Skip popup) stayed mounted with a stale
+          # view of @tile_selector until some LATER, unrelated re-render
+          # finally caught up and called .choices on what was by then a
+          # Lib::ExploreLockPrompt -- found live: crashed the page with
+          # "undefined method `choices'" the moment anything else
+          # triggered a render.
+          store(:tile_selector, Lib::ExploreLockPrompt.new(hex, coordinates, root, entity, role, dispatch))
         elsif (consenter = @game.consenter_for_choice(entity, choice, label))
           check_consent(entity, consenter, dispatch)
         else

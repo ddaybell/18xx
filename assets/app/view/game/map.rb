@@ -5,6 +5,7 @@ require '../lib/settings'
 require 'view/game/axis'
 require 'view/game/hex'
 require 'view/game/hex_choice_popup'
+require 'view/game/g_2038/explore_lock_prompt'
 require 'view/game/g_2038/map_g2038'
 require 'view/game/map_legend'
 require 'view/game/tile_confirmation'
@@ -105,6 +106,19 @@ module View
                                  near_right_edge: width - left < HexChoicePopup::EDGE_MARGIN,
                                  near_top_edge: top < HexChoicePopup::EDGE_MARGIN,
                                  near_bottom_edge: height - top < HexChoicePopup::BOTTOM_EDGE_MARGIN)
+            elsif @tile_selector.is_a?(Lib::ExploreLockPrompt)
+              width, height = map_size
+              # Same edge-proximity technique as the HexChoicePopup branch
+              # above -- this prompt intentionally keeps its own copy of
+              # EDGE_MARGIN/BOTTOM_EDGE_MARGIN (see its own file) rather
+              # than referencing HexChoicePopup's, so it has no load-order
+              # dependency on that unrelated component.
+              g2038_prompt = View::Game::G2038::ExploreLockPrompt
+              h(g2038_prompt,
+                zoom: map_zoom,
+                near_right_edge: width - left < g2038_prompt::EDGE_MARGIN,
+                near_top_edge: top < g2038_prompt::EDGE_MARGIN,
+                near_bottom_edge: height - top < g2038_prompt::BOTTOM_EDGE_MARGIN)
             elsif @tile_selector.role != :map
               # Tile selector not for the map
             elsif @tile_selector.hex.tile != @tile_selector.tile
@@ -150,6 +164,17 @@ module View
               position: 'absolute',
               left: "#{left}px",
               top: "#{top}px",
+              # Explicit, rather than relying on default paint order (an
+              # absolutely-positioned element normally paints above static
+              # content regardless of DOM order) -- that's an incidental
+              # guarantee, not a real one, and every other selector this
+              # wrapper hosts (TokenSelector/TileConfirmation/TileSelector,
+              # plus G2038's HexChoicePopup) needs to stay on top of the
+              # map's own content no matter what that content does. Same
+              # order of magnitude as confirm.rb/flash.rb's app-wide modals
+              # (10000) but a notch below them, since this is scoped to the
+              # map, not the whole page.
+              zIndex: '9999',
             },
           }
           # This needs to be before the map, so that the relative positioning works

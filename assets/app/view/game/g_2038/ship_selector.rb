@@ -195,8 +195,14 @@ module View
         # step via apply_previous_route! (the same helper Submit All Routes
         # uses per-ship), so there was nothing left for a standalone
         # Activate/Deactivate pair to do. Modify lands on the hand-fly
-        # Submit/Clear bar (render_flight_bar); this Submit finishes the
-        # job in one click for "I like this as-is."
+        # Submit/Clear bar (render_flight_bar); this Submit (now labeled
+        # "Accept prior run" -- see previous_route_submit_label) finishes
+        # the job in one click for "I like this as-is."
+        #
+        # Modify itself is currently hidden (per the user) -- not offered
+        # as a button below -- but apply_previous_route! and everything
+        # else it needs are deliberately left in place, not removed, in
+        # case it comes back.
         def render_idle_controls(step, entity, auto_running: false, current_ship_id: nil)
           buttons = []
           # Modify/individual-Submit and a second Auto click are both
@@ -204,9 +210,17 @@ module View
           # the counter (below) stays visible during a run.
           unless auto_running
             if step.respond_to?(:previous_route_available?) && step.previous_route_available?(entity)
-              target_ship = step.current_ship(entity)
-              buttons << local_button('Modify') { step.apply_previous_route!(entity, target_ship) }
+              # Modify is hidden for now (per the user) -- not ready to
+              # remove apply_previous_route!/local_button's own support
+              # for it yet, just don't offer it as a button. Leaving
+              # target_ship/apply_previous_route! wired up here would be
+              # dead code with Modify gone, so it's dropped from this
+              # branch too; previous_route_submit_button below doesn't
+              # need it (it re-derives its own ship via step.current_ship).
               buttons << previous_route_submit_button(step, entity)
+            end
+            if step.respond_to?(:clear_all_available?) && step.clear_all_available?(entity)
+              buttons << clear_all_button(step, entity)
             end
             if autorouting_allowed? && step.respond_to?(:any_suggestable?) && step.any_suggestable?(entity)
               buttons << auto_route_all_button(step, entity)
@@ -351,18 +365,20 @@ module View
         # only ever folding in the one ship on screen -- clicking it
         # silently dropped the other ships' already-displayed routes
         # instead of submitting them.
+        # Fires exactly ONE real action: step.submit_all_choice(entity)
+        # already decided (client-side) everything this click is about
+        # to submit and packed it into one self-contained SUBMIT_ALL
+        # choice (see its own comment on why that decision can't be
+        # left to the engine's auto_actions mechanism). The terminal
+        # Pass that ends the turn is NOT part of that choice -- it's
+        # safely bundled on afterward via Step::Route#auto_actions
+        # instead -- so either way, the whole click undoes atomically
+        # with a single Undo rather than leaving some ships submitted
+        # and others not.
         def submit_all_routes!(step, entity)
-          choice = step.finish_and_submit_choice(entity)
-          process_action(Engine::Action::Choose.new(entity, choice: choice)) if choice
-
-          step.available_ships(entity).dup.each do |ship|
-            next unless step.apply_previous_route!(entity, ship)
-
-            submit_choice = step.finish_and_submit_choice(entity)
-            process_action(Engine::Action::Choose.new(entity, choice: submit_choice)) if submit_choice
-          end
-
-          process_action(Engine::Action::Pass.new(@game.pass_entity(@user)))
+          choice = step.submit_all_choice(entity)
+          action = choice ? Engine::Action::Choose.new(entity, choice: choice) : Engine::Action::Pass.new(entity)
+          process_action(action)
         end
 
         # Cancels whichever already-submitted route the row list above is
@@ -915,19 +931,24 @@ module View
           h('button.no_margin', props, step.submit_button_label(entity))
         end
 
-        # Clears an in-progress or finished-but-not-yet-submitted flight --
-        # runs purely locally (step.local_pass!, the exact same discard the
-        # standalone Pass button triggers when it intercepts a real Pass
-        # action -- see assets/app/view/game/actionable.rb), so this is a
-        # same-effect shortcut living right on the ship's row rather than a
-        # second, different code path. The explored-tile warning comes
-        # straight from pass_description (shared with the standalone
-        # button's own wording), just with "Cancel" swapped for "Clear
-        # Ship" -- the two buttons never show at once (suppress_standalone_
-        # pass? hides the standalone one whenever this one would apply), so
-        # there's no risk of them reading inconsistently side by side.
+        # Discards an in-progress or finished-but-not-yet-submitted flight
+        # -- runs purely locally (step.local_pass!, the exact same discard
+        # the standalone Pass button triggers when it intercepts a real
+        # Pass action -- see assets/app/view/game/actionable.rb), so this
+        # is a same-effect shortcut living right on the ship's row rather
+        # than a second, different code path. Labeled "Reset," not
+        # "Clear": discarding the local flight also leaves @trace empty
+        # again, which brings back the ship's own italicized suggested
+        # route (see previewed_ship_routes/ship_rows) rather than leaving
+        # the row genuinely blank -- a reset to that suggestion, not a
+        # wipe. The explored-tile warning comes straight from
+        # pass_description (shared with the standalone button's own
+        # wording), just with "Cancel" swapped for "Reset" -- the two
+        # buttons never show at once (suppress_standalone_pass? hides the
+        # standalone one whenever this one would apply), so there's no
+        # risk of them reading inconsistently side by side.
         def cancel_flight_button(step, entity)
-          label = step.respond_to?(:pass_description) ? step.pass_description.sub(/\ACancel/, 'Clear') : 'Clear'
+          label = step.respond_to?(:pass_description) ? step.pass_description.sub(/\ACancel/, 'Reset') : 'Reset'
           props = {
             key: 'cancel_flight',
             style: { marginRight: '0.3rem' },
@@ -939,6 +960,27 @@ module View
             },
           }
           h('button.no_margin', props, label)
+        end
+
+        # Per the user: a single button (between Accept and Auto) that
+        # resets the whole idle-controls panel back to "nothing decided
+        # yet" in one click -- see Route#clear_all! for exactly what it
+        # discards (a safe, unexplored local flight, plus every still-
+        # unrun ship's own passive suggested-route preview) and, just as
+        # importantly, what it deliberately leaves alone (an explored
+        # partial route, and anything already submitted this OR).
+        def clear_all_button(step, entity)
+          props = {
+            key: 'clear_all',
+            style: { marginRight: '0.3rem' },
+            on: {
+              click: lambda {
+                step.clear_all!(entity)
+                store(:game, @game)
+              },
+            },
+          }
+          h('button.no_margin', props, 'Clear All')
         end
 
         # Shared padding/box-sizing every cell (header or row) uses, so
@@ -1000,7 +1042,11 @@ module View
           # re-launched (choice is nil), but clicking it still means
           # something: targeting it for the single "Clear Ship" control
           # below the list (see G2038::Step::Route#select_completed_ship!).
-          selectable = !row[:select_ship].nil?
+          # An unrun ship with no real choice of its own (see
+          # ShipDisplay#unrun_ship_row) can mean something too, once a
+          # completed route is currently targeted -- clicking it drops
+          # that targeting instead (see deselect_completed_ship!).
+          selectable = !row[:select_ship].nil? || row[:deselect_completed]
           blocked = row[:blocked]
           # A settled, already-submitted route from before a later route
           # this turn explored a hex (see Step::Route#cancellable_ships) --
@@ -1027,7 +1073,11 @@ module View
           elsif selectable
             wrapper_props[:on] = {
               click: -> {
-                step.select_completed_ship!(row[:select_ship])
+                if row[:select_ship]
+                  step.select_completed_ship!(row[:select_ship])
+                else
+                  step.deselect_completed_ship!
+                end
                 store(:game, @game)
               },
             }
