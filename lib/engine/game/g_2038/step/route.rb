@@ -63,6 +63,20 @@ module Engine
           # as plain data -- never re-derived.
           SUBMIT_ALL = 'submit_all'
           FLEET_SEP = ';'
+          # "Clear All" (see clear_all_action/clear_all!) cancelling an
+          # already-submitted-this-OR route is functionally identical to
+          # CANCEL_COMPLETED (same cancel_completed_route call) -- this is
+          # a SEPARATE prefix purely so auto_actions (below) can tell a
+          # Clear-All-initiated cancel apart from an ordinary, standalone
+          # "Clear Selected Route" click and know to keep cascading
+          # through the rest of cancellable_ships, without also hijacking
+          # that single-ship button into cascading when it shouldn't.
+          # Safe to decide via auto_actions (unlike SUBMIT_ALL's per-ship
+          # decision, which depends on @auto_fill_declined -- see its own
+          # comment): which ships are still cancellable is a pure function
+          # of recorded state (@ran_ships/@route_stats_by_ship's explored
+          # flags, via cancellable_ships), nothing client-only involved.
+          CLEAR_ALL_CANCEL = 'clear_all_cancel_'
           # A dedicated choice key for undo_last_hex! (see its comment) --
           # never a real hex id, so it can be dispatched unambiguously
           # whether it arrives via a hex-choice popup's own button or as
@@ -797,13 +811,13 @@ module Engine
           # just another local hex click, dispatching it -- prefix and
           # all -- straight through dispatch_choice!'s own validity
           # check, which of course rejects it as "Invalid route
-          # choice"); CANCEL_COMPLETED (undoing an *already-submitted*
-          # route from earlier this same turn, which is real state other
-          # clients need to see change); and PILOT (assigning a Growth
-          # Corp's inherited pilot to a specific ship) -- that's meant to
-          # survive a *different* ship's local route being discarded or
-          # submitted (see assign_pilot!'s own comment), which local
-          # batching can't actually guarantee.
+          # choice"); CANCEL_COMPLETED and CLEAR_ALL_CANCEL (undoing an
+          # *already-submitted* route from earlier this same turn, which
+          # is real state other clients need to see change); and PILOT
+          # (assigning a Growth Corp's inherited pilot to a specific
+          # ship) -- that's meant to survive a *different* ship's local
+          # route being discarded or submitted (see assign_pilot!'s own
+          # comment), which local batching can't actually guarantee.
           #
           def local_choose?(entity, choice)
             choice = choice.to_s
@@ -811,6 +825,7 @@ module Engine
               !choice.start_with?("#{SUBMIT_FLIGHT}:") &&
               !choice.start_with?("#{SUBMIT_ALL}:") &&
               !choice.start_with?(CANCEL_COMPLETED) &&
+              !choice.start_with?(CLEAR_ALL_CANCEL) &&
               !choice.start_with?(PILOT)
           end
 
@@ -886,8 +901,34 @@ module Engine
             rollback_local_flight!(entity)
           end
 
-          # Public: the "Clear All" button (ship_selector.rb, between
-          # Accept and Auto) -- discards both kinds of not-yet-real
+          # Public: the real, recorded half of the "Clear All" button
+          # (ship_selector.rb, between Accept and Auto) -- the ship-
+          # selector click handler dispatches this FIRST, via
+          # process_action, before ever calling clear_all! below. Returns
+          # an Action::Choose cancelling the first still-cancellable
+          # submitted route this OR (see cancellable_ships -- already
+          # excludes anything an intervening Explore has locked in), or
+          # nil if there's nothing to cancel. auto_actions bundles the
+          # REST of cancellable_ships onto this same action, so a single
+          # Undo reverts the whole click atomically, same reasoning as
+          # "Accept All Routes"/SUBMIT_ALL.
+          #
+          # Found live: the original clear_all! deliberately left every
+          # submitted route alone (by design, at the time) -- but per the
+          # user, that's not what "Clear All" should mean: a company that
+          # used Auto (or a manual Submit) to fly its ships this turn, with
+          # no exploration done, expects Clear All to undo that too, not
+          # just decline previews for ships that never ran at all.
+          def clear_all_action(entity)
+            ship = cancellable_ships.first
+            return nil unless ship
+
+            Engine::Action::Choose.new(entity, choice: "#{CLEAR_ALL_CANCEL}#{ship.id}")
+          end
+
+          # Public: the purely local half of "Clear All" -- called after
+          # clear_all_action's own real cancellation cascade (if any) has
+          # already run. Discards both remaining kinds of not-yet-real
           # routing state in one click, rather than clearing ships one at
           # a time:
           #
@@ -904,22 +945,19 @@ module Engine
           #    aware via @auto_fill_declined) -- so the whole Ships panel
           #    goes back to "nothing decided yet" instead of the player
           #    needing to decline each ship's suggestion individually.
+          #    Ships clear_all_action just cancelled are included here
+          #    too (they're back in available_ships by this point), so
+          #    their own last-OR preview doesn't immediately resurface.
           def clear_all!(entity)
             local_pass!(entity) unless @explored_in_trace
             @auto_fill_declined |= available_ships(entity)
           end
 
-          # Public: whether the "Clear All" button (see clear_all! above)
-          # should even be offered right now. Per the user: available any
-          # time the panel is sitting at the route-level ship list (not
-          # focused on one individual ship) and there's no exploration
-          # block in the way -- regardless of how many *other* ships have
-          # already been submitted this OR (via Auto, hand-fly, or an
-          # earlier "Accept All Routes"/"Accept prior route" click).
-          # clear_all! itself already leaves every submitted route alone
-          # either way, so there's nothing unsafe about still offering it
-          # once some ships are already done -- it just means fewer
-          # ships are left for it to actually affect.
+          # Public: whether the "Clear All" button (see clear_all!/
+          # clear_all_action above) should even be offered right now. Per
+          # the user: available any time the panel is sitting at the
+          # route-level ship list (not focused on one individual ship)
+          # and there's no exploration block in the way.
           #
           # 1. Once a ship's been selected -- local_pass?(entity), the
           #    same test render_action_bar already uses to show the
@@ -1151,11 +1189,62 @@ module Engine
           # whole hex sequence into one SUBMIT_FLIGHT choice rather than
           # one action per hex -- sidesteps that mechanism (and its
           # recorded-state-only requirement) entirely.
+          # Deliberately does NOT roll back each ship's own @ran_ships
+          # entry between fragments, unlike every other per-ship local
+          # discard this step does -- `apply_previous_route!`'s own
+          # explicit-ship-select decision (`local_choose!(SHIP+id) if
+          # available_ships(entity).size > 1`) must see the SAME
+          # available-ship count here that replay_submitted_all! (below)
+          # will ALSO see when it replays this exact fragment for real,
+          # hop by hop, ship by ship -- and that real replay never rolls
+          # @ran_ships back mid-sequence either (dispatch_choice! runs
+          # directly, with no local_choose!/@rollback involved at all, so
+          # finish_route's own unconditional `@ran_ships << ship` simply
+          # accumulates across fragments there, same as here). Getting
+          # this out of sync is exactly how two earlier attempts at this
+          # method broke: rolling @ran_ships back after each fragment
+          # (so every ship but the first wrongly computed its own
+          # fragment as if it were the ONLY one left, omitting a
+          # SHIP-select token the real replay's own earlier accumulation
+          # still expected) or never rolling it back at all (leaving
+          # every processed ship stuck in @ran_ships once this method
+          # returned, so the real commit's own very first dispatch found
+          # zero ships "available" and rejected its own leading
+          # SHIP-select token) -- found live, a real reported game, a
+          # Growth Corp with two same-named "6/5" ships.
+          #
+          # @rollback/@local_flight_log, by contrast, MUST reset between
+          # ships (current_ship's own first check,
+          # @rollback&.dig(:finished_ship), would otherwise keep
+          # resolving to whichever ship finished *previously* instead of
+          # re-deriving the true current one from available_ships; see
+          # the "Invalid route choice: F18" bug this replaced) -- but
+          # finish_route itself already resets everything else
+          # (@trace/@cargo/@explored_in_trace back to "nothing in
+          # progress") the moment a ship finishes, same as a live launch
+          # does.
+          #
+          # The actual accumulated side effects of every ship processed
+          # here (new @round.routes entries, @route_stats_by_ship
+          # entries, @ran_ships growth, mine pickups, @log lines) are all
+          # undone in one pass at the very end, via
+          # discard_simulated_submissions!, restoring this step to
+          # exactly the state it was in before this method was ever
+          # called -- a pure dry run as far as anything outside this
+          # method can tell, since the caller (ShipSelector#
+          # submit_all_routes!) immediately calls process_action on this
+          # SAME live step object right after, which drives the real
+          # commit through replay_submitted_all! completely fresh.
           def submit_all_choice(entity)
+            ran_ships_before = @ran_ships.dup
+            log_size_before = @log.size
+            rand_before = @game.rand_state
             fragments = []
 
             if (choice = finish_and_submit_choice(entity))
               fragments << choice.split(':', 2).last
+              @rollback = nil
+              @local_flight_log = []
             end
 
             available_ships(entity).each do |ship|
@@ -1163,11 +1252,45 @@ module Engine
               next unless (choice = finish_and_submit_choice(entity))
 
               fragments << choice.split(':', 2).last
+              @rollback = nil
+              @local_flight_log = []
             end
+
+            discard_simulated_submissions!(ran_ships_before, log_size_before, rand_before)
 
             return nil if fragments.empty?
 
             "#{SUBMIT_ALL}:#{fragments.join(FLEET_SEP)}"
+          end
+
+          # The other half of submit_all_choice above -- undoes every
+          # ship's simulated-but-never-really-submitted finish in one
+          # pass: pops each one's Route back off @round.routes, un-marks
+          # whatever mines its stored cargo claims, drops its
+          # @route_stats_by_ship entry, restores @ran_ships/@log/rand to
+          # their pre-call snapshots, and resets whatever local-flight
+          # bookkeeping the loop above left pointing at the last ship it
+          # processed. mine_state is the only thing worth calling out as
+          # *not* snapshotted/restored wholesale (unlike rollback_local_
+          # flight!'s own laid_hexes/mine_state_added, which undo a real
+          # EXPLORE) -- a suggestion never explores, so the only mine-
+          # state change any of this ever makes is marking a pickup used,
+          # which un-marking (mark_mine_used!(..., false)) fully reverses
+          # on its own, hex by hex, with no broader snapshot needed.
+          def discard_simulated_submissions!(ran_ships_before, log_size_before, rand_before)
+            (@ran_ships - ran_ships_before).each do |ship|
+              route = @round.routes.find { |r| r.train == ship }
+              @round.routes.delete(route)
+              stats = @route_stats_by_ship[ship]
+              stats[:cargo].each { |c| @game.mark_mine_used!(c[:hex_id], c[:mine_idx], false) if c[:mine_idx] }
+              @route_stats_by_ship.delete(ship)
+            end
+            @ran_ships = ran_ships_before
+            @log.slice!(log_size_before..-1) if @log.size > log_size_before
+            @game.rand_state = rand_before
+            @rollback = nil
+            @local_flight_log = []
+            @choices_memo = nil
           end
 
           # The real, recorded handler for SUBMIT_ALL -- replays every
@@ -1207,14 +1330,27 @@ module Engine
           # SUBMIT_ALL action that was just processed (process_action
           # appends it before ever calling auto_actions), never on
           # anything local-only like @auto_fill_declined.
+          # Also handles "Clear All" (see clear_all_action) cascading
+          # through the rest of cancellable_ships -- same safety argument
+          # as the SUBMIT_ALL/Pass case above: which ships are still
+          # cancellable is re-derivable from recorded state alone
+          # (cancellable_ships, a pure function of @ran_ships/explored
+          # flags), so the server's independent recomputation always
+          # agrees with the client's.
           def auto_actions(entity)
             return unless entity == current_entity
 
             last = @game.actions.last
             return unless last.is_a?(Engine::Action::Choose)
-            return unless last.choice.to_s.start_with?("#{SUBMIT_ALL}:")
 
-            [Engine::Action::Pass.new(entity)]
+            return [Engine::Action::Pass.new(entity)] if last.choice.to_s.start_with?("#{SUBMIT_ALL}:")
+
+            if last.choice.to_s.start_with?(CLEAR_ALL_CANCEL)
+              next_ship = cancellable_ships.first
+              return [Engine::Action::Choose.new(entity, choice: "#{CLEAR_ALL_CANCEL}#{next_ship.id}")] if next_ship
+            end
+
+            nil
           end
 
           # Public: how many still-unfilled, non-Probe ships a joint "Auto"
@@ -1345,6 +1481,9 @@ module Engine
 
             return replay_submitted_flight!(entity, choice) if choice.to_s.start_with?("#{SUBMIT_FLIGHT}:")
             return replay_submitted_all!(entity, choice) if choice.to_s.start_with?("#{SUBMIT_ALL}:")
+            if choice.to_s.start_with?(CLEAR_ALL_CANCEL)
+              return cancel_completed_route(entity, choice.delete_prefix(CLEAR_ALL_CANCEL))
+            end
 
             dispatch_choice!(entity, choice)
           end
@@ -1726,14 +1865,49 @@ module Engine
             cargo.map { |c| [c[:hex_id], c[:mine_idx]] }.uniq.size
           end
 
-          # Public: the ship-selector row's Explore/Mines column values,
-          # built the same way regardless of where the underlying data
-          # comes from (a finished route's stored @route_stats_by_ship
-          # entry, the live in-progress ship's @hexes_explored_this_trip/
-          # @cargo, or a pending suggestion/replay preview's own hexes/
-          # cargo) -- see ship_rows' three call sites.
-          def route_stats(explored, cargo)
-            { explored: explored, mines: mines_visited(cargo), codes: mine_codes(cargo) }
+          # Public: the ship-selector row's Explore/Mines/Hexes/Refuels
+          # column values, built the same way regardless of where the
+          # underlying data comes from (a finished route's stored
+          # @route_stats_by_ship entry, the live in-progress ship's
+          # @hexes_explored_this_trip/@cargo/@trace/@refueled_hexes, or a
+          # pending suggestion/replay preview's own hexes/cargo/
+          # refueled_hex_ids) -- see ship_rows' three call sites. `hexes`
+          # is the number of hexes actually flown through, NOT counting
+          # the launch base itself (a route that never left its base is 0,
+          # not 1) -- shown so the player can compare routes before
+          # deciding whether to Submit as-is or back out and fly
+          # differently; `max_hexes` is the ship's own full movement
+          # allowance (@game.ship_distance) -- the Hexes column renders
+          # "X/Y" the same way the log's own "N/M MP" line already does,
+          # just in hexes rather than MP, so the player can see at a
+          # glance how much of the ship's range this particular route
+          # actually used; `refuels` is how many of those hexes were a
+          # refueling-station stop that actually topped off the tank (see
+          # refuel!'s own §7.11 once-per-station-per-flight rule).
+          # Public: the Hexes column's "Y" denominator -- the ship's own
+          # base movement allowance (@game.ship_distance) plus however
+          # much refueling actually extended it this route. Per the user:
+          # a 4-MP ship that refuels twice shows a max of 10 (4 + 3 + 3),
+          # not 4 -- each refueling-station stop is worth a flat +3 MP of
+          # EXTRA range on top of the ship's own allowance (§7.11/7.12),
+          # same figure refuel! itself grants (capped there at however
+          # much MP had actually been spent so far, which only matters
+          # for a refuel taken very early in a route; this column is a
+          # simple "how far could this ship have gone" ceiling, not a
+          # replay of that edge case).
+          def max_hexes(entity, ship, refuels)
+            @game.ship_distance(entity, ship) + (3 * refuels)
+          end
+
+          def route_stats(explored, cargo, hexes, max_hexes, refuels)
+            {
+              explored: explored,
+              mines: mines_visited(cargo),
+              codes: mine_codes(cargo),
+              hexes: hexes,
+              max_hexes: max_hexes,
+              refuels: refuels,
+            }
           end
 
           # Comma-joined letter-code list (e.g. "N, I, TP"), empty when
@@ -2114,7 +2288,13 @@ module Engine
                     "(#{mines} #{mines == 1 ? 'mine' : 'mines'} visited, "\
                     "#{@mp_spent}/#{@game.ship_distance(entity, ship)} MP): #{trace.map(&:id).join(' - ')}"
 
-            @route_stats_by_ship[ship] = { explored: @hexes_explored_this_trip, mines: mines, cargo: @cargo.dup }
+            @route_stats_by_ship[ship] = {
+              explored: @hexes_explored_this_trip,
+              mines: mines,
+              cargo: @cargo.dup,
+              hexes: trace.size - 1,
+              refuels: @refueled_hexes.size,
+            }
             @ran_ships << ship
             @trace = []
             @cargo = []
@@ -2146,8 +2326,11 @@ module Engine
           # which is exactly why an explored route is never eligible here),
           # frees the ship to fly again this turn, and gives back any
           # picked-up ore the same way cancel_route does for an in-progress
-          # trace.
-          def cancel_completed_route(entity, ship_id)
+          # trace. Deliberately no @log entry -- per the user, nothing
+          # irreversible happened (no exploration to undo; cancellable_ships
+          # already guarantees that), so there's nothing here other players
+          # need to be told about, unlike an actual submitted route.
+          def cancel_completed_route(_entity, ship_id)
             ship = @ran_ships.find { |t| t.id == ship_id }
             return unless ship
 
@@ -2164,7 +2347,6 @@ module Engine
             # it straight back to the same route the player just backed
             # away from.
             @auto_fill_declined << ship
-            @log << "#{entity.name} cancels #{ship_label(ship)}'s completed route"
           end
 
           # Starting point for a fresh @rollback -- see local_choose!.

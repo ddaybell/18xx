@@ -3,7 +3,6 @@
 require_relative 'meta'
 require_relative 'map'
 require_relative 'entities'
-require_relative 'corporation'
 require_relative '../base'
 require_relative 'round/operating'
 require_relative 'step/waterfall_auction'
@@ -38,8 +37,6 @@ module Engine
         attr_reader :mine_state, :al_reserved_shares, :al_independents_ever_offered, :al_corporation,
                     :fast_buck_income_recipient, :hex_assignments
 
-        CORPORATION_CLASS = G2038::Corporation
-
         TILE_TYPE = :lawson
         TRACK_RESTRICTION = :permissive
         SELL_BUY_ORDER = :sell_buy
@@ -65,15 +62,20 @@ module Engine
         BANK_CASH = 10_000
         SHORT_GAME_BANK_CASH = 4_000
 
-        CERT_LIMIT = { 3 => 22, 4 => 16, 5 => 13, 6 => 11 }.freeze
+        # 2-player cert limits/cash (optional, printed rule) are their own
+        # flat numbers, not derived from the 3-6 player formulas below.
+        CERT_LIMIT = { 2 => 33, 3 => 22, 4 => 16, 5 => 13, 6 => 11 }.freeze
         # §13a (short game): "The certificate limits are reduced."
-        SHORT_GAME_CERT_LIMIT = { 3 => 17, 4 => 13, 5 => 10, 6 => 9 }.freeze
+        SHORT_GAME_CERT_LIMIT = { 2 => 26, 3 => 17, 4 => 13, 5 => 10, 6 => 9 }.freeze
         # §13b (extra companies variant): "The Certificate Limit is increased"
         # once OSR/MR are in play mutually exclusive with the Short Game (see
-        # optional_new_corporations' incompatibility check in setup).
-        NEW_CORPORATIONS_CERT_LIMIT = { 3 => 27, 4 => 20, 5 => 16, 6 => 13 }.freeze
+        # optional_new_corporations?' incompatibility check in setup). No
+        # 2-player number is printed for this combination -- 40 picked per
+        # the user, consistent with every other player count's Full Game +
+        # New Corporations limits summing to 80 or 81.
+        NEW_CORPORATIONS_CERT_LIMIT = { 2 => 40, 3 => 27, 4 => 20, 5 => 16, 6 => 13 }.freeze
 
-        STARTING_CASH = { 3 => 600, 4 => 450, 5 => 360, 6 => 300 }.freeze
+        STARTING_CASH = { 2 => 900, 3 => 600, 4 => 450, 5 => 360, 6 => 300 }.freeze
 
         # §13d: variant charter cards for 6 of the 12 Private
         # companies -- cheaper certificates, and PI/TS/VA/RS/ST/AE income
@@ -138,7 +140,7 @@ module Engine
         }.freeze
 
         def game_companies
-          return super unless optional_variant_start_pack
+          return super unless optional_variant_start_pack?
 
           super.map do |company|
             overrides = VARIANT_START_PACK_COMPANIES[company[:sym]]
@@ -159,14 +161,14 @@ module Engine
         MARKET_TEXT = Base::MARKET_TEXT.merge(
           par: 'Public Corps Par',
           par_1: 'Asteroid League Par',
-          par_2: 'All Growth Corps Par',
-        )
+          par_2: 'All Growth Corps Starting Market Value (Par $67)',
+        ).freeze
 
         STOCKMARKET_COLORS = Base::STOCKMARKET_COLORS.merge(
           par: :gray,
           par_1: :brown,
           par_2: :blue,
-        )
+        ).freeze
 
         ENTITY_DISPLAY_ORDER = %w[FB IF DH OC TH LY TSI RU VP LE MM OPC RCC AL].freeze
         HIDE_TILE_TRACK = true
@@ -273,7 +275,20 @@ module Engine
             distance: 4,
             cargo_holds: 0,
             price: 1,
-            rusts_on: %w[4/3 6/2],
+            # Just the base/group name here (not also its '6/2' variant) --
+            # Train#sym (what the engine's own rust check actually matches
+            # against, base.rb's needs_to_rust?) always stays the group's
+            # base name regardless of which variant was bought (Train#
+            # variant= only ever reassigns @name, never @sym), so listing
+            # the variant name too was always dead weight for the rust
+            # mechanic itself. It WAS live-but-redundant data for the
+            # Info tab's own Rusts column, though: assets/app/view/game/
+            # game_info.rb (shared, every game) builds that cell once per
+            # DISPLAY name in a row, so a row with 2 variant names whose
+            # rusts_on both listed BOTH triggers produced the exact same
+            # "what rusts" line twice. Same fix applied below for 3/2/5/1
+            # and 4/3/6/2.
+            rusts_on: '4/3',
             num: 1,
           },
           {
@@ -281,7 +296,7 @@ module Engine
             distance: 3,
             cargo_holds: 2,
             price: 100,
-            rusts_on: %w[5/4 7/3],
+            rusts_on: '5/4', # see Probe's own comment on why just the base name
             num: 10,
             variants: [
               {
@@ -289,7 +304,7 @@ module Engine
                 distance: 5,
                 cargo_holds: 1,
                 price: 100,
-                rusts_on: %w[5/4 7/3],
+                rusts_on: '5/4',
               },
             ],
           },
@@ -298,7 +313,7 @@ module Engine
             distance: 4,
             cargo_holds: 3,
             price: 200,
-            rusts_on: %w[7/6 9/5],
+            rusts_on: '7/6', # see Probe's own comment on why just the base name
             num: 10,
             variants: [
               {
@@ -306,7 +321,7 @@ module Engine
                 distance: 6,
                 cargo_holds: 2,
                 price: 175,
-                rusts_on: %w[7/6 9/5],
+                rusts_on: '7/6',
               },
             ],
           },
@@ -428,7 +443,7 @@ module Engine
         ).freeze
 
         def bank_starting_cash
-          optional_short_game ? SHORT_GAME_BANK_CASH : BANK_CASH
+          optional_short_game? ? SHORT_GAME_BANK_CASH : BANK_CASH
         end
 
         # §13d: "+$300 total starting money, divided by player count" --
@@ -438,15 +453,15 @@ module Engine
         # 300/player_count, with no remainder at any player count).
         def init_starting_cash(players, bank)
           super
-          return unless optional_variant_start_pack
+          return unless optional_variant_start_pack?
 
           bonus = 300 / players.size
           players.each { |player| bank.spend(bonus, player) }
         end
 
         def game_cert_limit
-          return SHORT_GAME_CERT_LIMIT if optional_short_game
-          return NEW_CORPORATIONS_CERT_LIMIT if optional_new_corporations
+          return SHORT_GAME_CERT_LIMIT if optional_short_game?
+          return NEW_CORPORATIONS_CERT_LIMIT if optional_new_corporations?
 
           CERT_LIMIT
         end
@@ -608,9 +623,17 @@ module Engine
         # happened to sell out first.
         def stock_round
           Engine::Round::Stock.new(self, [
+            # DiscardShip ahead of FormAsteroidLeague/MergeIntoLeague --
+            # per the user: a player who just went over the train limit
+            # buying the very ship that hands AE's owner the form-AL
+            # decision should resolve their OWN discard first. Otherwise
+            # the blocking FormAsteroidLeague step interrupts BEFORE that
+            # discard is forced, making it harder to back out of the
+            # purchase (via Undo) without also having to re-decide
+            # something else entirely in between.
+            G2038::Step::DiscardShip,
             G2038::Step::FormAsteroidLeague,
             G2038::Step::MergeIntoLeague,
-            G2038::Step::DiscardShip,
             Engine::Step::SpecialTrack,
             G2038::Step::CompanyPendingPar,
             G2038::Step::WaterfallAuction,
@@ -620,10 +643,11 @@ module Engine
 
         def operating_round(round_num)
           G2038::Round::Operating.new(self, [
+            # See stock_round's own comment on why DiscardShip goes first.
+            G2038::Step::DiscardShip,
             G2038::Step::FormAsteroidLeague,
             G2038::Step::MergeIntoLeague,
             Engine::Step::Bankrupt,
-            G2038::Step::DiscardShip,
             G2038::Step::StockRepurchase,
             G2038::Step::Route,
             G2038::Step::StockRepurchase,
@@ -996,7 +1020,7 @@ module Engine
             # isn't a real base without them, so a Full Game without the
             # expansion doesn't silently pay a bonus for what's just an
             # ordinary mine hex there.
-            next if data[:requires_optional_new_corporations] && !optional_new_corporations
+            next if data[:requires_optional_new_corporations] && !optional_new_corporations?
 
             h[data[:coordinates]] = [data[:delivery_bonus], data[:delivery_bonus_amount]]
           end
@@ -1220,17 +1244,18 @@ module Engine
           'TH' => '+1 movement point to spaceships',
         }.freeze
 
-        # Human-readable description of this corp's inherited pilot
-        # ability/abilities (Phase 8), named per source rather than a
-        # generic "Pilot:" label -- nil if it wasn't formed via Growth Corp
-        # conversion (or hasn't absorbed any independent yet). Joins
-        # multiple entries if the corp has more than one (e.g. AL).
-
-        def pilot_description(entity)
-          sources = growth_corp_pilots(entity)
-          return nil if sources.empty?
-
-          sources.map { |source| "#{PILOT_NAMES[source]}: #{PILOT_DESCRIPTIONS[source]}" }.join('; ')
+        # This corp's inherited pilot ability/abilities (Phase 8), one
+        # entry per absorbed independent (usually one, but AL can
+        # accumulate more via Phase 9 mergers) -- [] if it wasn't formed
+        # via Growth Corp conversion (or hasn't absorbed any independent
+        # yet). Structured (name/description pairs) rather than a single
+        # joined string, so the view can list each pilot by name and let
+        # the player expand just the one(s) they want to read about --
+        # the same per-item name/click-to-expand-description shape
+        # View::Game::Companies already uses for a corp's owned private
+        # companies (see View::Game::G2038::PilotInfo).
+        def pilot_details(entity)
+          growth_corp_pilots(entity).map { |source| { name: PILOT_NAMES[source], description: PILOT_DESCRIPTIONS[source] } }
         end
 
         # Peeks at hex_id's assigned tile without laying anything -- [name,
@@ -1369,7 +1394,7 @@ module Engine
           place_starting_bases!
           apply_optional_corporation_availability!
 
-          return if optional_variant_start_pack
+          return if optional_variant_start_pack?
 
           partition_corporation_groups!
         end
@@ -1377,15 +1402,15 @@ module Engine
         # §13-pre: the expansion's own "New Corporations" text is explicit
         # -- "to the full game (but not the Short Game)" -- and the
         # Variant Start Packet transitively implies New Corporations
-        # (optional_new_corporations above), so this one check covers
+        # (optional_new_corporations? above), so this one check covers
         # both. Raised here (not at the lobby/options level) since
         # @optional_rules is only assembled once game setup actually runs
         # -- matches how other invalid-combination checks in this
         # codebase surface (a GameError at setup time, not a silent
         # ignore).
         def validate_optional_rule_combination!
-          return unless optional_short_game
-          return unless optional_new_corporations
+          return unless optional_short_game?
+          return unless optional_new_corporations?
 
           raise GameError, 'The Short Game cannot be combined with New Corporations or the Variant Start Packet'
         end
@@ -1488,7 +1513,7 @@ module Engine
           # Otherwise run as early as possible, before any shares have
           # actually moved, so "every currently self-held share" is
           # unambiguously the entire unsold allotment.
-          return unless optional_stock_repurchases
+          return unless optional_stock_repurchases?
 
           @corporations.each do |corp|
             next if corp.capitalization == :incremental
@@ -1528,7 +1553,7 @@ module Engine
 
         def place_starting_bases!
           # §13b: OSR/MR's home hexes (B14/O13) only exist as real base
-          # cities when optional_new_corporations makes optional_hexes
+          # cities when optional_new_corporations? makes optional_hexes
           # carve them out of the blue/unexplored set -- without the
           # rule they're ordinary unexplored hexes, so place_home_token
           # would crash looking for a city that was never placed. Pulled
@@ -1537,7 +1562,7 @@ module Engine
           # place_home_token/coordinates: flow as any other corp below.
           osr_mr = @corporations.select { |c| %w[OSR MR].include?(c.id) }
           placement_entities = @corporations + @minors + [@al_corporation]
-          placement_entities -= osr_mr unless optional_new_corporations
+          placement_entities -= osr_mr unless optional_new_corporations?
 
           # All 13 starting-base hexes are on the map and deliverable from
           # turn one -- unlike the engine's HOME_TOKEN_TIMING default of
@@ -1548,7 +1573,7 @@ module Engine
           # called again later (it checks `tokens.first&.used`), so the
           # standard :operate-time call still fires without conflict once
           # each entity actually starts operating. Placed for OPC/RCC too,
-          # even under optional_short_game (where they're about to be
+          # even under optional_short_game? (where they're about to be
           # excluded from @corporations below) -- confirmed with the user:
           # the Short Game section only says the *corporations* aren't
           # used, and "Points to Remember" separately states, twice and
@@ -1570,7 +1595,7 @@ module Engine
           # never appear on the stock market, and never show up in any
           # other bookkeeping that iterates @corporations, while their
           # bases remain in play.
-          @corporations.reject! { |c| %w[OPC RCC].include?(c.id) } if optional_short_game
+          @corporations.reject! { |c| %w[OPC RCC].include?(c.id) } if optional_short_game?
 
           # §13b: On-Site Refining and Mining Robotics only exist under
           # the New Corporations expansion rule (or the Variant Start
@@ -1583,7 +1608,7 @@ module Engine
           # the user (see ROADMAP 13b): they unlock on the ordinary
           # group_c timeline and float like any other corp, no special
           # handling needed.
-          @corporations.reject! { |c| %w[OSR MR].include?(c.id) } unless optional_new_corporations
+          @corporations.reject! { |c| %w[OSR MR].include?(c.id) } unless optional_new_corporations?
         end
 
         def partition_corporation_groups!
@@ -1764,17 +1789,19 @@ module Engine
         # bankruptcy if it still can't afford one) -- but independents are
         # governed entirely by their own rule (Phase 9f: merge into AL once
         # it exists; before that, an independent with no ship simply sits
-        # idle with no consequence). The base
-        # engine's default (`MUST_BUY_TRAIN == :route`, checking `@graph.
-        # route_info`) is permanently inert for G2038 regardless of entity
-        # type, since this game has no tile-path graph at all -- overriding
-        # the method directly (rather than the constant, which has no
-        # per-entity-type option) is what actually lets this apply only to
-        # corporations.
+        # idle with no consequence). The base engine's default
+        # (`MUST_BUY_TRAIN == :route`, checking `@graph.route_info`) is
+        # permanently inert for G2038 regardless of entity type, since this
+        # game has no tile-path graph at all -- MUST_BUY_TRAIN = :always
+        # (below) makes `super` unconditional instead, and this override's
+        # only remaining job is excluding minors, which the constant alone
+        # has no per-entity-type way to express.
+        MUST_BUY_TRAIN = :always
+
         def must_buy_train?(entity)
           return false if entity.minor?
 
-          entity.trains.empty? && !depot.depot_trains.empty?
+          super
         end
 
         # §13c rule 3: standard engine redeem/issue hooks (see
@@ -1791,7 +1818,7 @@ module Engine
         # price source) -- filtered to whatever the corp's own treasury
         # can actually afford.
         def redeemable_shares(entity)
-          return [] unless optional_stock_repurchases
+          return [] unless optional_stock_repurchases?
           return [] unless entity.corporation?
 
           bundles_for_corporation(share_pool, entity).reject { |bundle| entity.cash < bundle.price }
@@ -1833,9 +1860,22 @@ module Engine
         # an ordinary Public corp's shares were never IPO-owned this way
         # in the first place, so this never applies to one just because
         # it's holding some Treasury Shares back via a rule-3 buyback).
+        #
+        # This is the ONLY place that rule may apply -- a prior revision
+        # also overrode Corporation#par_price itself (unconditionally, for
+        # any Growth Corp, regardless of optional_stock_repurchases?),
+        # which inflated "par" (and, via Share#price_per_share, every
+        # treasury-share price) to match the market price the moment it
+        # rose above par even with the rule OFF. Found live: an LE player
+        # paying current market value for treasury shares with zero
+        # optional rules enabled. par_price must stay the plain, fixed
+        # original par -- what the word "par" actually means, and what
+        # the corp card's own Par column displays -- regardless of this
+        # rule; this method alone is what makes treasury-share price
+        # diverge from it, and only when the rule is on.
         def bundles_for_corporation(share_holder, corporation, shares: nil)
           bundles = super
-          return bundles unless optional_stock_repurchases
+          return bundles unless optional_stock_repurchases?
           return bundles unless share_holder == corporation
           return bundles unless corporation.capitalization == :incremental
 

@@ -124,15 +124,21 @@ module Engine
 
             minor.owner = player
             minor.float!
-            # $100 plus half of whatever was bid over $100. No floor needed
-            # here: every independent's face value is a fixed $100 (none
-            # affected by the Variant Start Packet's price swaps, which
-            # only touch non-minor privates like TS) and this game has no
-            # rule that ever discounts a company below face value --
-            # G2038::Step::WaterfallAuction#all_passed! fully overrides
-            # the base engine's own waterfall-discount mechanic, so `price`
-            # can never actually be less than 100.
-            capital = (price - 100) / 2
+            # $100 plus half of whatever was bid over $100. `price` can
+            # never actually be less than 100: every independent's face
+            # value is a fixed $100 (none affected by the Variant Start
+            # Packet's price swaps, which only touch non-minor privates
+            # like TS), and this game has no rule that ever discounts a
+            # company below face value -- G2038::Step::WaterfallAuction#
+            # all_passed! fully overrides the base engine's own waterfall-
+            # discount mechanic.
+            # Integer#/ IS still needed though -- it's Opal/browser float
+            # division, not Ruby's -- bids go in $5 increments
+            # (MIN_BID_INCREMENT), so an odd multiple over $100 ($105,
+            # $115, ...) made this a literal fractional dollar in the
+            # browser (e.g. (105 - 100) / 2 == 2.5). §5.11: round
+            # fractions down.
+            capital = ((price - 100) / 2.0).floor
             @game.bank.spend(100 + capital, minor)
           end
 

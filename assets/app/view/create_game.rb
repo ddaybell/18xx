@@ -234,10 +234,22 @@ module View
       end
     end
 
+    def uncheck_children(sym)
+      return unless selected_game_or_variant
+
+      selected_game_or_variant::OPTIONAL_RULES.each do |o_r|
+        next unless o_r[:parent] == sym
+
+        @optional_rules.delete(o_r[:sym])
+        sync_rule(o_r[:sym])
+      end
+    end
+
     def toggle_optional_rule(sym)
       lambda do
         if (@optional_rules ||= []).include?(sym)
           @optional_rules.delete(sym)
+          uncheck_children(sym)
         else
           @optional_rules << sym
           uncheck_mutex(sym)
@@ -286,14 +298,16 @@ module View
         desc_text += " (#{parenthetical})" if parenthetical != ''
 
         label_text = "#{o_r[:short_name]}#{desc_text}"
-        h(:li, [render_input(
+        parent_checked = !o_r[:parent] || @optional_rules.include?(o_r[:parent])
+        li_props = o_r[:parent] ? { style: { paddingLeft: '1.5rem' } } : {}
+        h(:li, li_props, [render_input(
           label_text,
           type: 'checkbox',
           id: o_r[:sym],
           attrs: {
             value: o_r[:sym],
             checked: @optional_rules.include?(o_r[:sym]),
-            disabled: !@visible_optional_rules.find { |vo_r| vo_r[:sym] == o_r[:sym] },
+            disabled: !@visible_optional_rules.find { |vo_r| vo_r[:sym] == o_r[:sym] } || !parent_checked,
           },
           on: { input: toggle_optional_rule(o_r[:sym]) },
         )])

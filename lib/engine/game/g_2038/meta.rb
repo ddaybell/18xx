@@ -18,7 +18,7 @@ module Engine
           'Expansion Set Rules' => 'https://boardgamegeek.com/filepage/90180/2038-expansion-set',
         }.freeze
 
-        PLAYER_RANGE = [3, 6].freeze
+        PLAYER_RANGE = [2, 6].freeze
 
         OPTIONAL_RULES = [
           {
@@ -48,8 +48,39 @@ module Engine
                   'Game typically ends in Phase III.  Not compatible with the New Corporations or '\
                   'Variant Start Packet expansion rules.',
           },
+          {
+            sym: :optional_weaker_tsi,
+            short_name: 'Weaker TSI',
+            desc: 'Full Game only, reduces TSI par value.',
+          },
+          {
+            sym: :optional_weaker_tsi_89,
+            short_name: '$89 TSI par value',
+            parent: :optional_weaker_tsi,
+          },
+          {
+            sym: :optional_weaker_tsi_78,
+            short_name: '$78 TSI par value',
+            parent: :optional_weaker_tsi,
+          },
+          {
+            sym: :optional_weaker_tsi_67,
+            short_name: '$67 TSI par value',
+            parent: :optional_weaker_tsi,
+          },
+          {
+            sym: :optional_cutthroat_game,
+            short_name: 'Cutthroat Game',
+            desc: 'Play with only four Phase IV spaceships instead of five. Guarantees that at least one '\
+                  'Corporation must buy a Phase VI spaceship at full price (assuming the game enters Phase VI).',
+          },
         ].freeze
 
+        # Weaker TSI's three price options are a single printed choice ("choose
+        # one"), so checking any one of them unchecks the other two.
+        MUTEX_RULES = [
+          %i[optional_weaker_tsi_89 optional_weaker_tsi_78 optional_weaker_tsi_67],
+        ].freeze
       end
     end
   end

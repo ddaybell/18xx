@@ -107,7 +107,10 @@ module Engine
 
         def sift_up(i)
           while i.positive?
-            parent = (i - 1) / 2
+            # Integer#/ is Opal/browser float division, not Ruby's -- an
+            # even i (e.g. 2) made this 0.5 in the browser, and indexing
+            # @heap[0.5] crashes (undefined method `[]' for nil).
+            parent = ((i - 1).to_f / 2).floor
             break if @heap[parent][0] >= @heap[i][0]
 
             @heap[parent], @heap[i] = @heap[i], @heap[parent]

@@ -2,6 +2,7 @@
 
 require '../lib/storage'
 require '../lib/settings'
+require 'view/game/actionable'
 require 'view/game/axis'
 require 'view/game/hex'
 require 'view/game/hex_choice_popup'
@@ -16,8 +17,14 @@ module View
   module Game
     class Map < Snabberb::Component
       include Lib::Settings
-      # For G2038: route-line/ship-marker rendering.
-      include MapG2038
+      # For G2038: the route-line "click the last leg's line to undo it"
+      # target (see g_2038/map_g2038.rb's render_route_lines) needs
+      # process_action, which only Actionable provides. Every other need
+      # it brings along is either already declared here independently
+      # (:game, :user, :tile_selector, ...) or a harmless unused default
+      # for every other game, same as every other opt-in addition this
+      # session.
+      include Actionable
       needs :game, store: true
       needs :tile_selector, default: nil, store: true
       needs :selected_route, default: nil, store: true
@@ -29,6 +36,44 @@ module View
       needs :historical_laid_hexes, default: nil, store: true
       needs :historical_routes, default: [], store: true
       needs :map_zoom, default: nil, store: true
+      # G2038-specific "Show Last Route" data: an array of hex-id arrays,
+      # one per ship, straight from Game#last_route -- the standard
+      # :historical_routes store holds Engine::Route objects keyed on
+      # connection_hexes/halts/nodes, none of which G2038 ever populates
+      # (see MapControls#route_controls' own comment), so this is a
+      # parallel, G2038-only store MapControls fills in instead. No tile/
+      # highlight counterpart (:historical_laid_hexes) -- per the user,
+      # only the route lines themselves are wanted here, not a tile-reveal
+      # effect.
+      needs :historical_ship_routes, default: [], store: true
+      # Needed for dim_by_hex_validity? below -- Map doesn't otherwise
+      # track the viewing browser's own identity or hotseat status.
+      needs :user, store: true, default: nil
+      needs :game_data, default: {}, store: true
+
+      # Whether the CURRENT VIEWER should see hex-validity dimming at all
+      # (see Game#dim_only_active_player?'s own comment for why this
+      # exists -- a generic, any-game-may-opt-into-it hook, only ever
+      # consulted here, currently only set true by G2038). Hotseat has no
+      # real distinct "logged in as this seat" identity -- one browser
+      # plays every seat, so @user's real account id has nothing to do
+      # with the small sequential in-game player ids and would otherwise
+      # make this always false there -- hotseat gets the traditional
+      # dimming instead, same as any other opt-out case.
+      def dim_by_hex_validity?
+        return true unless @game.dim_only_active_player?
+
+        @game_data[:mode] == :hotseat || @game.active_players_id.include?(@user&.dig('id'))
+      end
+
+      # Memoized per render -- see View::Game::G2038::MapDecorations.
+      # last_route is the same G2038-specific signal MapControls#
+      # g2038_ship_routes? already gates on.
+      def g2038
+        return @g2038 if defined?(@g2038)
+
+        @g2038 = G2038::MapDecorations.new(self, @game, @start_pos, @historical_ship_routes) if @game.respond_to?(:last_route)
+      end
 
       EDGE_LENGTH = 50
       SIDE_TO_SIDE = 87
@@ -63,6 +108,17 @@ module View
         unless (laid_hexes = @historical_laid_hexes)
           laid_hexes = @game.round.respond_to?(:laid_hexes) ? @game.round.laid_hexes : []
         end
+        # For G2038: an active-entity claim ring can extend past its own
+        # hex's boundary (see Game#hex_has_active_claim?'s own comment) --
+        # move those hexes to the back first, same "render highest in z
+        # space" trick as the selected hex right below, so painting order
+        # doesn't clip the overflow against whichever neighbor happens to
+        # come later in @hexes otherwise.
+        if @game.respond_to?(:hex_has_active_claim?)
+          claimed, unclaimed = @hexes.partition { |hex| @game.hex_has_active_claim?(hex) }
+          @hexes = unclaimed + claimed
+        end
+
         selected_hex = @tile_selector&.hex
         # Move the selected hex to the back so they render highest in z space
         @hexes << @hexes.delete(selected_hex) if @hexes.include?(selected_hex)
@@ -228,8 +284,8 @@ module View
           h(:g, { attrs: { transform: "scale(#{@scale})" } }, [
             h(:g, { attrs: { id: 'map-hexes', transform: "translate(#{map_x} #{map_y})" } }, @hexes),
             # for G2038: draws route lines and the active ship marker
-            h(:g, { attrs: { transform: "translate(#{map_x} #{map_y})" } }, render_route_lines),
-            h(:g, { attrs: { transform: "translate(#{map_x} #{map_y})" } }, render_ship_marker),
+            h(:g, { attrs: { transform: "translate(#{map_x} #{map_y})" } }, g2038 ? g2038.render_route_lines : []),
+            h(:g, { attrs: { transform: "translate(#{map_x} #{map_y})" } }, g2038 ? g2038.render_ship_marker : []),
             h(Axis,
               cols: @cols,
               rows: @rows,

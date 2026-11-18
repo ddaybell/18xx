@@ -84,7 +84,7 @@ module Engine
           # share-based path below (dividends_for_entity, ultimately
           # num_shares_of) silently finds nothing to pay every single
           # time, even though per_share here IS the owner's whole payout
-          # (a minor's total_shares is 1).  Pay the owner directly instead 
+          # (a minor's total_shares is 1).  Pay the owner directly instead
           # of routing through the share-holder lookup that can never find them.
           def payout_shares(entity, per_share)
             if entity.minor?
@@ -128,7 +128,7 @@ module Engine
           # Mirrors 1862's own G1862::Step::Dividend#holder_for_corporation
           # exactly (always redirect to `entity` itself, unconditionally)
           # -- safe to do so *only* because Game#setup (see the
-          # optional_stock_repurchases block there) points every
+          # optional_stock_repurchases? block there) points every
           # full-capitalization corp's ipo_owner at the bank once this
           # rule is active, the same way 1862's own Game#convert_to_full!
           # does for its chartered companies. With that in place,
@@ -141,7 +141,7 @@ module Engine
           # iterates players + corporations, never @game.share_pool) --
           # no separate code needed for that half.
           def holder_for_corporation(entity)
-            return entity if @game.optional_stock_repurchases
+            return entity if @game.optional_stock_repurchases?
 
             super
           end
@@ -184,8 +184,12 @@ module Engine
           # ---------------------------------------------------------------------------
 
           # Split: owner gets half, treasury retains half. No price movement.
+          # Same "round up for the player" convention as `half` above --
+          # Integer#/ is Opal/browser float division (7 / 2 == 3.5 there,
+          # not Ruby's 3), so a plain `revenue / 2` silently produces a
+          # fractional dollar in the browser on any odd revenue.
           def split(entity, revenue)
-            player_share = revenue / 2
+            player_share = (revenue / 2.0).ceil
             { corporation: revenue - player_share, per_share: payout_per_share(entity, player_share) }
           end
 

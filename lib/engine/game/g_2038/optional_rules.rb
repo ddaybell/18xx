@@ -4,7 +4,7 @@ module Engine
   module Game
     module G2038
       module OptionalRules
-        def optional_short_game
+        def optional_short_game?
           @optional_rules&.include?(:optional_short_game)
         end
 
@@ -18,22 +18,52 @@ module Engine
         # spaceships" once OSR/MR are in play -- on top of the base
         # game's own counts, additive with the Short Game's -2 to '4/3'
         # (though the two can never actually combine in practice --
-        # optional_new_corporations and optional_short_game are mutually
+        # optional_new_corporations? and optional_short_game? are mutually
         # exclusive, enforced in setup).
         NEW_CORPORATIONS_EXTRA_SHIPS = { '5/4' => 1, '7/6' => 1, '9/7' => 3 }.freeze
 
         def num_trains(ship_data)
           count = super
-          count -= 2 if optional_short_game && ship_data[:name] == '4/3'
-          count += NEW_CORPORATIONS_EXTRA_SHIPS[ship_data[:name]] || 0 if optional_new_corporations
+          count -= 2 if optional_short_game? && ship_data[:name] == '4/3'
+          count += NEW_CORPORATIONS_EXTRA_SHIPS[ship_data[:name]] || 0 if optional_new_corporations?
           # §13d: "+2 Phase I ships" -- same double-sided-token pool as
           # '4/3'/'6/2' above, just added to '3/2''s own '5/1'-variant pool
           # instead of removed from it.
-          count += 2 if optional_variant_start_pack && ship_data[:name] == '3/2'
+          count += 2 if optional_variant_start_pack? && ship_data[:name] == '3/2'
+          # "Play with only four Phase IV spaceships instead of five" --
+          # guarantees someone must buy a Phase VI ship at full price.
+          count -= 1 if optional_cutthroat_game? && ship_data[:name] == '6/5'
           count
         end
 
-        def optional_variant_start_pack
+        def optional_cutthroat_game?
+          @optional_rules&.include?(:optional_cutthroat_game)
+        end
+
+        def optional_weaker_tsi?
+          @optional_rules&.include?(:optional_weaker_tsi)
+        end
+
+        # §13d: "Reduce TSI's initial stock price, par value and starting
+        # capital to (choose one): $89/890; 78/780; or 67/670" -- Full Game
+        # only (growth_corporations.rb's after_buy_company already forces
+        # $67 under the Short Game regardless, so these are simply ignored
+        # if somehow both were checked at once). Gated on the top-level
+        # optional_weaker_tsi? box, not just its three sub-options, since
+        # create_game.rb's own parent/child checkbox UI already disables
+        # (and clears) the sub-options whenever the parent is unchecked --
+        # this is just the matching engine-side guarantee.
+        def weaker_tsi_price
+          return nil unless optional_weaker_tsi?
+
+          return 89 if @optional_rules&.include?(:optional_weaker_tsi_89)
+          return 78 if @optional_rules&.include?(:optional_weaker_tsi_78)
+          return 67 if @optional_rules&.include?(:optional_weaker_tsi_67)
+
+          nil
+        end
+
+        def optional_variant_start_pack?
           @optional_rules&.include?(:optional_variant_start_pack)
         end
 
@@ -42,8 +72,8 @@ module Engine
         # the two Corporations... Use the optional rule Stock
         # Repurchases..."), so each of these returns true whether its own
         # box was checked directly or only the Start Packet's was.
-        def optional_new_corporations
-          optional_variant_start_pack || @optional_rules&.include?(:optional_new_corporations)
+        def optional_new_corporations?
+          optional_variant_start_pack? || @optional_rules&.include?(:optional_new_corporations)
         end
 
         # §13b: with OSR/MR in play, Phase VI ('9/7') needs *two* Phase V
@@ -58,7 +88,7 @@ module Engine
         # this step override at all) still offered a 9/5->9/7 Exchange
         # button regardless.
         def phase_vi_unlocked?
-          return true unless optional_new_corporations
+          return true unless optional_new_corporations?
 
           phase_v_bought = @depot.trains.count { |t| %w[7/6 9/5].include?(t.name) && t.owner != @depot }
           phase_v_bought >= 2
@@ -108,7 +138,7 @@ module Engine
         # resolves via Game's full ancestry regardless of which included
         # module actually owns the constant.
         def optional_hexes
-          return game_hexes unless optional_new_corporations
+          return game_hexes unless optional_new_corporations?
 
           hexes = game_hexes.dup
           hexes[:blue] = { hexes[:blue].keys.first - Game::OSR_MR_HOME_HEXES => '' }
@@ -120,19 +150,19 @@ module Engine
         # *reservation* from `reservation_corporations` (default:
         # `corporations`) -- and it does this *before* `setup` ever runs,
         # so OSR/MR are still sitting in `@corporations` at that point
-        # regardless of whether optional_new_corporations is on (the
+        # regardless of whether optional_new_corporations? is on (the
         # exclusion in `setup` happens later). Without this override,
         # B14/O13 correctly stay ordinary blank hexes (optional_hexes
         # above), but still end up with a stray, city-less reservation
         # label for OSR/MR floating over them.
         def reservation_corporations
-          return super if optional_new_corporations
+          return super if optional_new_corporations?
 
           super.reject { |c| %w[OSR MR].include?(c.id) }
         end
 
-        def optional_stock_repurchases
-          optional_variant_start_pack || @optional_rules&.include?(:optional_stock_repurchases)
+        def optional_stock_repurchases?
+          optional_variant_start_pack? || @optional_rules&.include?(:optional_stock_repurchases)
         end
       end
     end

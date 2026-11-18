@@ -64,12 +64,30 @@ module Engine
             !active_entities.empty?
           end
 
+          # Only the one entity actually being asked right now -- mirrors
+          # G1870::Step::Connection's own fix for the identical shape
+          # (several entities, owned by different players, all eligible
+          # at once, but only ever answered one at a time, in order).
+          # Round::Base#current_entity/can_act? (and, in turn, Game#
+          # active_players, which player.rb's own "whose turn" border
+          # reads) are keyed off active_entities[0] alone -- returning the
+          # *whole* candidate list here, as this used to, made every
+          # remaining independent's owner show as "acting" simultaneously
+          # the instant AL formed, even though only the first (clockwise
+          # from the AL president) can actually submit a choice. Found
+          # live: game 188, every player who owned a still-independent
+          # minor got the active-player highlight at once.
           def active_entities
-            return [] unless @game.asteroid_league_formed?
+            pending_entities.take(1)
+          end
 
-            candidates = @game.remaining_independents - @round.declined
-            candidates = candidates.reject { |m| @game.al_independents_ever_offered.include?(m.id) } if @round.stock?
-            sort_by_owner_rotation(candidates)
+          # Opt-in hook (see assets/app/view/game/entity_order.rb): the
+          # full upcoming queue, still shown in order for context even
+          # though only pending_entities.first is actually "active" above
+          # -- same split 1870's Connection module uses (active_entities
+          # vs override_entities) for its own destination-run queue.
+          def override_entities
+            pending_entities
           end
 
           def description
@@ -105,7 +123,15 @@ module Engine
 
           private
 
-          # Clockwise from the AL president, always. Stable sort keeps same-owner 
+          def pending_entities
+            return [] unless @game.asteroid_league_formed?
+
+            candidates = @game.remaining_independents - @round.declined
+            candidates = candidates.reject { |m| @game.al_independents_ever_offered.include?(m.id) } if @round.stock?
+            sort_by_owner_rotation(candidates)
+          end
+
+          # Clockwise from the AL president, always. Stable sort keeps same-owner
           # independents adjacent, so a player who owns 2+ gets asked about all of them
           # back to back before rotating to the next player.
           def sort_by_owner_rotation(candidates)

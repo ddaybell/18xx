@@ -40,7 +40,7 @@ module View
         # only stops WRAPPING, not overflow) -- found live in browser as
         # garbled overlapping header text that changing to nowrap alone
         # didn't fix, only changed the shape of.
-        ROW_GRID_COLUMNS_BASE = 'minmax(3rem, auto) 3.5rem 4.5rem minmax(4.5rem, auto)'
+        ROW_GRID_COLUMNS_BASE = 'minmax(3rem, auto) 3rem 4.5rem 3rem 3.5rem 3.5rem'
         ROW_GRID_COLUMNS_PROGRESS = 'minmax(5rem, auto) minmax(3.5rem, auto) minmax(3.5rem, auto)'
 
         # Ships/Explore/Mines/Revenue always show; Progress/Current Best/
@@ -974,17 +974,23 @@ module View
 
         # Per the user: a single button (between Accept and Auto) that
         # resets the whole idle-controls panel back to "nothing decided
-        # yet" in one click -- see Route#clear_all! for exactly what it
-        # discards (a safe, unexplored local flight, plus every still-
-        # unrun ship's own passive suggested-route preview) and, just as
-        # importantly, what it deliberately leaves alone (an explored
-        # partial route, and anything already submitted this OR).
+        # yet" in one click -- see Route#clear_all_action/clear_all! for
+        # exactly what it discards: every still-cancellable route
+        # submitted this OR (via Auto or a manual Submit -- cancelled for
+        # real, one process_action call that cascades through the rest
+        # via auto_actions, so a single Undo reverts the whole click), a
+        # safe/unexplored local flight, and every still-unrun ship's own
+        # passive suggested-route preview. What it deliberately leaves
+        # alone: an explored partial route, and any route an intervening
+        # Explore has already locked in (see cancellable_ships).
         def clear_all_button(step, entity)
           props = {
             key: 'clear_all',
             style: { marginRight: '0.3rem' },
             on: {
               click: lambda {
+                action = step.clear_all_action(entity)
+                process_action(action) if action
                 step.clear_all!(entity)
                 store(:game, @game)
               },
@@ -1027,9 +1033,11 @@ module View
           progress_label_style = label_style
           headers = [
             h(:div, { style: label_style }, 'Ships'),
-            h(:div, { style: label_style }, 'Explore'),
+            h(:div, { style: label_style }, 'Rev.'),
             h(:div, { style: label_style }, 'Mines'),
-            h(:div, { style: label_style.merge(textAlign: 'right') }, 'Revenue'),
+            h(:div, { style: label_style }, 'Hexes'),
+            h(:div, { style: label_style }, 'Refuel'),
+            h(:div, { style: label_style }, 'Exp.'),
           ]
           if show_progress_cols
             headers << h(:div, { style: progress_label_style }, 'Progress')
@@ -1146,9 +1154,11 @@ module View
           stats = row[:stats]
           children = [
             h(:div, { style: value_style }, [render_ship_name(row)]),
-            h(:div, { style: value_style }, stats ? stats[:explored].to_s : ''),
-            h(:div, { style: value_style }, stats ? mines_cell(stats) : ''),
             h(:div, { style: value_style.merge(textAlign: 'right') }, revenue_cell(row)),
+            h(:div, { style: value_style }, stats ? mines_cell(stats) : ''),
+            h(:div, { style: value_style }, stats ? "#{stats[:hexes]}/#{stats[:max_hexes]}" : ''),
+            h(:div, { style: value_style }, stats ? stats[:refuels].to_s : ''),
+            h(:div, { style: value_style }, stats ? stats[:explored].to_s : ''),
           ]
           # The three live Auto-run cells, attached to whichever ship's row
           # the final search is currently building (see render's own

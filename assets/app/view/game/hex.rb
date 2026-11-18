@@ -9,7 +9,7 @@ require 'view/game/runnable'
 require 'view/game/tile'
 require 'view/game/triangular_grid'
 require 'view/game/tile_unavailable'
-require 'view/game/hex_g2038'
+require 'view/game/g_2038/hex_g2038'
 
 module View
   module Game
@@ -17,9 +17,6 @@ module View
       include Actionable
       include Runnable
       include Lib::Settings
-      # For G2038: hex starfield/asteroid/ring-station/satellite art plus its
-      # BuyInfrastructure highlights.
-      include HexG2038
 
       SIZE = 100
 
@@ -47,6 +44,25 @@ module View
       needs :routes, default: []
       needs :start_pos, default: [1, 1]
       needs :highlight, default: false
+      # Same global store key map.rb/map_controls.rb already toggle --
+      # read directly here rather than threaded through as an explicit
+      # prop, since it's already store: true and available anywhere. Used
+      # by HexDecorations#refuel_teardrop_shape to treat "no stations
+      # exist yet" as an unconditional fact while previewing the starting
+      # map, rather than querying @game (the LIVE game, not the clone the
+      # preview's own hexes come from -- see Game#base_tile?'s own
+      # comment for the matching bug this same live-vs-clone mismatch
+      # caused there).
+      needs :show_starting_map, default: false, store: true
+
+      # Memoized per render -- see View::Game::G2038::HexDecorations.
+      # mine_tile? is a stable, G2038-only signal (confirmed via
+      # Game::Infrastructure) shared by nothing else.
+      def g2038
+        return @g2038 if defined?(@g2038)
+
+        @g2038 = G2038::HexDecorations.new(self, @game, @hex, @tile, @show_starting_map) if @game.respond_to?(:mine_tile?)
+      end
 
       def render
         return '' if @hex.empty
@@ -83,9 +99,11 @@ module View
         end
         children << hex_highlight if @highlight
         # For G2038: highlights G2038 infrastructure if it exists
-        children << existing_infrastructure_highlight if existing_base_hex?
-        children << existing_station_highlight if existing_station_hex?
-        suggested_pickup_entries.each { |entry| children << pickup_highlight_square(entry) }
+        if g2038
+          children << g2038.existing_infrastructure_highlight if g2038.existing_base_hex?
+          children << g2038.existing_station_highlight if g2038.existing_station_hex?
+          g2038.suggested_pickup_entries.each { |entry| children << g2038.pickup_highlight_square(entry) }
+        end
 
         if (color = @tile&.stripes&.color)
           stripes = Lib::Hex.stripe_points.map do |stripe|
@@ -101,30 +119,30 @@ module View
 
         # Opt-in hooks: a game can paint a hex with something richer than
         # a flat color, and/or draw extra art behind the tile's own city/
-        # revenue circle -- see hex_g2038.rb (starfield_defs/asteroid_rock/
-        # ring_station/satellite_icon and Game#hex_fill_override/
-        # mine_tile?/base_tile?/transshipment_hex? for how each gets
-        # triggered).
-        is_mine = @game.respond_to?(:mine_tile?) && @game.mine_tile?(@tile)
-        is_base = @game.respond_to?(:base_tile?) && @game.base_tile?(@tile)
-        is_transshipment = @game.respond_to?(:transshipment_hex?) && @game.transshipment_hex?(@hex.id)
-        wants_starfield = (@game.respond_to?(:hex_fill_override) && @game.hex_fill_override(@tile)) || is_transshipment
-        children << starfield_defs if wants_starfield
+        # revenue circle -- see g_2038/hex_g2038.rb (starfield_defs/
+        # asteroid_rock/ring_station/satellite_icon and Game#
+        # hex_fill_override/mine_tile?/base_tile?/transshipment_hex? for
+        # how each gets triggered).
+        is_mine = g2038 && @game.mine_tile?(@tile)
+        is_base = g2038 && @game.respond_to?(:base_tile?) && @game.base_tile?(@tile)
+        is_transshipment = g2038 && @game.respond_to?(:transshipment_hex?) && @game.transshipment_hex?(@hex.id)
+        wants_starfield = g2038 && ((@game.respond_to?(:hex_fill_override) && @game.hex_fill_override(@tile)) || is_transshipment)
+        children << g2038.starfield_defs if wants_starfield
         # Drawn before Tile below so the tile's own city/revenue
         # circle(s) -- in G2038 the printed mine value(s) -- paint on top of the
         # tile art (e.g. rocks).
         if is_mine
           if @game.mine_count(@tile) == 2 && @tile.cities.size == 2
             @tile.cities.each_with_index do |city, index|
-              children << asteroid_rock(scale: MINE_DOUBLE_SCALE, offset: mine_city_position(city),
-                                         key: "g2038-asteroid-#{index}")
+              children << g2038.asteroid_rock(scale: G2038::HexDecorations::MINE_DOUBLE_SCALE,
+                                              offset: g2038.mine_city_position(city), key: "g2038-asteroid-#{index}")
             end
           else
-            children << asteroid_rock(scale: MINE_SINGLE_SCALE, key: 'g2038-asteroid-0')
+            children << g2038.asteroid_rock(scale: G2038::HexDecorations::MINE_SINGLE_SCALE, key: 'g2038-asteroid-0')
           end
         end
-        children << ring_station if is_base
-        children << satellite_icon if is_transshipment
+        children << g2038.ring_station if is_base
+        children << g2038.satellite_icon if is_transshipment
 
         if @tile
           children << h(
@@ -143,7 +161,7 @@ module View
           key: @hex.id,
           attrs: {
             transform: transform,
-            fill: (wants_starfield ? "url(##{starfield_pattern_id})" : nil) ||
+            fill: (wants_starfield ? "url(##{g2038.starfield_pattern_id})" : nil) ||
               color_for(@tile&.color) || (Lib::Hex::COLOR[@tile&.color || 'white']),
             stroke: 'black',
           },
@@ -164,9 +182,7 @@ module View
         # the ambient stroke every other child (mine/revenue/type-letter
         # circles) would otherwise inherit from the wrapping <g> in
         # render.
-        if @game.respond_to?(:hex_border_color)
-          polygon_props[:attrs][:stroke] = @game.hex_border_color
-        end
+        polygon_props[:attrs][:stroke] = @game.hex_border_color if @game.respond_to?(:hex_border_color)
 
         invisible_edges = @tile.borders.select { |b| b.type.nil? }.map(&:edge) if @tile
         if invisible_edges&.any?
@@ -274,7 +290,7 @@ module View
             ))
           end
           if @actions.include?('choose') && step.choices.include?(@hex.id)
-            #For G2038: provides multi-choice popup if enabled
+            # For G2038: provides multi-choice popup if enabled
             if step.respond_to?(:hex_choice_popup) && @entity && (popup = step.hex_choice_popup(@entity, @hex))
               return store(:tile_selector, Lib::HexChoicePopup.new(@hex, popup, coordinates, root, @entity, @role))
             end
@@ -284,7 +300,7 @@ module View
               process_action(Engine::Action::Choose.new(@entity, choice: choice))
             end
 
-            #For 2038: checks consent for hex action
+            # For 2038: checks consent for hex action
             if (consenter = @game.consenter_for_choice(@entity, choice, step.choices[choice]))
               return check_consent(@entity, consenter, dispatch)
             end

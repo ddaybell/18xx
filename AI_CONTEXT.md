@@ -44,6 +44,7 @@ docker exec 18xx-rack-1 rubocop -a path/to/file.rb
 
 ## Code Conventions
 - Prefer `empty?` over `any?`/`none?` when no block is needed (cheaper)
+- **Opal integer division gotcha**: in Opal (browser), `Integer#/` is JavaScript float division (`7 / 2 == 3.5`), not Ruby's integer division. Write `(numerator.to_f / divisor).floor` or `.ceil` (never `.round`) wherever an integer result matters. MRI specs pass even when this is wrong, because MRI's `/` really is integer division — the bug only shows up in the browser. (Source: `tobymao/18xx` PR #12928, Chris Rericha's `AGENTS.md`.)
 - Game logic lives in `lib/engine/game/`; each game has its own subdirectory
 - Tab-specific UI controls (Map, Log, etc.) must only affect that tab; global preferences go in Profile
 - Keep changes minimal — no unnecessary abstractions, no over-engineering
@@ -90,6 +91,7 @@ Derived from a review of ~90 merged PRs' reviewer comments (2025-08 to 2026-08) 
 - Migration scripts must be validated against a real copy of the production DB (`import_game`, `strict: true`) before merge — spot-checking isn't enough
 - Shared/global definitions (e.g. `lib/engine/config/tile.rb`) should match conventions already established across other games to ease future migrations
 - Hard-to-reach game states still need fixture coverage; if truly unreachable, use the documented `SKIP_BETA_PROD` escape hatch rather than skipping silently
+- **Validating a shared-code change**: fixture specs only check each game's *final* result, which can hide a shared-code bug that cancels itself out by the end. For changes to shared code (especially performance work), also replay the affected titles' fixtures (and imported games if needed) on `master` and on the branch, dump the intermediate state the change touches after each action (graph output, routes, log), and diff the two runs — any difference must be intended. (Source: PR #12928.)
 
 ### PR hygiene
 - Split large games/features into a dependency-ordered chain of small, single-mechanic PRs
@@ -125,11 +127,23 @@ Derived by surveying the flagship games of three prolific, well-regarded impleme
 ### A caution, not a pattern to copy
 - One author's shipped code had no `private` sections in any `game.rb` (every method public) and another had leftover commented-out debug `puts` statements in a merged step file. Neither was flagged in the PR-review corpus, so the community evidently doesn't enforce either strongly — but both are worth avoiding on new work regardless: unnecessary public surface area and stray debug output are exactly the kind of thing the "no dead code" style rule above already covers.
 
+## UI-Driven Game Simulation (new titles / large changes)
+Engine-only specs can't catch actions the engine accepts but the UI never offers, or states the UI can't get out of — relevant to G2038 while it's still new. (Source: PR #12928.)
+1. **Enumerate UI options.** Write a helper that, for the current game state, mirrors the views (`assets/app/view/game_page.rb` and the round/map/train views under `assets/app/view/game/`) and returns exactly the actions their buttons, hexes and inputs would submit.
+2. **Play with a seeded bot.** Repeatedly pick one of those options at random (weighted by a profile, e.g. aggressive/conservative), process it, continue until the game ends. Seed both the game and the bot so runs are reproducible. Stop and report when no option is offered or every option is rejected.
+3. **Verify.** Replay saved games and assert every action was one the UI offered at that point.
+4. **Keep useful games as fixtures.**
+Run several games in parallel in the background (a full game can take minutes). The bot can't press Undo, so it can stall on flows that expect the player to undo — treat that as a bot limitation, not an engine bug, after checking.
+
 ## Windows-Specific Gotchas
 - `docker compose exec` panics — always use `docker exec 18xx-rack-1 <cmd>`
 - Files edited on Windows may have CRLF line endings; strip before rubocop: `sed -i 's/\r//'` inside Docker
 - `spec/fixtures` is a broken symlink on Windows — never reference it; use the spec files above
 - Git is configured with `core.autocrlf=true`; stored content is clean LF (CRLF warnings from rubocop are Windows artifacts)
+
+## Using the Live Site (18xx.games)
+- **Rate limit: at most one request per second, sequential, never parallel** — exceeding this gets the IP blocked by the site (confirmed the hard way: a parallel/burst batch job checking archived-game status got this environment's IP blocked for ~10+ hours). Use `sleep 1` (Chris's `AGENTS.md` says `sleep 2`, be conservative) between requests for any script hitting `18xx.games` or its API.
+- Fetch only what's needed: `/api/game?title=<title>&finished=<n>` lists games, `/api/game/<id>` returns one game's full JSON. `scripts/import_game.rb` copies a production game into the local DB. (Source: PR #12928.)
 
 ## Git Workflow
 - Always branch from `origin/master`: `git checkout -b <branch-name> origin/master`

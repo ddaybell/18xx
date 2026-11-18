@@ -1,18 +1,45 @@
 # frozen_string_literal: true
 
 require 'lib/settings'
-require 'view/game/g_2038/map_controls_g2038'
 
 module View
   module Game
     class MapControls < Snabberb::Component
       include Lib::Settings
-      # For G2038: "Show Last Route" support.
-      include MapControlsG2038
       needs :show_starting_map, default: false, store: true
       needs :historical_routes, default: [], store: true
       needs :historical_laid_hexes, default: nil, store: true
       needs :game, default: nil, store: true
+      # Opt-in "Show Last Route" data for games with no track (G2038's
+      # Game#last_route has no connection_hexes/halts/nodes to draw along,
+      # so Map#historical_ship_routes is the trackless equivalent of
+      # historical_routes above): an array of hex-id arrays, one per ship.
+      needs :historical_ship_routes, default: [], store: true
+
+      # Opt-in hook: whether the current game implements last_route at all
+      # (currently only G2038) -- gates both the "Show Last Route" controls
+      # below and Map#historical_ship_routes's own population.
+      def g2038_ship_routes?
+        @game.respond_to?(:last_route)
+      end
+
+      # "Show Last Route and Tile" draws colored segments along printed
+      # track lanes (Engine::Route#connection_hexes/#halts, both track-
+      # connectivity concepts) -- meaningless for a trackless game
+      # (HIDE_TILE_TRACK), which has no lanes to draw along at all.
+      def hide_tile_track?
+        @game.class.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
+      end
+
+      # G2038 equivalent of generate_last_route below -- one hex-id array
+      # per ship, straight from Game#last_route (already maintained for
+      # the ship-selector's own "Last" button), rather than
+      # connection_hexes/halts/nodes, which G2038 never populates. No
+      # "tile" counterpart -- per the user, only the route lines are
+      # wanted here, not last_laid_hexes' highlight-box effect.
+      def generate_last_ship_routes(entity)
+        entity.trains.filter_map { |train| @game.last_route(train)&.dig(:hexes) }
+      end
 
       def render
         children = [

@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
 require 'view/game/actionable'
-require 'view/game/g_2038/par_g2038'
+require 'view/game/g_2038/growth_exchange'
 
 module View
   module Game
     class Par < Snabberb::Component
       include Actionable
-      # For G2038: Growth Corp exchange buttons.
-      include ParG2038
 
       needs :corporation
       needs :corporation_to_par, default: nil, store: true
@@ -114,7 +112,9 @@ module View
         children = []
         children.concat(render_par)
         children.concat(render_par_for_others)
-        children.concat(render_growth_exchange)
+        if @step.respond_to?(:growth_exchange_choices)
+          children << h(G2038::GrowthExchange, step: @step, current_entity: @current_entity, corporation: @corporation)
+        end
         return h(:div, children) unless children.empty?
 
         nil

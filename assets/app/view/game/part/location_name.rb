@@ -1,14 +1,15 @@
 # frozen_string_literal: true
 
 require 'view/game/part/base'
-require 'view/game/g_2038/part/location_name_g2038'
 
 module View
   module Game
     module Part
       class LocationName < Base
-        # For G2038: name-placement/color hooks.
-        include LocationNameG2038
+        # Part::Base doesn't declare :game -- no Part needed it before these
+        # opt-in hooks did. default: nil keeps every existing h(LocationName,
+        # ...) call site working unchanged.
+        needs :game, store: true, default: nil
 
         LINE_HEIGHT = 15
         CHARACTER_WIDTH = 8
@@ -17,6 +18,39 @@ module View
 
         def edge_at_bottom?(edge)
           edge&.zero? || edge&.to_i == 5
+        end
+
+        # Opt-in hook: a game can set HIDE_TILE_TRACK to collapse its own
+        # preferred-location logic to a simpler single spot (currently only
+        # G2038, whose Lawson-style trackless single-city hexes don't need
+        # the usual multi-slot layout logic below).
+        def hide_tile_track?
+          @game&.class&.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
+        end
+
+        # Opt-in hook: .tile__text's own `fill: black` (main.css) suits
+        # every other game's light hex backgrounds, but is illegible on a
+        # dark starfield background (currently only G2038) -- an inline
+        # `style:` attribute is needed, not `attrs: { fill: }`, since a
+        # plain SVG presentation attribute loses to a stylesheet class
+        # rule; an inline style wins over both.
+        def location_name_text_props
+          if @game.respond_to?(:location_name_text_color) && (color = @game.location_name_text_color)
+            { style: { fill: color } }
+          else
+            {}
+          end
+        end
+
+        # Opt-in hook: pairs with location_name_text_props above -- a white
+        # background box behind white text would be illegible, so a game
+        # overriding the text color gets to override this too.
+        def location_name_background_color
+          if @game.respond_to?(:location_name_background_color) && (color = @game.location_name_background_color)
+            color
+          else
+            BACKGROUND_COLOR
+          end
         end
 
         def preferred_render_locations

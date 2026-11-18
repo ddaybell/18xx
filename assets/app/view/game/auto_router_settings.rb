@@ -11,14 +11,14 @@ module View
     class AutoRouterSettings < Form
       include Lib::Settings
       include UserManager
-      # Used by G2038 -- see auto_router_settings_g2038.rb.
-      include AutoRouterSettingsG2038
 
       needs :path_timeout, store: true, default: 30
       needs :route_timeout, store: true, default: 10
+      # Opt-in: only G2038 reads this today -- see auto_router_settings_g2038.rb.
+      needs :ranking_timeout, store: true, default: 4
 
       def render_content
-        return render_single_phase_content if @game.respond_to?(:autorouter)
+        return G2038::AutoRouterSettingsG2038.new(self).render_single_phase_content if @game.respond_to?(:autorouter)
 
         fields = [
           render_input(

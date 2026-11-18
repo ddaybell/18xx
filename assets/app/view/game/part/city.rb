@@ -11,8 +11,6 @@ module View
     module Part
       class City < Base
         include Runnable
-        # For G2038: mine/claim/delivery-bonus rendering.
-        include CityG2038
 
         SLOT_RADIUS = 25
         SLOT_DIAMETER = 2 * SLOT_RADIUS
@@ -20,6 +18,39 @@ module View
         needs :tile
         needs :city
         needs :show_revenue
+        # Part::Base doesn't declare :game -- no Part needed it before
+        # G2038's opt-in hooks did. default: nil keeps every existing
+        # h(City, ...) call site working unchanged.
+        needs :game, default: nil, store: true
+
+        # Opt-in hook: a game can hide a city part entirely -- e.g. G2038's
+        # H10, whose empty AL-reserved token slot would otherwise read as
+        # "a base is already here" well before the AL actually exists to
+        # occupy it (H10 doubles as both a transshipment point and the
+        # AL's future home base). The city only needs to render once that
+        # stops being true -- see Game#hide_city?/Game#transshipment_hex?.
+        def should_render?
+          return !@game.hide_city?(@tile&.hex, @city) if @game.respond_to?(:hide_city?)
+
+          super
+        end
+
+        # G2038's cities carry no track by design (see HIDE_TILE_TRACK in
+        # track.rb) -- the revenue-display gate below otherwise requires
+        # @city.paths.any?, a proxy for "connected to the track network"
+        # that's meaningless here and would hide every mine's revenue.
+        def trackless_game?
+          @game&.class&.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
+        end
+
+        # Memoized per render -- see View::Game::G2038::Part::CityDecorations.
+        # mine_claim_owner is a stable, G2038-only signal (confirmed via
+        # Game::Infrastructure) shared by nothing else.
+        def g2038
+          return @g2038 if defined?(@g2038)
+
+          @g2038 = G2038::Part::CityDecorations.new(self, @game, @tile, @city) if @game.respond_to?(:mine_claim_owner)
+        end
 
         # key is how many city slots are part of the city; value is the offset for
         # the first city slot
@@ -337,20 +368,23 @@ module View
           children << render_pass if @city.pass?
           children << render_box(slots.size) if slots.size.between?(2, 9)
           children.concat(slots)
-          children << render_mine_color if mine_ore
+          children << g2038.render_mine_color if g2038&.mine_ore
 
-          claim_owner = mine_claim_owner
-          children << render_claim_ring(claim_owner) if claim_owner
+          if g2038 && (claim_owner = g2038.mine_claim_owner)
+            children << g2038.render_claim_ring(claim_owner)
+          end
 
           if @show_revenue && ((@city && !@city.paths.empty?) || trackless_game?) && (revenue = render_revenue)
             children << revenue
           end
 
-          overlays = []
-          ore_letter = mine_ore_letter
-          overlays << render_ore_letter(ore_letter) if ore_letter
-          overlays << render_used_marker if mine_used?
-          children << upright(overlays) unless overlays.empty?
+          if g2038
+            overlays = []
+            ore_letter = g2038.mine_ore_letter
+            overlays << g2038.render_ore_letter(ore_letter) if ore_letter
+            overlays << g2038.render_used_marker if g2038.mine_used?
+            children << g2038.upright(overlays) unless overlays.empty?
+          end
 
           props = @city.solo? ? {} : { on: { click: -> { touch_node(@city) } } }
 
@@ -360,7 +394,7 @@ module View
         end
 
         def render_revenue
-          bonus_ore, bonus_amount = delivery_bonus
+          bonus_ore, bonus_amount = g2038&.delivery_bonus
 
           revenue = nil
           unless bonus_ore
@@ -369,7 +403,7 @@ module View
               if revenues.size > 1
                 return unless trackless_game?
 
-                current_phase_revenue
+                g2038.current_phase_revenue
               else
                 revenues.first
               end
@@ -417,7 +451,7 @@ module View
 
           revert_angle = render_location[:angle] + rotation
           content = if bonus_ore
-                      render_delivery_bonus(bonus_ore, bonus_amount)
+                      g2038.render_delivery_bonus(bonus_ore, bonus_amount)
                     else
                       h(Part::SingleRevenue,
                         revenue: revenue,
@@ -429,7 +463,8 @@ module View
           # base's own center than a plain revenue circle would.
           content_displacement =
             if bonus_ore
-              displacement + (displacement.negative? ? -DELIVERY_BONUS_RADIAL_SHIFT : DELIVERY_BONUS_RADIAL_SHIFT)
+              shift = G2038::Part::CityDecorations::DELIVERY_BONUS_RADIAL_SHIFT
+              displacement + (displacement.negative? ? -shift : shift)
             else
               displacement
             end

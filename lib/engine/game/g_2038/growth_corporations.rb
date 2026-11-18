@@ -17,7 +17,7 @@ module Engine
         # capitalization = :incremental as ITS OWN result -- see below), and
         # that path is already gated to Phases 2-3 here regardless of any
         # group-partition timeline. No separate check needed under
-        # optional_variant_start_pack.
+        # optional_variant_start_pack?.
         def growth_conversion_allowed?
           %w[2 3].include?(phase.name) && !@asteroid_league_formed
         end
@@ -50,7 +50,7 @@ module Engine
           # before any corp's eventual capitalization is knowable -- every
           # corp still shows :full at that point (this one only becomes
           # :incremental right here, via conversion), so under
-          # optional_stock_repurchases it was already swept into the bank
+          # optional_stock_repurchases? it was already swept into the bank
           # along with every genuinely full-cap corp. Reclaim it now: this
           # corp hasn't parred/floated yet, so nothing but the bank could
           # possibly hold any of its shares at this exact moment -- safe
@@ -150,14 +150,14 @@ module Engine
         end
 
         def after_buy_company(player, company, _price)
-          target_price = optional_short_game ? 67 : 100
+          target_price = optional_short_game? ? 67 : (weaker_tsi_price || 100)
           share_price = stock_market.par_prices.find { |pp| pp.price == target_price }
 
           # NOTE: This should only ever be TSI
           abilities(company, :shares) do |ability|
             ability.shares.each do |share|
               if share.president
-                if optional_variant_start_pack
+                if optional_variant_start_pack?
                   # §13d: "TSI's par price is player-chosen" -- and must be
                   # chosen immediately, interrupting the auction right when
                   # ST is bought (confirmed with the user -- waiting for
@@ -172,8 +172,8 @@ module Engine
                   # G2038::Step::CompanyPendingPar (this game's own
                   # subclass, fixing the base version's `corporation.
                   # shares.first` to `ipo_shares.first` -- needed since
-                  # optional_variant_start_pack always implies
-                  # optional_stock_repurchases, which relocates an unparred
+                  # optional_variant_start_pack? always implies
+                  # optional_stock_repurchases?, which relocates an unparred
                   # full-cap corp's shares to the bank at setup), which is
                   # positioned *before* WaterfallAuction in that array so
                   # it wins Round::Base#process_action's first-blocking-
@@ -199,7 +199,7 @@ module Engine
         # or variant -- its president's cert only ever comes from ST's own
         # `shares` ability (see after_buy_company above), either an
         # immediate fixed-price grant (baseline) or a forced player choice
-        # via G2038::Step::CompanyPendingPar (optional_variant_start_pack).
+        # via G2038::Step::CompanyPendingPar (optional_variant_start_pack?).
         # Without this, nothing stops any player from cash-parring TSI
         # directly through the ordinary par UI before ST is even bought --
         # a real gap in both modes.
@@ -220,7 +220,7 @@ module Engine
           if corporation.id == 'TSI'
             pending = round.respond_to?(:companies_pending_par) &&
               round.companies_pending_par.find { |c| c.id == 'ST' }
-            return false unless pending && pending.owner == parrer
+            return false if !pending || pending.owner != parrer
           end
 
           super

@@ -23,8 +23,13 @@ module Engine
         # claim_limit) -- lets callers read that data the same way for any
         # operating entity, without needing to know or care which array it
         # actually lives in.
+        # Memoized -- called from claim_limit and autorouter_support on
+        # every entity check, and Entities::MINORS + Entities::CORPORATIONS
+        # was otherwise reallocating and linearly rescanning both arrays
+        # on every single call.
         def entity_data(entity)
-          (Entities::MINORS + Entities::CORPORATIONS).find { |c| c[:sym] == entity.id }
+          @entity_data_by_sym ||= (Entities::MINORS + Entities::CORPORATIONS).to_h { |c| [c[:sym], c] }
+          @entity_data_by_sym[entity.id]
         end
 
         # Cost of the *next* base/station this entity places, indexed by how
@@ -130,10 +135,11 @@ module Engine
         # and mark, not silently drop.
         def claim_details(entity)
           @mine_state.flat_map do |hex_id, state|
-            state[:mines].select { |m| m[:owner] == entity.id }
-                          .map do |m|
+            state[:mines].each_with_index.select { |m, _idx| m[:owner] == entity.id }
+                          .map do |m, idx|
               {
                 hex_id: hex_id,
+                mine_idx: idx,
                 ore: m[:ore],
                 value: m[:claimed],
                 used: m[:used],
@@ -189,7 +195,7 @@ module Engine
             height: '33px',
           }
 
-          rows = claim_ore_upgrade_amounts.sort.map do |ore, amount|
+          rows = claim_ore_upgrade_amounts.sort_by { |_ore, amount| amount }.map do |ore, amount|
             [
               {
                 text: CLAIM_UPGRADE_ORE_NAMES[ore],
@@ -323,6 +329,23 @@ module Engine
           best.keys.map { |id| hex_by_id(id) }
         end
 
+        # Opt-in hook for assets/app/view/game/map.rb: does this hex hold a
+        # mine claimed by the entity whose turn it is? That claim's ring
+        # (View::Game::G2038::Part::City#render_claim_ring) doubles in
+        # size for exactly this case, big enough to extend past this
+        # hex's own boundary into a neighbor's -- and since SVG siblings
+        # paint strictly in array order regardless of geometric overlap,
+        # an unexplored (opaque) neighbor painted later than this hex
+        # would otherwise clip that overflow. Map#render uses this to
+        # push the hex to the back of its own render list instead, the
+        # same "render highest in z space" trick it already uses for the
+        # tile-selector's own hex.
+        def hex_has_active_claim?(hex)
+          return false unless (entity = round.current_entity)
+
+          @mine_state.dig(hex.id, :mines)&.any? { |m| m[:owner] == entity.id } || false
+        end
+
         # A base may be placed on any explored hex with no claimed mine (§7.4,
         # §7.41). Bases and mines are mutually exclusive on a hex -- laying
         # the base tile replaces whatever mines were there.
@@ -403,7 +426,7 @@ module Engine
         # otherwise-ordinary, unexplored blue hex) even with the rule off.
         def starting_base_hexes
           @starting_base_hexes ||= (Entities::CORPORATIONS + Entities::MINORS).map { |data| data[:coordinates] }
-          return @starting_base_hexes if optional_new_corporations
+          return @starting_base_hexes if optional_new_corporations?
 
           @starting_base_hexes - OSR_MR_HOME_HEXES
         end
@@ -419,7 +442,7 @@ module Engine
         OSR_MR_HOME_HEXES = %w[B14 O13].freeze
 
         def station_eligible?(hex)
-          return false if optional_new_corporations && OSR_MR_HOME_HEXES.include?(hex.id)
+          return false if optional_new_corporations? && OSR_MR_HOME_HEXES.include?(hex.id)
           return true unless starting_base_hexes.include?(hex.id)
           return hex.all_neighbors.size == 6 unless Array(@al_corporation.coordinates).include?(hex.id)
 

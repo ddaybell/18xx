@@ -167,12 +167,10 @@ module Engine
         # Returns half_cash so the caller's own log line can distinguish
         # a split payout from a keep-everything one.
         def pay_independent_merge_cash!(minor, owner, first_opportunity, recipient)
-          owner_gets_half = first_opportunity || (!optional_short_game && !minor.trains.empty?)
+          owner_gets_half = first_opportunity || (!optional_short_game? && !minor.trains.empty?)
           # .round guards against a non-integer minor.cash -- money here
           # should always be whole dollars, but this is defensive in case
-          # some earlier turn's arithmetic left a fractional residue (found
-          # live in browser: a stale $72.5 in a log line, from an odd
-          # total run through plain float division somewhere upstream).
+          # some earlier turn's arithmetic left a fractional residue.
           # Confirmed with the user: the owner's share rounds UP, the
           # recipient's share rounds DOWN -- the opposite of what this
           # used to do (owner got floor(total/2), recipient got the ceil
@@ -181,8 +179,16 @@ module Engine
           # relying on whatever's left in minor.cash for the recipient's
           # share, so a leftover fractional cent can never carry over via
           # the second spend.
+          #
+          # (total_cash + 1) / 2 is plain Integer#/ -- Opal/browser float
+          # division, not Ruby's -- so this line was itself the actual
+          # source of a stale $72.5 found live in browser (total_cash ==
+          # 144: (144 + 1) / 2 == 72.5 in the browser, 72 in Ruby/MRI
+          # specs, which is why this passed every spec while still broken
+          # live). The .to_f/.floor below replicates Ruby's own integer-
+          # division result exactly, in both environments.
           total_cash = minor.cash.round
-          half_cash = owner_gets_half ? (total_cash + 1) / 2 : 0
+          half_cash = owner_gets_half ? ((total_cash + 1).to_f / 2).floor : 0
           remaining_cash = total_cash - half_cash
           # check_positive: false on top of the .positive? guards themselves
           # (not just belt-and-suspenders) -- matches Step::Dividend#
@@ -255,15 +261,15 @@ module Engine
         end
 
         def log_independent_al_merge!(minor, owner, half_cash)
-          if half_cash.positive?
-            @log << "#{minor.name} merges into #{@al_corporation.name}; #{owner.name} receives "\
-                    "#{format_currency(half_cash)} and a 10% #{@al_corporation.name} share "\
-                    "(#{@al_corporation.name} keeps the other half of #{minor.name}'s treasury)"
-          else
-            @log << "#{minor.name} merges into #{@al_corporation.name}; #{owner.name} receives "\
-                    "a 10% #{@al_corporation.name} share (#{@al_corporation.name} keeps all of "\
-                    "#{minor.name}'s treasury)"
-          end
+          @log << if half_cash.positive?
+                    "#{minor.name} merges into #{@al_corporation.name}; #{owner.name} receives "\
+                      "#{format_currency(half_cash)} and a 10% #{@al_corporation.name} share "\
+                      "(#{@al_corporation.name} keeps the other half of #{minor.name}'s treasury)"
+                  else
+                    "#{minor.name} merges into #{@al_corporation.name}; #{owner.name} receives "\
+                      "a 10% #{@al_corporation.name} share (#{@al_corporation.name} keeps all of "\
+                      "#{minor.name}'s treasury)"
+                  end
         end
       end
     end

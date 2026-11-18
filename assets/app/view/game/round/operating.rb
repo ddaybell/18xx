@@ -59,7 +59,7 @@ module View
           left << h(ReassignTrains) if @current_actions.include?('reassign_trains')
           left << h(DoubleHeadTrains) if @current_actions.include?('double_head_trains')
           left << h(CombinedTrains) if @current_actions.include?('combined_trains')
-          left << h(View::Game::G2038::ShipSelector) if @current_actions.include?('choose')
+          left << h(View::Game::G2038::ShipSelector) if @step.respond_to?(:ship_rows)
           left << h(Choose) if @current_actions.include?('choose')
           left << h(BuyToken, entity: entity) if @current_actions.include?('buy_token')
 

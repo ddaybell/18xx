@@ -10,8 +10,8 @@ module Engine
         # share from `corporation.ipo_shares` rather than `corporation.
         # shares` -- the same fix (and same reason) as G2038::Step::
         # BuySellParShares's own can_buy_any_from_ipo?/can_ipo_any?
-        # overrides: `optional_stock_repurchases` (always implied by
-        # `optional_variant_start_pack`, this step's only real use here --
+        # overrides: `optional_stock_repurchases?` (always implied by
+        # `optional_variant_start_pack?`, this step's only real use here --
         # see Game#after_buy_company's ST handling) relocates every
         # not-yet-parred full-cap corp's shares to the bank at setup,
         # leaving `corporation.shares` (shares literally owned by the

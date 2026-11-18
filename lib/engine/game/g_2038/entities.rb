@@ -126,8 +126,14 @@ module Engine
             max_price: 120,
             abilities: [
               { type: 'shares', shares: 'TSI_3' },
-              { type: 'generic', subtype: 'free_base', description: 'Free base, any explored hex',
-                when: 'owning_corp_or_turn', count: 1, remove: '5' },
+              {
+                type: 'generic',
+                subtype: 'free_base',
+                description: 'Free base, any explored hex',
+                when: 'owning_corp_or_turn',
+                count: 1,
+                remove: '5',
+              },
             ],
             color: '#40b1b9',
           },
@@ -143,8 +149,14 @@ module Engine
             max_price: 140,
             abilities: [
               { type: 'shares', shares: 'TSI_2' },
-              { type: 'generic', subtype: 'free_station', description: 'Free refueling station, in range',
-                when: 'owning_corp_or_turn', count: 1, remove: '5' },
+              {
+                type: 'generic',
+                subtype: 'free_station',
+                description: 'Free refueling station, in range',
+                when: 'owning_corp_or_turn',
+                count: 1,
+                remove: '5',
+              },
             ],
             color: '#40b1b9',
           },
@@ -159,8 +171,14 @@ module Engine
             max_price: 160,
             abilities: [
               { type: 'shares', shares: 'TSI_1' },
-              { type: 'generic', subtype: 'free_claim', description: 'Free claim, in range',
-                when: 'owning_corp_or_turn', count: 1, remove: '5' },
+              {
+                type: 'generic',
+                subtype: 'free_claim',
+                description: 'Free claim, in range',
+                when: 'owning_corp_or_turn',
+                count: 1,
+                remove: '5',
+              },
             ],
             color: '#40b1b9',
           },
@@ -189,7 +207,7 @@ module Engine
               { type: 'close', when: 'bought_train', corporation: 'AL' },
               { type: 'no_buy' },
             ],
-            
+
             color: '#fa3d58',
           },
         ].freeze
@@ -354,8 +372,10 @@ module Engine
             own_delivery_bonus_amount: 10,
             type: :group_b,
             abilities: [
-              { type: 'description',
-                description: '+$10 per Rare delivered' },
+              {
+                type: 'description',
+                description: '+$10 per Rare delivered',
+              },
             ],
           },
           {
@@ -380,8 +400,10 @@ module Engine
             own_delivery_bonus_amount: 10,
             type: :group_b,
             abilities: [
-              { type: 'description',
-                description: '+$10 per Nickel delivered' },
+              {
+                type: 'description',
+                description: '+$10 per Nickel delivered',
+              },
             ],
           },
           {
@@ -398,7 +420,7 @@ module Engine
             # once at load time, before any specific game's optional rules
             # are known; Game#claim_limit calls this with itself once that
             # IS known.
-            claim_limit: ->(game) { game.optional_new_corporations ? 8 : 6 },
+            claim_limit: ->(game) { game.optional_new_corporations? ? 8 : 6 },
             # home base information
             coordinates: 'A1',
             color: '#f66936',
@@ -412,8 +434,10 @@ module Engine
             own_delivery_bonus_amount: 10,
             type: :group_b,
             abilities: [
-              { type: 'description',
-                description: '+$10 per Ice delivered' },
+              {
+                type: 'description',
+                description: '+$10 per Ice delivered',
+              },
             ],
           },
           {
@@ -438,8 +462,10 @@ module Engine
             own_delivery_bonus_amount: 10,
             type: :group_c,
             abilities: [
-              { type: 'description',
-                description: '+$10 per Nickel delivered' },
+              {
+                type: 'description',
+                description: '+$10 per Nickel delivered',
+              },
             ],
           },
           {
@@ -454,7 +480,7 @@ module Engine
             # home base information
             coordinates: 'F18',
             color: '#FFDB58',
-            # This is the delivery bonus available to all deliveries made to this hex, 
+            # This is the delivery bonus available to all deliveries made to this hex,
             # regardless of which entity makes the delivery.
             delivery_bonus: :n,
             delivery_bonus_amount: 10,
@@ -464,8 +490,10 @@ module Engine
             own_delivery_bonus_amount: 10,
             type: :group_c,
             abilities: [
-              { type: 'description',
-                description: '+$10 per Nickel delivered' },
+              {
+                type: 'description',
+                description: '+$10 per Nickel delivered',
+              },
             ],
           },
           {
@@ -492,7 +520,7 @@ module Engine
             delivery_bonus_amount: 10,
             # §13b: OSR's entities.rb entry exists regardless of optional
             # rules, but its home hex (B14) isn't a real base without
-            # optional_new_corporations -- this flags that its home
+            # optional_new_corporations? -- this flags that its home
             # delivery_bonus above must NOT be paid otherwise (see
             # Game#home_delivery_bonuses), since a Full Game without the
             # expansion would otherwise silently pay it to anyone
@@ -503,8 +531,10 @@ module Engine
             claimed_delivery_bonus_amount: 10,
             type: :group_c,
             abilities: [
-              { type: 'description',
-                description: '+$10 per claimed mine delivery' },
+              {
+                type: 'description',
+                description: '+$10 per claimed mine delivery',
+              },
             ],
           },
           {

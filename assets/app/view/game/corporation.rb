@@ -4,6 +4,7 @@ require 'lib/settings'
 require 'view/game/actionable'
 require 'view/game/alternate_corporations'
 require 'view/game/companies'
+require 'view/game/g_2038/alternate_corporations_g2038'
 
 module View
   module Game
@@ -102,11 +103,11 @@ module View
         end
 
         # Guards `children` from a bare nil input.
-        if @game.respond_to?(:claim_hexes) && (claims_display = render_claims_display)
-          children << claims_display
-        end
         if @game.respond_to?(:growth_corp_pilots) && (pilot_info = render_pilot_info)
           children << pilot_info
+        end
+        if g2038 && (claims_display = g2038.render_claims_display)
+          children << claims_display
         end
 
         if @corporation.owner
@@ -332,8 +333,8 @@ module View
 
         # for G2038, allows charters to display infrastructure tokens.
         tokens_body =
-          if @game.respond_to?(:base_hexes) && @corporation.corporation?
-            infrastructure_tokens_body
+          if g2038 && @corporation.corporation?
+            g2038.infrastructure_tokens_body
           else
             default_tokens_body
           end
@@ -357,6 +358,15 @@ module View
           [logo_for_user(token), token.used, token_text]
         end
         tokens_body.sort_by! { |t| t[1] ? 1 : -1 }
+      end
+
+      # Memoized per render -- nil for every non-G2038 game (claim_hexes/
+      # base_hexes always come as a pair for this game, so either hook name
+      # alone is a safe "is this G2038" signal).
+      def g2038
+        return @g2038 if defined?(@g2038)
+
+        @g2038 = View::Game::G2038::AlternateCorporationsG2038.new(self, @game, @corporation) if @game.respond_to?(:claim_hexes)
       end
 
       def render_token_column(logo, used, text)
