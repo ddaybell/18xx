@@ -30,21 +30,33 @@
 
 ## PR Index
 
+**Status vocabulary** (the single source of truth for where each PR stands in
+the review pipeline -- checkboxes below only mean "implemented locally",
+never "merged"; look here for actual review/merge state):
+- `not yet submitted` -- coded and verified locally, no PR opened yet
+- `open, awaiting review` -- PR pushed, no reviewer activity yet
+- `open, in review` -- a reviewer has left comments or requested changes
+- `approved, awaiting merge` -- approved, just needs a maintainer to merge
+- `merged`
+
 | PR | GitHub # | Status | Scope |
 |---|---|---|---|
-| PR0 | — | merged | Initial game scaffold (meta, market, phases, trains, map/entity stubs) |
-| PR1 | #12703 | merged | Phase 1: entity data fixes + map data fixes |
-| PR2 | #12806 | open | Phase 2 auction + Phase 3a–3b OR foundation |
-| PR3 | — | pending PR2 | Phase 3c–3e dividend + route steps |
-| PR4 | — | in progress | Phase 4 routing mechanics + mine revenue model |
-| PR5 | — | planned | Phase 5 infrastructure (claims/bases/refueling) + Phase 4c–4j routing completion |
-| PR6 | — | planned | Phase 6 TSI probe + Phase 4i undo logging |
-| PR7 | — | implemented, needs browser verification | Phase 7 independent special abilities |
-| PR7b | — | implemented, needs browser verification | Phase 7b corporation home-base delivery bonuses |
-| PR8 | — | implemented, needs browser verification | Phase 8 Growth Corp formation |
-| PR9 | — | implemented, needs browser verification | Phase 9 Asteroid League formation + independent mergers |
-| PR10 | — | implemented, needs browser verification | Phase 10 private company post-auction abilities |
-| PR11 | — | implemented, needs browser verification | Phase 11 endgame & scoring |
+| PR0 | [#12666](https://github.com/tobymao/18xx/pull/12666) | merged | Data layer: map/entities/logos |
+| PR1 | [#12703](https://github.com/tobymao/18xx/pull/12703) | merged | Operating round wiring + buy-train step |
+| PR2 | [#12806](https://github.com/tobymao/18xx/pull/12806) | open, awaiting review | Phase 3c–3d: dividend step for corporations and independents (just updated 2026-11-18 with an Opal float-division fix to `split()`; no review activity yet) |
+| PR-artwork | [#12863](https://github.com/tobymao/18xx/pull/12863) | approved, awaiting merge | Phase 12: logo/token art for independents and corporations (approved by philcampeau and lucastleite, CI green) |
+| ~~PR3~~ | — | retired | Original Phase 3c–3e dividend+route-step slice; dividend absorbed into PR2 above, route-step stubs it also carried are obsolete (predate the trackless/choose-per-hex redesign) |
+| PR4 | [#13141](https://github.com/tobymao/18xx/pull/13141) | open, awaiting review | Phase 4 core routing: choose-per-hex movement, mid-route exploration, the hex-anchored Explore/Fly Over popup (two shared-file hooks: `hex.rb`/`map.rb`). Built fresh against current `master` in a separate worktree/branch, not copied from the dev branch's fuller version -- scoped down to just movement/exploration/transshipment-delivery, deferring pickups/refueling/multi-ship selection/independent redraw powers/live route-line rendering to later PRs. Submitted 2026-11-19; not independently execution-tested this session (see PR body's own test-plan note) -- relying on this repo's CI and reviewer feedback as the first real checkpoint. |
+| PR5 | — | not yet submitted | Phase 5 infrastructure (claims/bases/refueling) + Phase 4c–4j routing completion (pickups, refueling, multi-ship selection) |
+| PR6 | — | not yet submitted | Phase 6 TSI probe |
+| PR7 | — | not yet submitted | Phase 7 independent special abilities (verified live 2026-08-02) |
+| PR7b | — | not yet submitted | Phase 7b corporation home-base delivery bonuses |
+| PR8 | — | not yet submitted | Phase 8 Growth Corp formation (verified live 2026-08-02) |
+| PR9 | — | not yet submitted | Phase 9 Asteroid League formation + independent mergers (verified live 2026-08-02) |
+| PR10 | — | not yet submitted | Phase 10 private company post-auction abilities (verified live 2026-08-02) |
+| PR11 | — | not yet submitted | Phase 11 endgame & scoring (verified live 2026-08-12) |
+
+Four earlier, now-superseded PR attempts exist on GitHub and should stay closed, not be confused with the PRx tags above: [#12654](https://github.com/tobymao/18xx/pull/12654)/[#12656](https://github.com/tobymao/18xx/pull/12656) (abandoned initial approach, incl. the `:invisible` track type later replaced by the trackless redesign), [#12704](https://github.com/tobymao/18xx/pull/12704) (superseded by PR2/#12806 above), [#12762](https://github.com/tobymao/18xx/pull/12762) (the obsolete PR3 route-step stub mentioned above).
 
 ---
 
