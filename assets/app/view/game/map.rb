@@ -5,7 +5,7 @@ require '../lib/settings'
 require 'view/game/actionable'
 require 'view/game/axis'
 require 'view/game/hex'
-require 'view/game/hex_choice_popup'
+require 'view/game/hex_choice_selector'
 require 'view/game/g_2038/explore_lock_prompt'
 require 'view/game/g_2038/map_g2038'
 require 'view/game/map_legend'
@@ -152,24 +152,19 @@ module View
             if @tile_selector.is_a?(Lib::TokenSelector)
               # 1882
               h(TokenSelector, zoom: map_zoom)
-            elsif @tile_selector.is_a?(Lib::HexChoicePopup)
+            elsif @tile_selector.is_a?(Lib::HexChoiceSelector)
               width, height = map_size
-              # Same edge-proximity idea TileSelector already uses below
-              # (right_col/top_row/bottom_row) so the popup flips to
-              # extend toward the opposite side instead of overflowing
-              # past the map's own boundary.
-              h(HexChoicePopup, zoom: map_zoom,
-                                near_left_edge: left < HexChoicePopup::EDGE_MARGIN,
-                                near_right_edge: width - left < HexChoicePopup::EDGE_MARGIN,
-                                near_top_edge: top < HexChoicePopup::EDGE_MARGIN,
-                                near_bottom_edge: height - top < HexChoicePopup::BOTTOM_EDGE_MARGIN)
+              h(HexChoiceSelector, zoom: map_zoom,
+                                   near_left_edge: left < HexChoiceSelector::EDGE_MARGIN,
+                                   near_right_edge: width - left < HexChoiceSelector::EDGE_MARGIN,
+                                   near_top_edge: top < HexChoiceSelector::EDGE_MARGIN,
+                                   near_bottom_edge: height - top < HexChoiceSelector::BOTTOM_EDGE_MARGIN)
             elsif @tile_selector.is_a?(Lib::ExploreLockPrompt)
               width, height = map_size
-              # Same edge-proximity technique as the HexChoicePopup branch
-              # above -- this prompt intentionally keeps its own copy of
+              # This prompt intentionally keeps its own copy of
               # EDGE_MARGIN/BOTTOM_EDGE_MARGIN (see its own file) rather
-              # than referencing HexChoicePopup's, so it has no load-order
-              # dependency on that unrelated component.
+              # than referencing HexChoiceSelector's, so it has no
+              # load-order dependency on that unrelated component.
               g2038_prompt = View::Game::G2038::ExploreLockPrompt
               h(g2038_prompt,
                 zoom: map_zoom,
@@ -226,7 +221,7 @@ module View
               # content regardless of DOM order) -- that's an incidental
               # guarantee, not a real one, and every other selector this
               # wrapper hosts (TokenSelector/TileConfirmation/TileSelector,
-              # plus G2038's HexChoicePopup) needs to stay on top of the
+              # plus G2038's HexChoiceSelector) needs to stay on top of the
               # map's own content no matter what that content does. Same
               # order of magnitude as confirm.rb/flash.rb's app-wide modals
               # (10000) but a notch below them, since this is scoped to the

@@ -14,7 +14,7 @@ module View
       # which silently abandons the click with no way back except
       # clicking the hex again. This popup instead sits right where the
       # Explore button was clicked (same positioning technique as
-      # HexChoicePopup, same EDGE_MARGIN/BOTTOM_EDGE_MARGIN values kept in
+      # HexChoiceSelector, same EDGE_MARGIN/BOTTOM_EDGE_MARGIN values kept in
       # sync with it by hand rather than referenced, so this file has no
       # load-order dependency on that one) and persists until the player
       # picks one of its own two buttons -- no timeout at all.
@@ -38,7 +38,7 @@ module View
                         style: { color: '#FFFFFF', fontSize: '14px', marginBottom: '4px' },
                       }, '⚠️ Exploring locks in every route already submitted this turn.')
 
-          # No per-button drop-shadow here (unlike HexChoicePopup's
+          # No per-button drop-shadow here (unlike HexChoiceSelector's
           # buttons) -- the card itself now casts one as a whole (see
           # style[:filter] below), so a second shadow per button would
           # just double up on top of that.
@@ -77,7 +77,7 @@ module View
             padding: '8px',
             filter: 'drop-shadow(3px 3px 4px #888)',
           }
-          # Same edge-flip technique HexChoicePopup uses -- grows back
+          # Same edge-flip technique HexChoiceSelector uses -- grows back
           # toward the hex (and the rest of the map) instead of past
           # whichever boundary it's close to.
           if @near_right_edge
@@ -97,7 +97,7 @@ module View
         end
 
         # Confirm actually explores -- runs the dispatch callback
-        # View::Game::HexChoicePopup#choose had already built (the real
+        # View::Game::HexChoiceSelector#choose had already built (the real
         # process_action, plus its own follow-up-popup chaining) before
         # this prompt intercepted it. Cleared first so a slow double-click
         # can't re-fire it. Also marks the warning acknowledged (see

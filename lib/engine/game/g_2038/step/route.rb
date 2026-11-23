@@ -275,7 +275,7 @@ module Engine
           # Hex-based choices (launch/move/explore/flyover/pickup/Lucky's
           # tile redraw) are fully redundant with clicking the relevant hex
           # directly on the map (`available_hex` above, and
-          # `hex_choice_popup` below for the explore/flyover/multi-pickup/
+          # `hex_choices` below for the explore/flyover/multi-pickup/
           # tile-redraw disambiguation). FINISH is deliberately left out
           # too, even though it has no map-click equivalent of its own.
           # ShipSelector's Submit button now covers it (see submit_ready?/
@@ -587,7 +587,7 @@ module Engine
           # available), else an explore/flyover decision -- for a direct
           # neighbor (1 hop) or a shortcut destination (2+ hops) alike;
           # only the choice keys differ (see shortcut_choices/compute_choices).
-          def hex_choice_popup(entity, hex)
+          def hex_choices(entity, hex)
             return nil unless entity == current_entity
 
             if @trace.empty?
@@ -617,7 +617,7 @@ module Engine
             popup.empty? ? nil : popup
           end
 
-          # Opt-in hook for assets/app/view/game/hex_choice_popup.rb: does
+          # Opt-in hook for assets/app/view/game/hex_choice_selector.rb: does
           # choosing `choice` right now actually explore `hex` (rather
           # than Skip/Flyover, which leaves it unrevealed), while at
           # least one *other*, already-submitted route from earlier this
@@ -627,7 +627,7 @@ module Engine
           # own comment on why an explored route can't be safely reopened
           # around) -- worth a confirmation before it happens, rather than
           # the player only discovering it afterward via ship_rows' own
-          # greyed-out `locked` rows. Reuses hex_choice_popup's own
+          # greyed-out `locked` rows. Reuses hex_choices' own
           # Explore/Skip labeling rather than re-deriving the explore-key/
           # flyover-key prefix logic (SHORTCUT_EXPLORE swaps which of the
           # two is the bare hex-id alias depending on whether the hex is a
@@ -641,7 +641,7 @@ module Engine
             # not_yet_locked_ships' own comment).
             return false if not_yet_locked_ships.empty?
 
-            hex_choice_popup(entity, hex)&.[](choice) == 'Explore'
+            hex_choices(entity, hex)&.[](choice) == 'Explore'
           end
 
           # Public: click handler for the ExploreLockPrompt's own Confirm
@@ -659,7 +659,7 @@ module Engine
 
           # Mid-flight version of the same "force a popup if undo would
           # un-reveal a tile, otherwise let a single option dispatch
-          # directly" rule hex_choice_popup's finished-route branch above
+          # directly" rule hex_choices' finished-route branch above
           # uses -- current_hex_action_choices already folds Undo in
           # alongside pickup/transship, so this only needs to decide
           # *when* that combined set needs a popup instead of a direct
@@ -685,7 +685,7 @@ module Engine
             matches.merge(UNDO_HEX => undo_hex_label)
           end
 
-          # Opt-in hook for assets/app/view/game/hex_choice_popup.rb: chain
+          # Opt-in hook for assets/app/view/game/hex_choice_selector.rb: chain
           # straight into a follow-up popup ONLY for an independent whose
           # own explore-time choice is guaranteed to open a second popup
           # (the tile-redraw choice) right after, with nothing left for
@@ -702,7 +702,7 @@ module Engine
           # inherited chain_explore_popup pilot gets the same immediate
           # chain a bare independent does -- entity.id alone would only
           # ever match the independent itself.
-          def chain_hex_choice_popup?(entity, hex, choice)
+          def chain_hex_choices?(entity, hex, choice)
             # A shortcut/transshipment jump's explore choice is
             # "shortcut_explore_#{hex.id}", not the bare hex.id a direct
             # adjacent move offers (see explore_key above) -- both still
@@ -720,7 +720,7 @@ module Engine
           end
 
           # For the tile choice popup (e.g. Lucky's tile choice), shown
-          # as real tile art (see assets/app/view/game/hex_choice_popup.rb,
+          # as real tile art (see assets/app/view/game/hex_choice_selector.rb,
           # which renders an Engine::Tile value as a clickable preview instead
           # of a text button) rather than the plain-text redraw_choices used
           # as this hex's bare-id alias (see compute_choices) -- that alias only
@@ -1091,7 +1091,7 @@ module Engine
           # finish_route empties @trace) the endpoint of the route it
           # just flew, once finished but not yet submitted. nil once
           # nothing's pending at all. Shared by available_hex/
-          # hex_choice_popup/compute_choices/dispatch_choice! so all four
+          # hex_choices/compute_choices/dispatch_choice! so all four
           # always agree on the exact same hex.
           def undo_click_hex
             return @trace.last unless @trace.empty?
@@ -1103,7 +1103,7 @@ module Engine
 
           # Public: whether undoing the last hex would take back an
           # exploration -- the deciding factor for whether a click needs
-          # a confirmation popup first (see hex_choice_popup/pickup_popup)
+          # a confirmation popup first (see hex_choices/pickup_popup)
           # rather than acting immediately.
           def undoing_last_hex_reveals_tile?
             return false unless @rollback
@@ -1725,7 +1725,7 @@ module Engine
           # hex is different: that's exactly where a hand-flown route
           # would stop and decide whether to explore too, so it gets the
           # same Explore/Fly-over choice a direct neighbor would (see
-          # hex_choice_popup), just at the shortcut's own MP cost. Adjacent
+          # hex_choices), just at the shortcut's own MP cost. Adjacent
           # hexes are excluded here since the normal per-hex choice
           # already covers them.
           def shortcut_choices(entity, ship)
@@ -1833,7 +1833,7 @@ module Engine
           # process_choose's validity check either way). The bare-hex-id
           # alias exists only so hex.rb's dispatch gate
           # (`choices.include?(@hex.id)`) finds a key to look for a popup
-          # at all -- never dispatched directly, since hex_choice_popup
+          # at all -- never dispatched directly, since hex_choices
           # always returns non-nil here (redraw_tile_popup, the real
           # tile-image UI; these text labels no longer render anywhere).
           def redraw_choices
@@ -1977,7 +1977,7 @@ module Engine
               # only ever becomes visible in the double-mine hex-choice
               # popup (a single available pickup is aliased and dispatched
               # directly with no button shown at all, see
-              # alias_current_hex_pickup!'s comment). HexChoicePopup
+              # alias_current_hex_pickup!'s comment). HexChoiceSelector
               # renders this as the same ore-colored icon used for
               # claiming a mine (Step::BuyInfrastructure#claim_choices),
               # so the two double-mine popups look consistent instead of
@@ -2032,7 +2032,7 @@ module Engine
           # true. Alias it here so clicking the ship's own hex can trigger a
           # pickup, same trick BuyInfrastructure uses for its claim hexes.
           # With exactly one action available this value is what actually
-          # gets dispatched; with 2+ it's a placeholder `hex_choice_popup`
+          # gets dispatched; with 2+ it's a placeholder `hex_choices`
           # always intercepts ahead of -- a mine/transshipment hex that's
           # ALSO a station (REFUEL) is exactly the 2+ case this popup
           # already handles, not a new one.

@@ -44,7 +44,7 @@ module View
         # become active in its place -- but its already-finished routes
         # should stay visible until the turn actually ends. Both hooks are
         # gated the same opt-in way (only G2038's Route step defines them
-        # today), matching the convention used by ShipSelector/HexChoicePopup.
+        # today), matching the convention used by ShipSelector/HexChoiceSelector.
         def render_route_lines
           step = @game.round.steps.find { |s| s.respond_to?(:live_route_hexes) }
           return [] if !step && @historical_ship_routes.empty?

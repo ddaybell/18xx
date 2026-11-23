@@ -8,18 +8,12 @@ require 'view/game/hex'
 
 module View
   module Game
-    # Generic hex-anchored popup rendering one button per staged choice, plus
-    # a dismiss button, fanned radially around the hex -- same positioning
-    # technique (Lib::RadialSelector) as TileSelector's tile-upgrade fan and
-    # TokenSelector's token ring, per crericha's review on PR4 (18xx#13141).
-    # Cancel sits at the hex's own center; the real choices fan out around
-    # it. A choice's value is a text label (rendered as a button, as
-    # before), an Engine::Tile (rendered as a small clickable tile preview
-    # instead), or a {ore:, value:} Hash (rendered as a small ore-colored
-    # icon -- G2038's double-mine claim popup, so the two mines on a hex
-    # read at a glance instead of needing to parse an abbreviated text
-    # label).
-    class HexChoicePopup < Snabberb::Component
+    # Hex-anchored popup of staged choices, fanned radially around the hex
+    # (Lib::RadialSelector) with Cancel at its center -- the third selector
+    # alongside TileSelector and TokenSelector. A choice value is a text
+    # label (a button), an Engine::Tile (a small clickable tile preview),
+    # or a {ore:, value:} Hash (G2038's double-mine claim icon).
+    class HexChoiceSelector < Snabberb::Component
       include Actionable
       include Lib::RadialSelector
       include Lib::Settings
@@ -44,29 +38,30 @@ module View
       needs :near_top_edge, default: false
       needs :near_bottom_edge, default: false
 
-      # Roughly matches how far a fanned-out choice can land from the hex,
-      # so the edge flip below kicks in before a choice would actually
-      # render past the map's own boundary, not right at the point it
-      # already has.
       EDGE_MARGIN = 260
-
-      # Same idea as EDGE_MARGIN but for the vertical axis.
       BOTTOM_EDGE_MARGIN = 220
 
-      # How far from the hex's center each non-Cancel choice fans out.
-      DISTANCE = 55
+      # Fan radius at 1x zoom. Wide enough that the widest expected label
+      # ("Transshipment ($XX)") and Cancel, landing on the same horizontal
+      # line, don't overlap -- centers need ~89px of separation plus a gap.
+      BASE_DISTANCE = 100
 
-      # Caps how many degrees apart two adjacent fanned choices land.
-      # Without this, a 2-choice half-circle fan (e.g. Explore/Skip next
-      # to a map edge) gets stretched edge-to-edge by list_coordinates'
-      # own `angle = angle * count / (count - 1)` adjustment -- for
-      # count == 2 that doubles a 180-degree half-circle back to a full
-      # 360, landing the two choices diametrically opposite (literally
-      # top and bottom of the hex) instead of close together on the side
-      # the fan opened toward. Capping the real spread per choice first
-      # (same technique TileSelector's own coordinates_for uses via its
-      # MAX_ANGLE) keeps that stretch modest regardless of choice count.
+      BASE_FONT_SIZE = 14
+      BASE_PAD_V = 4
+      BASE_PAD_H = 8
+
+      # Caps the spread between adjacent choices -- without it,
+      # list_coordinates' own angle stretch doubles a 2-choice half-circle
+      # fan into a full circle, landing them diametrically opposite instead
+      # of together.
       MAX_ANGLE_PER_CHOICE = 70
+
+      # Same scale/technique as View::Game::TileSelector's own preview
+      # hexes, just a single static tile rather than a radial fan of them.
+      PREVIEW_SCALE = 0.3
+      BASE_PREVIEW_SIZE = 60
+
+      BASE_CLAIM_CIRCLE_SIZE = 28
 
       def render
         angle, rotation = calc_angle_rotation(@near_left_edge, @near_right_edge, @near_top_edge, @near_bottom_edge)
@@ -76,7 +71,7 @@ module View
           rotation += (angle - capped) / 2.0 if angle < FULL_CIRCLE
           angle = capped
         end
-        distance = DISTANCE * @zoom
+        distance = BASE_DISTANCE * @zoom
 
         choices = list_coordinates(@tile_selector.choices.to_a, distance, 0, angle, rotation).map do |pair, left, bottom|
           choice, label = pair
@@ -103,8 +98,8 @@ module View
             style: fanned_style(left, bottom).merge(
               backgroundColor: default_for(:green),
               color: '#FFFFFF',
-              fontSize: '14px',
-              padding: '4px 8px',
+              fontSize: "#{BASE_FONT_SIZE * @zoom}px",
+              padding: "#{BASE_PAD_V * @zoom}px #{BASE_PAD_H * @zoom}px",
               whiteSpace: 'nowrap',
             ),
             on: { click: -> { choose(choice) } },
@@ -117,8 +112,8 @@ module View
             style: fanned_style(0, 0).merge(
               backgroundColor: default_for(:red),
               color: '#FFFFFF',
-              fontSize: '14px',
-              padding: '4px 8px',
+              fontSize: "#{BASE_FONT_SIZE * @zoom}px",
+              padding: "#{BASE_PAD_V * @zoom}px #{BASE_PAD_H * @zoom}px",
             ),
             on: { click: -> { store(:tile_selector, nil) } },
           })
@@ -127,14 +122,14 @@ module View
       # Common positioning for every fanned choice (including Cancel, at
       # distance 0): absolutely placed at the computed (left, bottom), then
       # centered on that point regardless of the element's own rendered
-      # size -- a button sized to its text, a 60px tile preview, and a
-      # 1.8rem claim icon all land on their fan position the same way.
+      # size -- a button sized to its text, a tile preview, and a claim
+      # icon all land on their fan position the same way.
       def fanned_style(left, bottom)
         {
           position: 'absolute',
           left: "#{left}px",
           bottom: "#{bottom}px",
-          transform: 'translate(-50%, -50%)',
+          transform: 'translate(-50%, 50%)',
           display: 'inline-block',
           width: 'max-content',
           cursor: 'pointer',
@@ -142,13 +137,8 @@ module View
         }
       end
 
-      # Same scale/technique as View::Game::TileSelector's own preview
-      # hexes (the standard tile-upgrade fan), just a single static tile
-      # rather than a radial fan of them.
-      PREVIEW_SCALE = 0.3
-      PREVIEW_SIZE = 60
-
       def render_tile_choice(choice, tile, left, bottom)
+        preview_size = BASE_PREVIEW_SIZE * @zoom
         preview_hex = Engine::Hex.new('A1', layout: @tile_selector.hex.layout, tile: tile)
         wrapper_props = {
           style: fanned_style(left, bottom),
@@ -156,8 +146,8 @@ module View
         }
 
         h(:div, wrapper_props, [
-          h(:svg, { style: { width: "#{PREVIEW_SIZE}px", height: "#{PREVIEW_SIZE}px" } }, [
-            h(:g, { attrs: { transform: "scale(#{PREVIEW_SCALE})" } }, [
+          h(:svg, { style: { width: "#{preview_size}px", height: "#{preview_size}px" } }, [
+            h(:g, { attrs: { transform: "scale(#{PREVIEW_SCALE * @zoom})" } }, [
               h(Hex, hex: preview_hex, clickable: false, role: :tile_selector),
             ]),
           ]),
@@ -170,19 +160,21 @@ module View
       # claims, so a player who's seen one recognizes the other.
       def render_claim_choice(choice, data, left, bottom)
         color = tinted_mine_color(data[:ore], data[:value])
+        circle_size = BASE_CLAIM_CIRCLE_SIZE * @zoom
         wrapper_props = {
           style: fanned_style(left, bottom).merge(textAlign: 'center'),
           on: { click: -> { choose(choice) } },
         }
         circle_props = {
           style: {
-            width: '1.8rem',
-            height: '1.8rem',
+            width: "#{circle_size}px",
+            height: "#{circle_size}px",
             margin: '0 auto',
             borderRadius: '50%',
             background: color,
             color: '#000000',
             fontWeight: 'bold',
+            fontSize: "#{BASE_FONT_SIZE * @zoom}px",
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -190,7 +182,8 @@ module View
         }
 
         h(:div, wrapper_props, [
-          h('div.no_margin', { style: { color: '#FFFFFF', fontSize: '14px' } }, @game.format_currency(data[:value])),
+          h('div.no_margin', { style: { color: '#FFFFFF', fontSize: "#{BASE_FONT_SIZE * @zoom}px" } },
+            @game.format_currency(data[:value])),
           h(:div, circle_props, data[:ore].to_s.upcase),
         ])
       end
@@ -199,7 +192,6 @@ module View
         entity = @tile_selector.entity
         hex = @tile_selector.hex
         coordinates = [@tile_selector.x, @tile_selector.y]
-        root = @tile_selector.root
         role = @tile_selector.role
         step = @game.round.active_step
         label = @tile_selector.choices[choice]
@@ -208,53 +200,29 @@ module View
           # Only chain straight into a follow-up popup when the step opts
           # in for this specific choice (e.g. G2038's Lucky: choosing
           # "Explore" here triggers the tile-redraw power, which needs its
-          # own popup with no extra click). Other transitions -- e.g.
-          # picking a tile and then having ore available to pick up -- are
-          # deliberately left requiring a fresh click on the hex, since
-          # they're a separate decision, not a continuation of this one.
-          should_chain = step.respond_to?(:chain_hex_choice_popup?) && step.chain_hex_choice_popup?(entity, hex, choice)
+          # own popup with no extra click).
+          should_chain = step.respond_to?(:chain_hex_choices?) && step.chain_hex_choices?(entity, hex, choice)
 
           store(:tile_selector, nil, skip: true)
           process_action(Engine::Action::Choose.new(entity, choice: choice))
 
           next unless should_chain
-          next unless step.respond_to?(:hex_choice_popup)
+          next unless step.respond_to?(:hex_choices)
 
-          next_popup = step.hex_choice_popup(entity, hex)
+          next_popup = step.hex_choices(entity, hex)
           next unless next_popup
 
-          store(:tile_selector, Lib::HexChoicePopup.new(hex, next_popup, coordinates, root, entity, role))
+          store(:tile_selector, Lib::HexChoiceSelector.new(hex, next_popup, coordinates, entity, role))
         end
 
         if step.respond_to?(:explore_would_lock_other_routes?) &&
            step.explore_would_lock_other_routes?(entity, hex, choice)
-          # Replaces the Explore/Skip popup itself with the warning
-          # (rather than leaving it open alongside a separate prompt) --
-          # one decision at a time, same as before. Per the user: this
-          # warning is consequential enough (exploring locks in every
-          # route already submitted this OR) that it shouldn't share the
-          # generic top-banner Confirm's fixed 3-second auto-dismiss,
-          # which silently abandoned the click with no way back except
-          # re-clicking the hex -- so it's its own hex-anchored prompt
-          # (View::Game::G2038::ExploreLockPrompt) with no timeout at
-          # all, persisting until Confirm or Cancel Explore is clicked.
-          # `dispatch` (the real process_action, plus its own follow-up-
-          # popup chaining) is carried into that prompt rather than run
-          # now, exactly as it was carried into the old banner's own
-          # `click:` callback.
-          #
-          # No `skip: true` here, unlike the old banner version -- that
-          # one paired its tile_selector clear with a SECOND store call
-          # (confirm_opts, skip: false) that did the actual re-render;
-          # this store is the only one happening here, so it has to
-          # trigger the render itself. Without it, this component (still
-          # showing the Explore/Skip popup) stayed mounted with a stale
-          # view of @tile_selector until some LATER, unrelated re-render
-          # finally caught up and called .choices on what was by then a
-          # Lib::ExploreLockPrompt -- found live: crashed the page with
-          # "undefined method `choices'" the moment anything else
-          # triggered a render.
-          store(:tile_selector, Lib::ExploreLockPrompt.new(hex, coordinates, root, entity, role, dispatch))
+          # Replaces the Explore/Skip popup itself with the warning, same
+          # as the old top-banner Confirm this prompt replaced -- see
+          # View::Game::G2038::ExploreLockPrompt. `dispatch` (the real
+          # process_action, plus its own chaining) is carried into that
+          # prompt rather than run now.
+          store(:tile_selector, Lib::ExploreLockPrompt.new(hex, coordinates, entity, role, dispatch))
         elsif (consenter = @game.consenter_for_choice(entity, choice, label))
           check_consent(entity, consenter, dispatch)
         else

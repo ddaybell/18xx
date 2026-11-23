@@ -33,7 +33,7 @@ module View
           #
           # Detached preview tiles (e.g. Lucky's tile-choice popup, and the
           # standard TileSelector fan) are wrapped in a throwaway Engine::Hex
-          # always named 'A1' (see hex_choice_popup.rb/tile_selector.rb) --
+          # always named 'A1' (see hex_choices.rb/tile_selector.rb) --
           # which coincidentally collides with a real corp's home coordinate
           # in this game (Mars Mining). The same identity check the shared
           # engine already uses to detect a fake preview hex (Game::Base

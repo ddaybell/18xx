@@ -50,7 +50,7 @@ module Engine
             !choices_for_hex(entity, hex).empty?
           end
 
-          def hex_choice_popup(entity, hex)
+          def hex_choices(entity, hex)
             return nil unless entity == current_entity
 
             matches = choices_for_hex(entity, hex)
@@ -182,7 +182,7 @@ module Engine
 
           # Translate a bare-hex-id alias back to the real prefixed choice
           # key process_choose dispatches on. Non-alias choices (already a
-          # real prefixed key from a hex_choice_popup submission) pass
+          # real prefixed key from a hex_choices submission) pass
           # through unchanged.
           def unalias(entity, choice)
             return choice if choice.start_with?("#{FREE}base_", "#{FREE}station_", "#{FREE}claim_")

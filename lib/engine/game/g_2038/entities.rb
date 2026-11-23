@@ -100,7 +100,7 @@ module Engine
             # always triggers a guaranteed follow-up popup (the tile
             # redraw choice) with nothing else for the player to decide in
             # between -- see Game#chain_explore_popup_sources/
-            # Step::Route#chain_hex_choice_popup?.
+            # Step::Route#chain_hex_choices?.
             chain_explore_popup: true,
             # This entity's second draw is a genuine player choice (which
             # of the two tiles to place) -- unlike IF/DH, whose second

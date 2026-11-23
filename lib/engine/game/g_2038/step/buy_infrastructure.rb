@@ -141,7 +141,7 @@ module Engine
           # so hex.rb's existing `step.choices.include?(@hex.id)` dispatch
           # fires it directly with no popup needed -- same mechanism every
           # other game's hex clicks already use, no engine/view changes.
-          def hex_choice_popup(entity, hex)
+          def hex_choices(entity, hex)
             return nil unless entity == current_entity
 
             matches = choices_for_hex(entity, hex)
@@ -154,7 +154,7 @@ module Engine
           # rather than needing the popup above to disambiguate. Only
           # meaningful during the claim sub-phase -- a base/station hex's
           # single choice is already reachable via the ordinary bare-hex-id
-          # click (hex_choice_popup only ever triggers for 2+ claim matches).
+          # click (hex_choices only ever triggers for 2+ claim matches).
           def city_choice(entity, city)
             return nil unless entity == current_entity && @sub_phase[entity] == :claim
 
@@ -166,7 +166,7 @@ module Engine
           # button list (see assets/app/view/game/choose.rb). Base/station/
           # claim choices are all hex-based and fully redundant with
           # clicking the relevant hex directly (available_hex/
-          # hex_choice_popup above) -- only the phase-skip choices have no
+          # hex_choices above) -- only the phase-skip choices have no
           # map equivalent, so those are all that's left here.
           #
           # assets/app/view/game/round/operating.rb renders `h(Choose)` with
@@ -248,7 +248,7 @@ module Engine
           # choice) this is the real, directly-dispatchable action. For an
           # ambiguous hex (2+ choices, e.g. a double-mine's two unclaimed
           # ores) it's a placeholder that's never actually dispatched --
-          # `hex_choice_popup` always intercepts first when there's more
+          # `hex_choices` always intercepts first when there's more
           # than one match (see that method) -- but it still has to be
           # present, or hex.rb's dispatch gate never lets it ask for the
           # popup at all.
@@ -271,7 +271,7 @@ module Engine
           # Translate a bare-hex-id alias (see `alias_unambiguous_hexes!`)
           # back to the real prefixed choice key process_choose dispatches
           # on. Non-alias choices (skip_base/skip_station, or an already-
-          # prefixed key from a hex_choice_popup submission) pass through
+          # prefixed key from a hex_choices submission) pass through
           # unchanged.
           def unalias(entity, choice)
             return choice if choice == SKIP_BASE || choice == SKIP_STATION ||
@@ -349,7 +349,7 @@ module Engine
                 next if mine[:owner]
 
                 # A structured {ore:, value:} label rather than text --
-                # HexChoicePopup renders this as an ore-colored icon (same
+                # HexChoiceSelector renders this as an ore-colored icon (same
                 # visual language as the charter's claim display,
                 # View::Game::Corporation#render_claim_column) instead of
                 # a text button, so the two mines on a double-mine hex

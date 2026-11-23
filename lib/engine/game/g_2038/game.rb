@@ -946,7 +946,7 @@ module Engine
 
         # Independent/pilot source ids whose own explore-time tile choice
         # always chains straight into a guaranteed follow-up popup (see
-        # Step::Route#chain_hex_choice_popup?'s own comment for why this
+        # Step::Route#chain_hex_choices?'s own comment for why this
         # is only ever safe for a power shaped exactly like Lucky's) --
         # built from entities.rb's chain_explore_popup field, same
         # each_with_object pattern as company_ore_bonuses, so a future
@@ -1979,7 +1979,7 @@ module Engine
           # unconditionally sets `tile.hex = self` for whatever tile it's
           # constructed with, so `tile.hex.tile == tile` is trivially true
           # for ANY throwaway preview hex too, not just a real cloned/live
-          # one. HexChoicePopup#render_tile_choice (Lucky's tile-redraw
+          # one. HexChoiceSelector#render_tile_choice (Lucky's tile-redraw
           # popup, the standard TileSelector fan) wraps a real candidate
           # tile in exactly such a throwaway `Engine::Hex.new('A1', tile:
           # tile)` for rendering -- and 'A1' coincidentally IS a real
