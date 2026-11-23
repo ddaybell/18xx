@@ -606,6 +606,7 @@ module Engine
 
             return redraw_tile_popup if @pending_redraw && hex == @trace.last
             return pickup_popup if hex == @trace.last
+            return nil unless needs_exploration?(hex)
 
             neighbor = @trace.last.neighbors.value?(hex)
             explore_key = neighbor ? hex.id : "#{SHORTCUT_EXPLORE}#{hex.id}"
@@ -613,7 +614,7 @@ module Engine
             popup = {}
             popup[explore_key] = 'Explore' if choices.key?(explore_key)
             popup[flyover_key] = 'Skip' if choices.key?(flyover_key)
-            popup.size > 1 ? popup : nil
+            popup.empty? ? nil : popup
           end
 
           # Opt-in hook for assets/app/view/game/hex_choice_popup.rb: does

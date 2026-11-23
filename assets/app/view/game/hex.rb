@@ -289,23 +289,29 @@ module View
               token_type: next_token
             ))
           end
-          if @actions.include?('choose') && step.choices.include?(@hex.id)
-            # For G2038: provides multi-choice popup if enabled
+          if @actions.include?('choose')
+            # For G2038: a hex can have only a prefixed choice available
+            # (e.g. "Skip" when "Explore" is priced out of reach) with no
+            # bare @hex.id entry at all -- checked before the plain-choice
+            # branch below, not after, so that case isn't gated out before
+            # it ever reaches this hook.
             if step.respond_to?(:hex_choice_popup) && @entity && (popup = step.hex_choice_popup(@entity, @hex))
               return store(:tile_selector, Lib::HexChoicePopup.new(@hex, popup, coordinates, root, @entity, @role))
             end
 
-            choice = @hex.id
-            dispatch = lambda do
-              process_action(Engine::Action::Choose.new(@entity, choice: choice))
-            end
+            if step.choices.include?(@hex.id)
+              choice = @hex.id
+              dispatch = lambda do
+                process_action(Engine::Action::Choose.new(@entity, choice: choice))
+              end
 
-            # For 2038: checks consent for hex action
-            if (consenter = @game.consenter_for_choice(@entity, choice, step.choices[choice]))
-              return check_consent(@entity, consenter, dispatch)
-            end
+              # For 2038: checks consent for hex action
+              if (consenter = @game.consenter_for_choice(@entity, choice, step.choices[choice]))
+                return check_consent(@entity, consenter, dispatch)
+              end
 
-            return dispatch.call
+              return dispatch.call
+            end
           end
           return unless @actions.include?('lay_tile')
 
