@@ -8,11 +8,7 @@ module View
         # overlays, claim ownership rings, and home-delivery-bonus badges.
         # Delegate object (not a mixin) so View::Game::Part::City's own
         # method table never carries these -- instantiated once per City
-        # render via City#g2038, handed the host for h/rotation_for_layout/
-        # angle_for_layout/render_location access (all public on Part::Base,
-        # which City already extends) plus @tile/@city/@game. Every call
-        # site in city.rb itself is nil-guarded on `g2038`, so no other
-        # game's city rendering is affected.
+        # render via City#g2038.
         class CityDecorations
           def initialize(host, game, tile, city)
             @host = host
@@ -31,15 +27,13 @@ module View
           # off Game#home_delivery_bonuses (keyed by hex id) rather than any
           # per-tile data; most gray home-base hexes have none.
           #
-          # Detached preview tiles (e.g. Lucky's tile-choice popup, and the
-          # standard TileSelector fan) are wrapped in a throwaway Engine::Hex
-          # always named 'A1' (see hex_choices.rb/tile_selector.rb) --
-          # which coincidentally collides with a real corp's home coordinate
-          # in this game (Mars Mining). The same identity check the shared
-          # engine already uses to detect a fake preview hex (Game::Base
-          # #update_tile_lists's own "TileSelector creates fake A1 hexes"
-          # comment) rules that out here too, so a preview tile never shows a
-          # real hex's delivery bonus badge in place of its mine value.
+          # Detached preview tiles (e.g. Lucky's tile-choice popup, the
+          # standard TileSelector fan) are wrapped in a throwaway
+          # Engine::Hex always named 'A1' (see hex_choice_selector.rb/
+          # tile_selector.rb) -- which coincidentally collides with a real
+          # corp's home coordinate in this game (Mars Mining). The same
+          # identity check used to detect a fake preview hex (Game::Base
+          # #update_tile_lists) rules that out here too.
           def delivery_bonus
             return nil unless @tile.hex == @game.hex_by_id(@tile.hex.id)
 
@@ -54,9 +48,7 @@ module View
           DELIVERY_BONUS_RADIUS = 18
           DELIVERY_BONUS_FONT_SIZE = '15px'
           # On the same local-unit scale as Part::City::SLOT_RADIUS (25,
-          # the token's own radius) -- how much farther out from the
-          # base's center the badge sits than a plain revenue circle
-          # would, per the user.
+          # the token's own radius).
           DELIVERY_BONUS_RADIAL_SHIFT = 3
 
           def render_delivery_bonus(ore, amount)
@@ -135,19 +127,15 @@ module View
             format('#%<r>02x%<g>02x%<b>02x', r: r, g: g, b: b)
           end
 
-          # `pointer-events: none` on all three of these (this and the next
-          # two methods) -- each paints on top of `slots` (added to
-          # `children` earlier, so painted first/underneath), as a sibling
-          # rather than a child of the actual clickable CitySlot circle. Left
-          # clickable, any of the three would silently steal the click meant
-          # for the mine underneath, bubbling it up to Part::City's own
-          # touch_node handler instead (a no-op for G2038, since it never
-          # has 'run_routes', but critically one that never stops
-          # propagation) -- which then keeps bubbling all the way to the
-          # hex's own click handler, always opening the disambiguation
-          # popup instead of the intended direct single-mine pickup. Found
-          # live: a direct click on a double-mine hex's own city circle
-          # never worked, at all, confirmed by the user.
+          # `pointer-events: none` on all three of these (this and the
+          # next two methods) -- each paints as a sibling, not a child,
+          # of the actual clickable CitySlot circle. Left clickable, any
+          # of the three would silently steal the click meant for the
+          # mine underneath, bubbling up to Part::City's own touch_node
+          # handler (a no-op for G2038, but one that never stops
+          # propagation) and on to the hex's click handler, always
+          # opening the disambiguation popup instead of the intended
+          # direct single-mine pickup.
           def render_mine_color
             h(:circle, key: 'g2038-mine-color',
                        attrs: { r: View::Game::Part::City::SLOT_RADIUS - 1, fill: mine_color, 'pointer-events': 'none' })
@@ -166,25 +154,16 @@ module View
               }, letter)
           end
 
-          # Explicit key -- required, not just stylistic, same reasoning as
-          # every other conditionally-rendered overlay in hex_g2038.rb
-          # (starfield_defs/asteroid_rock/ring_station/the existing-
-          # infrastructure highlights): this element's very presence
-          # toggles on/off between renders (only shown while mine_used?),
-          # and its siblings here (render_mine_color/render_ore_letter)
-          # have no stable keys of their own either. Without a key,
-          # Snabbdom's keyless reconciliation matches children by sibling
-          # position, not identity -- the instant a claim changes hands
-          # mid-OR (the owner-color-changing render_claim_ring circle
-          # above shifts which overlays exist/how many), a positional
-          # mismatch can silently reassign this line pair's DOM nodes to
-          # the wrong vnode instead of toggling them off, which reads to
-          # the player as "the white X disappeared" even though mine_used?
-          # itself never actually changed. Confirmed mine_used? itself
-          # stays correct across ownership changes by replaying real
-          # games (184/186/188) -- this key is the render-layer fix for
-          # what those replays couldn't catch, since they only check
-          # final committed state, not moment-to-moment DOM patching.
+          # Explicit key -- required, not just stylistic: this element's
+          # very presence toggles on/off between renders (only shown
+          # while mine_used?), and without a key Snabbdom's keyless
+          # reconciliation matches children by sibling position, not
+          # identity -- the instant a claim changes hands mid-OR (which
+          # shifts which overlays exist/how many), a positional mismatch
+          # can silently reassign this line pair's DOM nodes to the wrong
+          # vnode instead of toggling them off, reading to the player as
+          # "the white X disappeared" even though mine_used? itself never
+          # changed.
           def render_used_marker
             r = 14
             h(:g, { key: 'g2038-used-marker', attrs: { 'pointer-events': 'none' } }, [
@@ -210,13 +189,10 @@ module View
             @game.mine_claim_owner(@tile.hex.id, mine_index)
           end
 
-          # Doubled while `owner` is the entity currently taking its turn --
-          # confirmed with the user some ROUTE_COLORS reds are hard to tell
-          # apart at the normal ring size, and the active company's own
-          # claims are exactly what a player is scanning the map for while
-          # running its ships (or its other steps -- not narrowed to Route
-          # specifically, since there's nothing Route-specific about wanting
-          # to spot your own claims).
+          # Doubled while `owner` is the entity currently taking its turn
+          # -- some ROUTE_COLORS reds are hard to tell apart at the
+          # normal ring size, and the active entity's own claims are what
+          # a player is scanning the map for.
           def render_claim_ring(owner)
             base_radius = View::Game::Part::City::SLOT_RADIUS + 5
             radius = owner == @game.round.current_entity ? base_radius * 2 : base_radius

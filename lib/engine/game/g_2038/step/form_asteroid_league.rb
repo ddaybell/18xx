@@ -7,36 +7,29 @@ module Engine
     module G2038
       module Step
         # Forces AE's owner to explicitly form-or-decline the Asteroid
-        # League once eligible (Phase 3-4).  This
-        # must interrupt play and force a real yes/no, not sit as a
-        # take-it-or-leave-it side option. The generic engine's
-        # `choose_ability` mechanism (Step::SpecialChoose) can only ever be
-        # non-blocking -- its `blocks?` is hardcoded false, and even if that
-        # weren't true, the round's own blocking check keys off
-        # `current_entity` (a player/operating corp), which a bare private
-        # company like AE never is -- so a dedicated step was the only way
-        # to make this a real, forced decision. AE's `choose_ability`
-        # ability was removed from entities.rb; this replaces it entirely.
+        # League once eligible (Phase 3-4). This must interrupt play and
+        # force a real yes/no, not sit as a take-it-or-leave-it side
+        # option. The generic engine's `choose_ability` mechanism
+        # (Step::SpecialChoose) can only ever be non-blocking -- its
+        # `blocks?` is hardcoded false -- so a dedicated step was the
+        # only way to make this a real, forced decision. AE's
+        # `choose_ability` ability was removed from entities.rb; this
+        # replaces it entirely.
         #
         # Modeled directly on MergeIntoLeague's same shape: overrides
-        # active_entities/active? (bypassing the Passer/@passed default,
-        # same reason MergeIntoLeague does -- eligibility can begin
-        # partway through a round, since buying the Phase III ship is
-        # itself an OR action) and a round_state flag that resets for free
-        # on every new round instance, giving "ask again next round" (per
-        # EVENTS_TEXT: "...or at the beginning of each Stock or Operating
-        # round thereafter" -- confirmed with the user this means BOTH
-        # round types, not just OR; wired into both stock_round and
-        # operating_round in game.rb for exactly this reason).
+        # active_entities/active? (eligibility can begin partway through
+        # a round, since buying the Phase III ship is itself an OR
+        # action) and a round_state flag that resets for free on every
+        # new round instance, giving "ask again next round" per
+        # EVENTS_TEXT -- wired into both stock_round and operating_round
+        # in game.rb.
         #
-        # Named `al_formation_declined`, not `declined` -- both this step
-        # and MergeIntoLeague are wired into the same operating_round, and
-        # round_state is applied step by step in array order with no
-        # namespacing; a same-named key here (which needs a boolean) would
-        # silently clobber MergeIntoLeague's own `declined` (which needs an
-        # array), corrupting it to `false` and crashing the next `Array#-`
-        # call on it. Hit exactly this bug once already -- confirmed the
-        # crash, fixed by renaming rather than trying to share one key.
+        # Named `al_formation_declined`, not `declined`: both this step
+        # and MergeIntoLeague are wired into the same operating_round,
+        # and round_state is applied step by step with no namespacing --
+        # a same-named key here would silently clobber MergeIntoLeague's
+        # own `declined` (an array), corrupting it to `false` and
+        # crashing the next `Array#-` call on it.
         class FormAsteroidLeague < Engine::Step::Base
           ACTIONS = %w[choose].freeze
           FORM = 'form'

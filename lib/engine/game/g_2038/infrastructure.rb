@@ -71,23 +71,14 @@ module Engine
           @extra_station_hexes[entity]
         end
 
-        # Lifetime cap on total bases/stations a corp may ever place -- the
-        # length of its own `bases:`/`stations:` cost array (base_cost/
-        # station_cost fall back to the array's last entry past that count,
-        # which previously meant "keep paying the last price forever" with
-        # no actual cap; ROADMAP's Phase 5c note flagged this as an
-        # intentional simplification, since revisited after live play).
-        # §8.12/Phase 9h: the AL must hold back 1 base for each independent
+        # Lifetime cap on total bases/stations a corp may ever place --
+        # the length of its own `bases:`/`stations:` cost array. §8.12/
+        # Phase 9h: the AL must hold back 1 base for each independent
         # that hasn't merged in yet -- its *own* new-placement capacity
-        # shrinks while any remain, growing back by 1 each time one merges
-        # or is forced in. This reservation is what keeps the combined
-        # total (self-placed + inherited) capped at the true allotment: a
-        # merged-in base counts against @base_hexes too (see
-        # transfer_independent_base!, counted: true for AL), consuming
-        # exactly the capacity this formula just gave back. Claims
-        # inherited via merger also count, against claim_limit -- see
-        # transfer_independent_mine_claims!'s own comment; that one was
-        # never in question, only bases were.
+        # shrinks while any remain, growing back by 1 each time one
+        # merges or is forced in. A merged-in base counts against
+        # @base_hexes too (transfer_independent_base!, counted: true for
+        # AL), consuming exactly the capacity this formula gave back.
         def base_limit(entity)
           limit = corp_data(entity)&.dig(:bases)&.size || Float::INFINITY
           return limit unless entity == @al_corporation
@@ -123,16 +114,13 @@ module Engine
 
         # Same one-entry-per-claimed-mine list as claim_hexes above, but
         # with the specific ore/claimed-value each entry needs to render
-        # as its own mine-colored circle on the corporation card (see
-        # View::Game::Corporation#render_claim_column) rather than a
-        # generic flag icon -- claim_hexes alone only has the hex id,
-        # which isn't enough to know which of a double-mine hex's two
-        # (possibly differently-valued/ore'd) mines a given slot is.
-        # `free` (Robot Smelters' one-time ability, Phase 10) is surfaced
-        # here too -- it's an uncounted extra beyond claims_placed_
-        # lifetime/claim_limit (see those methods' own comments), but it's
-        # still a real, physically-placed claim the charter needs to show
-        # and mark, not silently drop.
+        # as its own mine-colored circle on the corporation card --
+        # claim_hexes alone only has the hex id, not enough to know
+        # which of a double-mine hex's two mines a given slot is.
+        # `free` (Robot Smelters' one-time ability, Phase 10) is
+        # surfaced here too -- an uncounted extra beyond claims_placed_
+        # lifetime/claim_limit, but still a real, placed claim the
+        # charter needs to show.
         def claim_details(entity)
           @mine_state.flat_map do |hex_id, state|
             state[:mines].each_with_index.select { |m, _idx| m[:owner] == entity.id }
@@ -224,17 +212,13 @@ module Engine
         end
 
         # Every entity's lifetime claim cap comes straight from its own
-        # entities.rb entry's claim_limit (independents: a flat 2, §7.4;
-        # corporations: Company/Corporation Summary table) -- Float::
-        # INFINITY for the (currently none) corps without one on record
-        # rather than silently capping. A claim_limit value that itself
-        # depends on the game's optional rules (Mars Mining's own entry,
-        # §13b) is stored as a Proc rather than a plain number, since
-        # entities.rb's arrays are built once at load time before any
-        # specific game's rules are known -- called with `self` here, the
-        # one place that IS known. Same reservation idea as base_limit
-        # above, but 2 claims per remaining independent instead of 1 base
-        # (§8.12/Phase 9h).
+        # entities.rb entry's claim_limit (independents: a flat 2,
+        # §7.4). A claim_limit that itself depends on the game's
+        # optional rules (Mars Mining, §13b) is stored as a Proc rather
+        # than a plain number, since entities.rb's arrays are built once
+        # at load time before any specific game's rules are known.
+        # Same reservation idea as base_limit above, but 2 claims per
+        # remaining independent instead of 1 base (§8.12/Phase 9h).
         def claim_limit(entity)
           limit = entity_data(entity)&.dig(:claim_limit) || Float::INFINITY
           limit = limit.call(self) if limit.respond_to?(:call)
@@ -384,31 +368,25 @@ module Engine
           # game would ever find an unused '2023' instance; every later one
           # would crash laying a nil tile.
           #
-          # Not update_tile_lists (the normal tile-laying counterpart to
-          # this) -- that also returns the *replaced* tile to @tiles, which
-          # is right for an ordinary upgrade (the old tile goes back into
-          # circulation) but wrong here: the mine tile a base covers is
-          # gone for good, not available to be drawn again.
+          # Not update_tile_lists (the normal tile-laying counterpart) --
+          # that also returns the *replaced* tile to @tiles, right for
+          # an ordinary upgrade but wrong here: the mine tile a base
+          # covers is gone for good, not available to be drawn again.
           add_extra_tile(tile) if tile.unlimited
           @tiles.delete(tile)
 
           # A double-mine tile models each mine as its own City part (no
-          # engine token is ever placed there -- claim ownership lives in
-          # @mine_state, already cleared above), so laying '2023' (a single
-          # city) over one triggers Hex#lay's move_tokens_to_new_tile_
-          # multi_city! path. That method has a real bug: reading
-          # tokens[new_city] to check for an unmapped city's tokens
-          # inserts an empty-array entry as a side effect, so the "is
-          # there anything left to migrate" check (tokens.empty?) reads
-          # false even though nothing was ever added -- it then falls into
-          # a raise that itself references undefined locals (tile/token),
-          # crashing as `undefined method 'token' for the Hex`. This is
-          # unreachable in every other 18xx game (no other game shrinks a
-          # multi-city tile down like a mine-to-base placement does), so
-          # nothing else has ever tripped it. Since there are genuinely no
-          # tokens to migrate here, sidestep the buggy multi-city path
-          # entirely by dropping the tile to a single city first --
-          # Hex#lay then takes its plain single-city branch instead.
+          # engine token is ever placed there), so laying '2023' (a
+          # single city) over one triggers Hex#lay's move_tokens_to_
+          # new_tile_multi_city! path. That method has a real bug:
+          # reading tokens[new_city] to check for an unmapped city's
+          # tokens inserts an empty-array entry as a side effect, so the
+          # "anything left to migrate" check reads false even though
+          # nothing was added, and it falls into a raise that itself
+          # references undefined locals, crashing as `undefined method
+          # 'token' for the Hex`. Since there are genuinely no tokens to
+          # migrate here, sidestep the buggy multi-city path entirely by
+          # dropping the tile to a single city first.
           hex.tile.cities.slice!(1..) if hex.tile.cities.size > 1
           hex.lay(tile)
           tile.cities.first.place_token(entity, token, check_tokenable: false)
@@ -487,15 +465,13 @@ module Engine
           mine[:owner] = entity.id
           mine[:free] = true if free
 
-          # The claimed value is now the only one that matters on the map --
-          # only the claim owner may pick up here, always at the claimed rate.
-          # A plain integer tile revenue parses to the same value under every
-          # phase color (see Part::RevenueCenter#parse_revenue), so mirror
-          # that shape directly rather than re-parsing a string. That bypass
-          # skips `uniq_revenues`'s memoization too, though -- clear it by
-          # hand or the map keeps showing the stale unclaimed value until
-          # something else (e.g. a full reload) rebuilds the tile from
-          # scratch.
+          # The claimed value is now the only one that matters -- only
+          # the claim owner may pick up here, always at the claimed
+          # rate. A plain integer tile revenue parses to the same value
+          # under every phase color, so mirror that shape directly. That
+          # bypass skips `uniq_revenues`'s memoization too, though --
+          # clear it by hand or the map keeps showing the stale
+          # unclaimed value until something else rebuilds the tile.
           city = hex.tile.cities[mine_idx]
           city.revenue = Part::RevenueCenter::PHASES.to_h { |phase| [phase, mine[:claimed]] }
           city.instance_variable_set(:@uniq_revenues, nil)
@@ -514,16 +490,11 @@ module Engine
 
         # §13b: OSR's own entities.rb entry carries the +$20 surcharge it
         # alone pays when buying an already-placed claim off an
-        # Independent -- 0 for every other entity. Reading this from data
-        # (rather than a hardcoded entity.id == 'OSR' check) keeps the
-        # actual charge (below) and the affordability check that gates the
-        # purchase choice (Step::BuyInfrastructure#buy_independent_claim_
-        # choices) both computed from the exact same number, rather than
-        # two hand-kept-in-sync copies -- found live in browser: the
-        # choice was offered (and let a player click it) using only the
-        # base INDEPENDENT_CLAIM_PRICE as its own affordability check,
-        # crashing OSR with "cannot spend $20" the instant it actually
-        # tried to pay the surcharge on top of that base price.
+        # Independent -- 0 for every other entity. Reading this from
+        # data keeps the actual charge (below) and the affordability
+        # check that gates the purchase choice (Step::BuyInfrastructure#
+        # buy_independent_claim_choices) computed from the exact same
+        # number, rather than two hand-kept-in-sync copies.
         def independent_claim_surcharge(entity)
           entity_data(entity)&.dig(:independent_claim_surcharge) || 0
         end
@@ -558,19 +529,13 @@ module Engine
         # A corp buying an independent's claim is a cross-player
         # transaction whenever that independent belongs to a different
         # player than the buying corp's president -- same caution other
-        # games show for share exchanges/purchases between players, via
-        # the shared consent-popup mechanism (Actionable#check_consent in
-        # the view layer). Only BuyInfrastructure's BUY_CLAIM choice ever
-        # needs consent THROUGH THIS HOOK; every other `choose` action in
-        # the game returns nil here (no consent required for it via this
-        # path), the same as the engine default. This is scoped to the
-        # custom `choose` action machinery specifically -- it says nothing
-        # about cross-player transactions outside it. Buying a ship from
-        # another player, for instance, already gets its own consent
-        # popup for free from the base engine's own generic ownership
-        # check in assets/app/view/game/buy_trains.rb (a real
-        # Action::BuyTrain, not a `choose`), with no G2038 code involved
-        # at all.
+        # games show for share exchanges, via the shared consent-popup
+        # mechanism (Actionable#check_consent). Only BuyInfrastructure's
+        # BUY_CLAIM choice ever needs consent through this hook; every
+        # other `choose` action returns nil here. Buying a ship from
+        # another player already gets its own consent popup for free
+        # from the base engine's generic ownership check (a real
+        # Action::BuyTrain, not a `choose`).
         def consenter_for_choice(entity, choice, _label)
           step = @round.active_step(entity)
           return unless step.is_a?(G2038::Step::BuyInfrastructure)

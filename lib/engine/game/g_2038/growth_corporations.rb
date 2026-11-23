@@ -4,19 +4,10 @@ module Engine
   module Game
     module G2038
       module GrowthCorporations
-        # Unfloated, non-AL corps currently unlocked into @corporations --
-        # the same pool the normal cash-par path already offers, since
-        # trading in an independent is just a second way to start any of
-        # them (Phase 8).
-        # Growth Corp conversion is only available in Phases 2-3, and never
-        # once the Asteroid League has formed (§8).
-        # §13d: "Growth Corporations still may not be launched during Phase
-        # I even so" -- already true unconditionally, variant or not: a
-        # corp only ever becomes a Growth Corp via the trade-in-an-
-        # independent conversion path (form_growth_corporation!, which sets
-        # capitalization = :incremental as ITS OWN result -- see below), and
-        # that path is already gated to Phases 2-3 here regardless of any
-        # group-partition timeline. No separate check needed under
+        # Growth Corp conversion is only available in Phases 2-3, and
+        # never once the Asteroid League has formed (§8). §13d's "still
+        # may not be launched during Phase I" is already true
+        # unconditionally here, so no separate check is needed under
         # optional_variant_start_pack?.
         def growth_conversion_allowed?
           %w[2 3].include?(phase.name) && !@asteroid_league_formed
@@ -47,21 +38,15 @@ module Engine
           corp.capitalization = :incremental
 
           # §13c's ipo_owner migration (Game#setup) runs at game start,
-          # before any corp's eventual capitalization is knowable -- every
-          # corp still shows :full at that point (this one only becomes
-          # :incremental right here, via conversion), so under
-          # optional_stock_repurchases? it was already swept into the bank
-          # along with every genuinely full-cap corp. Reclaim it now: this
-          # corp hasn't parred/floated yet, so nothing but the bank could
-          # possibly hold any of its shares at this exact moment -- safe
-          # to move all of them back unconditionally. Without this,
-          # SharePool#buy_shares' own incremental-cap payment routing
-          # (keyed on `bundle.owner.corporation?`) never matches, since
-          # the shares stay bank-owned forever, and every share a player
-          # buys from this corp's own IPO box silently pays the bank
-          # instead of the corp -- found live: a Growth Corp showing only
-          # its inherited independent's treasury cash, none of what
-          # players had actually paid for its shares.
+          # before any corp's eventual capitalization is knowable --
+          # every corp still shows :full at that point, so under
+          # optional_stock_repurchases? it was already swept into the
+          # bank along with every genuinely full-cap corp. Reclaim it
+          # now: nothing but the bank could possibly hold any of its
+          # shares at this exact moment. Without this, SharePool#
+          # buy_shares' own incremental-cap payment routing never
+          # matches, and every share a player buys from this corp's IPO
+          # box silently pays the bank instead of the corp.
           if corp.ipo_owner != corp
             corp.ipo_owner = corp
             bank.shares_by_corporation[corp].dup.each { |share| transfer_treasury_share!(share, corp) }
@@ -88,15 +73,13 @@ module Engine
           # over its own train_limit would go completely undetected.
           transfer(:trains, minor, corp)
 
-          # Mine-claim/pilot-and-Fast-Buck transfer are identical mechanics
-          # to merge_independent_into_al!'s own asset transfer, just
-          # landing on `corp` instead of the AL (see those shared methods'
-          # own comments) -- the base transfer differs in one respect:
-          # counted: false here, since a Growth Corp's own inherited base
-          # (from the one independent it converted from) stays an
-          # uncounted extra, unlike AL's counted: true (see
-          # transfer_independent_base!'s own comment for why the two
-          # aren't the same).
+          # Mine-claim/pilot-and-Fast-Buck transfer are identical
+          # mechanics to merge_independent_into_al!'s own asset
+          # transfer, just landing on `corp` instead of the AL -- the
+          # base transfer differs in one respect: counted: false here,
+          # since a Growth Corp's own inherited base stays an uncounted
+          # extra, unlike AL's counted: true (see transfer_independent_
+          # base!'s own comment for why).
           transfer_independent_base!(minor, corp, counted: false)
           transfer_independent_mine_claims!(minor, corp)
           carry_over_independent_special_status!(minor, corp)
@@ -117,17 +100,12 @@ module Engine
                   "(par #{format_currency(67)}, market price #{format_currency(10)})"
 
           # Bypasses the normal par step (set_par/buy_shares called
-          # directly, above) same as after_buy_company's TSI formation --
-          # after_par is what actually fires event_group_b/c_corps_available!
-          # once every corp in the current group has launched (§ "Once all
-          # of a group is launched, the next group is immediately
-          # available" -- launched means the President's cert is
-          # acquired, not sold out; a Growth Corp is launched/active the
-          # instant this happens). Without this call, a Growth-Corp-only
-          # completion of a group could never unlock the next one, no
-          # matter how much of its stock later sold. Found live in
-          # browser: RU formed as a Growth Corp, sold out, and the next
-          # group still never became available.
+          # directly, above), same as after_buy_company's TSI formation
+          # -- after_par is what actually fires event_group_b/
+          # c_corps_available! once every corp in the current group has
+          # launched (launched means the President's cert is acquired,
+          # not sold out). Without this call, a Growth-Corp-only
+          # completion of a group could never unlock the next one.
           after_par(corp)
         end
 
@@ -158,27 +136,20 @@ module Engine
             ability.shares.each do |share|
               if share.president
                 if optional_variant_start_pack?
-                  # §13d: "TSI's par price is player-chosen" -- and must be
-                  # chosen immediately, interrupting the auction right when
-                  # ST is bought (confirmed with the user -- waiting for
-                  # the ordinary ipo/par UI, which only ever becomes
-                  # reachable once WaterfallAuction stops blocking for
-                  # *everyone*, was too late whenever other companies were
-                  # still unsold). `@round.companies_pending_par` is the
-                  # base engine's own mechanism for exactly this shape (a
-                  # private grants a president's cert, its buyer must
-                  # immediately pick a par price before anyone else can
-                  # act) -- already wired into stock_round via
+                  # §13d: "TSI's par price is player-chosen" -- and must
+                  # be chosen immediately, interrupting the auction right
+                  # when ST is bought (waiting for the ordinary ipo/par
+                  # UI, only reachable once WaterfallAuction stops
+                  # blocking for everyone, was too late). `@round.
+                  # companies_pending_par` is the base engine's own
+                  # mechanism for this shape, wired into stock_round via
                   # G2038::Step::CompanyPendingPar (this game's own
                   # subclass, fixing the base version's `corporation.
-                  # shares.first` to `ipo_shares.first` -- needed since
+                  # shares.first` to `ipo_shares.first`, needed since
                   # optional_variant_start_pack? always implies
-                  # optional_stock_repurchases?, which relocates an unparred
-                  # full-cap corp's shares to the bank at setup), which is
-                  # positioned *before* WaterfallAuction in that array so
-                  # it wins Round::Base#process_action's first-blocking-
-                  # step lookup and genuinely blocks everyone else's turn
-                  # until this resolves.
+                  # optional_stock_repurchases?), positioned *before*
+                  # WaterfallAuction so it wins the first-blocking-step
+                  # lookup.
                   @round.companies_pending_par << company
                 else
                   stock_market.set_par(share.corporation, share_price)
@@ -208,14 +179,12 @@ module Engine
         # assets/app/view/game/{par,form_corporation}.rb both gate their
         # own price-selection buttons behind this exact method ("Cannot
         # Par" otherwise) -- CompanyPendingPar#process_par itself never
-        # calls can_par? at all, but the UI the player actually clicks
-        # through to submit that Par action does, for every corp. Found
-        # live: the interrupt correctly blocked every other player, but
-        # the intended buyer saw "Cannot Par" too, with no way to ever
-        # submit a price. `round.respond_to?` guards against Operating-
-        # round contexts, where companies_pending_par was never declared
-        # (round_state only merges keys the current round's own steps
-        # opted into) and would otherwise raise via method_missing.
+        # calls can_par? at all, but the UI the player clicks through to
+        # submit that Par action does, for every corp. Without this
+        # exception the interrupt correctly blocked every other player,
+        # but the intended buyer saw "Cannot Par" too. `round.
+        # respond_to?` guards against Operating-round contexts, where
+        # companies_pending_par was never declared.
         def can_par?(corporation, parrer)
           if corporation.id == 'TSI'
             pending = round.respond_to?(:companies_pending_par) &&

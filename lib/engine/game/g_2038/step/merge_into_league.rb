@@ -16,28 +16,21 @@ module Engine
         # Timing: the instant the AL forms, the game stops and every
         # remaining independent is immediately asked in turn, clockwise
         # from the AL president -- an atomic, uninterruptible sequence
-        # (this step's own `active?`/`blocking?` force it, so nothing else
-        # can happen until every one of them has answered) that completes
-        # entirely within whichever round type AL happened to form in --
-        # confirmed with the user there is no scenario where an
-        # independent avoids this first-time offer or has it deferred to
-        # a later round. Every one of them ends this initial sweep
-        # recorded in `@game.al_independents_ever_offered` (permanent, not
+        # (this step's own `active?`/`blocking?` force it) that completes
+        # entirely within whichever round type AL happened to form in.
+        # Every one of them ends this initial sweep recorded in
+        # `@game.al_independents_ever_offered` (permanent, not
         # round-scoped), whether they merged or declined.
         #
         # After that, independents can only merge one further way: any
         # remaining decliner gets asked again at the start of every
         # Operating round, for as long as they stay unmerged -- never
-        # during a Stock round. The `@round.stock?` filter below is what
-        # enforces that: `@round.declined` resets on every new round
-        # instance, so without also excluding anyone already in
-        # `al_independents_ever_offered`, a later Stock round would see a
-        # fresh, empty local `declined` and wrongly treat a long-ago
-        # decliner as a brand-new candidate. It's never restrictive during
-        # the initial sweep itself (`ever_offered` starts empty then), so
-        # that sweep always completes in one round regardless of type --
-        # this filter's only real job is blocking OR-only re-offers from
-        # leaking into a Stock round.
+        # during a Stock round. The `@round.stock?` filter below enforces
+        # that: `@round.declined` resets on every new round instance, so
+        # without also excluding anyone already in
+        # `al_independents_ever_offered`, a later Stock round would see
+        # a fresh, empty local `declined` and wrongly treat a long-ago
+        # decliner as a brand-new candidate.
         class MergeIntoLeague < Engine::Step::Base
           ACTIONS = %w[choose].freeze
           MERGE = 'merge'
@@ -68,15 +61,11 @@ module Engine
           # G1870::Step::Connection's own fix for the identical shape
           # (several entities, owned by different players, all eligible
           # at once, but only ever answered one at a time, in order).
-          # Round::Base#current_entity/can_act? (and, in turn, Game#
-          # active_players, which player.rb's own "whose turn" border
-          # reads) are keyed off active_entities[0] alone -- returning the
-          # *whole* candidate list here, as this used to, made every
-          # remaining independent's owner show as "acting" simultaneously
-          # the instant AL formed, even though only the first (clockwise
-          # from the AL president) can actually submit a choice. Found
-          # live: game 188, every player who owned a still-independent
-          # minor got the active-player highlight at once.
+          # Round::Base#current_entity/can_act? are keyed off
+          # active_entities[0] alone -- returning the *whole* candidate
+          # list here made every remaining independent's owner show as
+          # "acting" simultaneously the instant AL formed, even though
+          # only the first can actually submit a choice.
           def active_entities
             pending_entities.take(1)
           end

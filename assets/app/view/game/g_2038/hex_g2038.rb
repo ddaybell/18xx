@@ -7,12 +7,7 @@ module View
       # backgrounds, asteroid-rock/ring-station/satellite art, and the
       # BuyInfrastructure existing-base/station/pickup highlights. Delegate
       # object (not a mixin) so View::Game::Hex's own method table never
-      # carries these -- instantiated once per Hex render via Hex#g2038,
-      # handed the host for h access (public on Snabberb::Component) plus
-      # @hex/@tile/@game/@show_starting_map. Every method here is still
-      # only ever reached via a `g2038 && ...`/`@game.respond_to?(...)`
-      # guard at its call site in hex.rb itself, so behavior for every
-      # other game is unchanged.
+      # carries these -- instantiated once per Hex render via Hex#g2038.
       class HexDecorations
         def initialize(host, game, hex, tile, show_starting_map)
           @host = host
@@ -113,25 +108,18 @@ module View
             ])
         end
 
-        # A simple generative satellite -- body, ring-dish antenna on a
-        # stalk, and two paneled solar wings -- echoing the relay-station
-        # art on the physical transshipment-point tiles (a ring-shaped
-        # dish is the distinctive feature there), not a reproduction of
-        # it. Sits at hex-center (0, 0 in this component's own local
-        # coordinate space); the printed revenue box is pushed to the
-        # bottom of the hex instead (see Game#offboard_forced_bottom?,
-        # part/revenue.rb) so the two don't collide. Drawn after Tile in
-        # the children order so it layers over the starfield background.
+        # A simple generative satellite -- body, ring-dish antenna, two
+        # paneled solar wings -- echoing the relay-station art on the
+        # physical transshipment-point tiles. Sits at hex-center; the
+        # printed revenue box is pushed to the bottom instead (see
+        # Game#offboard_forced_bottom?, part/revenue.rb) so the two don't
+        # collide.
         #
-        # Counter-rotated by -30 for pointy layout: this whole icon is a
-        # sibling of Tile within the hex's own <g>, which itself carries
-        # a `rotate(30)` for pointy hexes (see Hex#transform) -- normal
-        # tile content (cities, revenue boxes) renders through Part::
-        # Base's own rotation_for_layout, which already cancels that out,
-        # but a raw sibling shape like this one doesn't get that for free
-        # and was rendering visibly tilted as a result.
-        # 30% larger than the icon's own natural (drawn-at-1x) size, then
-        # another 30% on top of that (1.3 * 1.3).
+        # Counter-rotated by -30 for pointy layout: this icon is a raw
+        # sibling of Tile within the hex's own <g>, which carries a
+        # `rotate(30)` for pointy hexes (Hex#transform) that normal tile
+        # content cancels out via Part::Base's rotation_for_layout, but a
+        # raw sibling shape doesn't get that for free.
         SATELLITE_SCALE = 1.3 * 1.3
 
         def satellite_icon
@@ -197,13 +185,11 @@ module View
             ])
         end
 
-        # A large, roughly circular silhouette built from overlapping
-        # circles (a common, simple way to get an organic/irregular blob
-        # outline out of plain SVG shapes rather than hand-authored path
-        # data) -- not randomized, same reasoning as the starfield's own
-        # star positions: pure decoration, no determinism/replay concern,
-        # hand-placed to avoid an obviously-regular outline. [x, y,
-        # radius], all relative to hex-center.
+        # An irregular blob outline built from overlapping circles rather
+        # than hand-authored path data, hand-placed (not randomized --
+        # pure decoration, no determinism/replay concern) to avoid an
+        # obviously-regular outline. [x, y, radius], relative to
+        # hex-center.
         ASTEROID_BUMPS = [
           [0, -42, 52], [-36, -12, 46], [34, -16, 44], [-22, 28, 46], [24, 32, 42], [0, 6, 50]
         ].freeze
@@ -221,15 +207,10 @@ module View
           [40, -22, 15], [-30, 40, 13], [48, 22, 11]
         ].freeze
 
-        # Single-mine tiles: one rock at hex-center, shrunk to 55% (per
-        # the user: the original full size was too dominant next to the
-        # single revenue circle; +10% from an initial 50% once seen live).
-        # Double-mine tiles: two smaller rocks, each centered on its own
-        # city/circle instead of hex-center -- sized enough to actually
-        # be visible around the circle without the two rocks overlapping
-        # (the two cities sit ~78 units apart, see MINE_CITY_OFFSET_
-        # FRACTION below; a first pass at ~1.2x the circle radius came out
-        # far too small/fully hidden behind the circle once seen live).
+        # Single-mine tiles: one rock at hex-center, shrunk to 55% so it
+        # doesn't dominate next to the revenue circle. Double-mine tiles:
+        # two smaller rocks, each centered on its own city/circle instead
+        # of hex-center (see MINE_CITY_OFFSET_FRACTION below).
         MINE_SINGLE_SCALE = 0.55
         MINE_DOUBLE_SCALE = 0.38
 
@@ -247,9 +228,8 @@ module View
 
         # A double-mine city sits some fraction of the way from its edge
         # midpoint toward hex-center; this fraction is an analytical
-        # approximation (not yet visually confirmed against the engine's
-        # own city placement) -- adjust if the rocks don't land centered
-        # on their circles once deployed.
+        # approximation, not yet visually confirmed against the engine's
+        # own city placement.
         MINE_CITY_OFFSET_FRACTION = 0.45
 
         def mine_city_position(city)
@@ -260,17 +240,11 @@ module View
           [x * MINE_CITY_OFFSET_FRACTION, y * MINE_CITY_OFFSET_FRACTION]
         end
 
-        # Explored mine tiles' asteroid-rock background, behind whatever
-        # the tile itself draws on top (its city/revenue circle -- the
-        # printed mine value, see hex.rb#render's own ordering). A soft
-        # offset shadow, the main gray body, an offset lighter highlight
-        # (a simple fixed "light source" rather than anything per-hex-
-        # varied), and the craters on top, in that paint order.
-        # Counter-rotated for pointy layout for the same reason as
-        # satellite_icon -- this is a raw sibling of Tile, not tile
-        # content that goes through Part::Base's own rotation handling.
-        # `scale` shrinks the whole rock (single- vs double-mine sizing);
-        # `offset` recenters it on a specific city instead of hex-center.
+        # Explored mine tiles' asteroid-rock background, behind the
+        # tile's own city/revenue circle. Counter-rotated for pointy
+        # layout for the same reason as satellite_icon. `scale` shrinks
+        # the whole rock (single- vs double-mine sizing); `offset`
+        # recenters it on a specific city instead of hex-center.
         def asteroid_rock(scale: 1.0, offset: [0, 0], key: 'g2038-asteroid-0')
           rotation = @hex.layout == :pointy ? -30 : 0
           bumps = ASTEROID_BUMPS.map { |x, y, r| h(:circle, attrs: { cx: x, cy: y, r: r }) }
@@ -305,16 +279,11 @@ module View
         # iconography used everywhere else on the map.
         REFUEL_TEARDROP_PATH = 'M50 12 C38 30 25 48 25 65 A25 25 0 1 0 75 65 C75 48 62 30 50 12 Z'
 
-        # The teardrop's own fill/label -- white and unlabeled while the
-        # base's refueling slot is still unclaimed, the owning corp's own
-        # color and initials once someone actually buys a station there
-        # (see Game#place_station!/refueling_station_owner). This is now
-        # the *only* refueling-station indicator on a base hex -- the
-        # older generic Part::Icon-based marker (public/icons/g_2038/
-        # station_slot.svg / *_station.svg) was removed as redundant once
-        # this existed. Read live off game state (not baked in at render
-        # time) so it stays in sync as the station changes hands/gets
-        # bought.
+        # White and unlabeled while the base's refueling slot is still
+        # unclaimed, the owning corp's own color and initials once
+        # someone buys a station there (Game#place_station!/
+        # refueling_station_owner). Read live off game state so it stays
+        # in sync as the station changes hands.
         def refuel_teardrop_shape
           owner = !@show_starting_map && @game.respond_to?(:refueling_station_owner) &&
                   @game.refueling_station_owner(@hex.id)
@@ -336,15 +305,11 @@ module View
           shape
         end
 
-        # Slot index whose gap the teardrop sits in -- spokes land at
-        # every 45 degrees starting from 12 o'clock (i * 45), which
-        # happens to put spoke 5 exactly at 7:30 and spoke 6 exactly at
-        # 9:00, so the gap *between* those two spokes (slot index 5, the
-        # module gap immediately clockwise of spoke 5) is the 7:30-9:00
-        # gap the user asked for -- chosen so the teardrop doesn't
-        # overlap the core/token, the other modules, or (for pointy-
-        # layout hexes, which get an extra whole-group -30 degree
-        # rotation) the hex's own edges.
+        # Spoke index the teardrop sits on (spokes land every 45 degrees
+        # from 12 o'clock) -- chosen so it lands in the 7:30-9:00 gap,
+        # clear of the core/token, the other modules, and (for pointy
+        # layout, which adds a whole-group -30 degree rotation) the
+        # hex's own edges.
         REFUEL_TEARDROP_SLOT = 5
 
         def ring_station
@@ -379,18 +344,13 @@ module View
           end
           # Centered directly on spoke REFUEL_TEARDROP_SLOT (7:30) rather
           # than a module gap, superimposed over that ring segment --
-          # rotated 180 degrees around its own center (between the
-          # ring-position translate and the path's own recentering
-          # translate, so the pivot is the teardrop's own visual center,
-          # not the ring-anchor point). Scale history, tuned live in
-          # browser: 0.55 -> +50% -> 0.825 (too big, crossed the hex's own
-          # edge) -> -5% -> 0.78375 -> -2% -> 0.767875.
+          # rotated 180 degrees around its own center so the pivot is the
+          # teardrop's own visual center, not the ring-anchor point.
           # Omitted entirely for a base that can never have a refueling
           # station at all (the edge-touching starting bases -- VP/LE/MM/
           # OPC/RCC -- see Game#station_eligible?) -- drawing the white
-          # "unclaimed slot" teardrop there implied a station could still
-          # be bought, which it never can. Found live in browser: those
-          # bases showed the teardrop with no way to ever fill it.
+          # "unclaimed slot" teardrop there would imply a station could
+          # still be bought, which it never can.
           station_eligible = !@game.respond_to?(:station_eligible?) || @game.station_eligible?(@hex)
           teardrop =
             if station_eligible
@@ -447,19 +407,13 @@ module View
             ])
         end
 
-        # Opt-in hooks: while a step is actively choosing where to place a
-        # base or refueling station (G2038's BuyInfrastructure), the
-        # entity's own already-placed bases/stations light up, so the
-        # player can see at a glance where they already have
-        # infrastructure before picking a new hex -- per the user. Reads
-        # the active step directly rather than needing a dedicated per-hex
-        # prop threaded through Map (the same respond_to?-gated pattern
-        # used throughout this file), so every other game/step is
-        # unaffected. Bases and stations use different marker shapes (see
-        # existing_infrastructure_highlight/existing_station_highlight) so
-        # the two read as different things at a glance rather than both
-        # drawing the same generic hex-border highlight -- per the user, a
-        # base hex that also happens to have a station gets both at once.
+        # Opt-in hooks: while BuyInfrastructure is actively choosing where
+        # to place a base or refueling station, the entity's own
+        # already-placed bases/stations light up so the player can see at
+        # a glance where they already have infrastructure. Bases and
+        # stations use different marker shapes (existing_infrastructure_
+        # highlight/existing_station_highlight) so a hex with both reads
+        # as both, not one generic highlight.
         def existing_base_hex?
           step = @game.round&.active_step
           return false unless step.respond_to?(:highlight_base_hexes)
@@ -495,15 +449,9 @@ module View
         end
 
         # Center point of the ring station's own teardrop icon (see
-        # ring_station/REFUEL_TEARDROP_SLOT), in the same unrotated local
-        # coordinate frame every other raw sibling shape in this file uses
-        # -- derived the same way that art positions itself: rotate(rotation)
-        # composed with rotate(teardrop_angle), applied to the point
-        # straight "up" from center at RING_STATION_RING_R, since a pure
-        # rotation composition is just the sum of the angles. Needed here
-        # (rather than reusing a transform string like ring_station does)
-        # because a highlight circle needs its actual numeric center, not
-        # just a transform to nest inside.
+        # ring_station/REFUEL_TEARDROP_SLOT) -- needed as an actual
+        # numeric point, not a transform string like ring_station uses,
+        # because a highlight circle needs a literal center.
         def teardrop_position
           rotation = @hex.layout == :pointy ? -30 : 0
           angle = (rotation + (REFUEL_TEARDROP_SLOT * (360 / RING_STATION_SPOKE_COUNT))) * Math::PI / 180

@@ -7,17 +7,10 @@ module View
   module Game
     module G2038
       # Hex-anchored replacement for the shared top-banner Confirm (see
-      # View::Confirm) specifically for Step::Route#explore_would_lock_
-      # other_routes? -- per the user: a warning this consequential
-      # (exploring locks in every route already submitted this OR)
-      # shouldn't share the generic banner's fixed 3-second auto-dismiss,
-      # which silently abandons the click with no way back except
-      # clicking the hex again. This popup instead sits right where the
-      # Explore button was clicked (same positioning technique as
-      # HexChoiceSelector, same EDGE_MARGIN/BOTTOM_EDGE_MARGIN values kept in
-      # sync with it by hand rather than referenced, so this file has no
-      # load-order dependency on that one) and persists until the player
-      # picks one of its own two buttons -- no timeout at all.
+      # View::Confirm) for Step::Route#explore_would_lock_other_routes? --
+      # persists until the player picks a button, unlike Confirm's fixed
+      # 3-second auto-dismiss, since exploring here locks in every route
+      # already submitted this OR.
       class ExploreLockPrompt < Snabberb::Component
         include Actionable
         include Lib::Settings
@@ -38,10 +31,8 @@ module View
                         style: { color: '#FFFFFF', fontSize: '14px', marginBottom: '4px' },
                       }, '⚠️ Exploring locks in every route already submitted this turn.')
 
-          # No per-button drop-shadow here (unlike HexChoiceSelector's
-          # buttons) -- the card itself now casts one as a whole (see
-          # style[:filter] below), so a second shadow per button would
-          # just double up on top of that.
+          # No per-button drop-shadow here (unlike HexChoiceSelector) --
+          # the card casts one as a whole (see style[:filter] below).
           button_style = {
             display: 'inline-block',
             cursor: 'pointer',
@@ -67,19 +58,14 @@ module View
             gap: '5px',
             maxWidth: "#{POPUP_MAX_WIDTH}px",
             position: 'absolute',
-            # An opaque card, not just floating text/buttons over the map
-            # -- without this the message (white text) sat directly on
-            # whatever hex colors happened to be underneath it, unreadable
-            # depending on the map (found live: exactly that, reported by
-            # the user).
+            # Opaque card -- without it the white message text sat
+            # directly on whatever hex color was underneath, unreadable on
+            # some hexes.
             backgroundColor: 'rgba(0, 0, 0, 0.85)',
             borderRadius: '6px',
             padding: '8px',
             filter: 'drop-shadow(3px 3px 4px #888)',
           }
-          # Same edge-flip technique HexChoiceSelector uses -- grows back
-          # toward the hex (and the rest of the map) instead of past
-          # whichever boundary it's close to.
           if @near_right_edge
             style[:right] = '-60px'
           else
@@ -96,16 +82,10 @@ module View
           h(:div, { style: style }, [message, h(:div, [confirm, cancel])])
         end
 
-        # Confirm actually explores -- runs the dispatch callback
-        # View::Game::HexChoiceSelector#choose had already built (the real
-        # process_action, plus its own follow-up-popup chaining) before
-        # this prompt intercepted it. Cleared first so a slow double-click
-        # can't re-fire it. Also marks the warning acknowledged (see
-        # Step::Route#acknowledge_lock_warning!) so it doesn't pop up
-        # again before every later explore this same turn -- purely
-        # local, same as the rest of this step's per-turn UI state, so
-        # it needs no process_action of its own; dispatch.call's real
-        # action re-renders everything, this included.
+        # Runs the dispatch callback HexChoiceSelector#choose had already
+        # built before this prompt intercepted it. Also marks the warning
+        # acknowledged (Step::Route#acknowledge_lock_warning!) so it
+        # doesn't pop up again before every later explore this turn.
         def confirm!
           step = @game.round.active_step
           step.acknowledge_lock_warning! if step.respond_to?(:acknowledge_lock_warning!)

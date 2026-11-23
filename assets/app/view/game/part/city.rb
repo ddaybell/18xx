@@ -23,29 +23,26 @@ module View
         # h(City, ...) call site working unchanged.
         needs :game, default: nil, store: true
 
-        # Opt-in hook: a game can hide a city part entirely -- e.g. G2038's
-        # H10, whose empty AL-reserved token slot would otherwise read as
-        # "a base is already here" well before the AL actually exists to
-        # occupy it (H10 doubles as both a transshipment point and the
-        # AL's future home base). The city only needs to render once that
-        # stops being true -- see Game#hide_city?/Game#transshipment_hex?.
+        # Opt-in hook: a game can hide a city part entirely -- e.g.
+        # G2038's H10, whose empty AL-reserved token slot would
+        # otherwise read as "a base is already here" before the AL
+        # actually exists to occupy it (H10 doubles as both a
+        # transshipment point and the AL's future home base).
         def should_render?
           return !@game.hide_city?(@tile&.hex, @city) if @game.respond_to?(:hide_city?)
 
           super
         end
 
-        # G2038's cities carry no track by design (see HIDE_TILE_TRACK in
-        # track.rb) -- the revenue-display gate below otherwise requires
-        # @city.paths.any?, a proxy for "connected to the track network"
-        # that's meaningless here and would hide every mine's revenue.
+        # G2038's cities carry no track by design (HIDE_TILE_TRACK in
+        # track.rb) -- the revenue-display gate below otherwise
+        # requires @city.paths.any?, a proxy for "connected to the
+        # track network" that's meaningless here.
         def trackless_game?
           @game&.class&.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
         end
 
         # Memoized per render -- see View::Game::G2038::Part::CityDecorations.
-        # mine_claim_owner is a stable, G2038-only signal (confirmed via
-        # Game::Infrastructure) shared by nothing else.
         def g2038
           return @g2038 if defined?(@g2038)
 

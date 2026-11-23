@@ -68,31 +68,18 @@ module Engine
           def ship_rows(entity)
             # The Probe always leads, then slowest-ship-first for
             # everything else -- matches the same order the "start of
-            # turn" auto-search uses for non-Probe ships (see
-            # start_slowest_ship_search!/slowest_undeclined_ship, which
-            # excludes the Probe outright), so the ship the player would
-            # want routed first also shows first. The Probe is a pure explorer,
-            # always dealt with before the fleet's own routing order even
-            # matters. A display-only sort, local to this method -- it never
-            # touches entity.trains' own stored (acquisition) order, which
-            # other, unrelated shared display code (e.g. the Spreadsheet
-            # tab's Trains column) still expects to reflect when each ship
-            # was actually bought.
+            # turn" auto-search uses for non-Probe ships. A display-only
+            # sort, local to this method -- it never touches entity.
+            # trains' own stored (acquisition) order, which other
+            # shared display code (e.g. the Spreadsheet tab) still
+            # expects to reflect when each ship was actually bought.
             ships = slowest_first(entity, @game.route_trains(entity))
             return [] if ships.empty?
 
-            # "Exactly one thing selected at a time" (see
-            # select_completed_ship!'s own comment) -- current_ship still
-            # auto-resolves to the sole remaining unrun ship regardless
-            # (it needs to, for actually building/reviewing that ship's
-            # route), but its row's highlight must defer to an
-            # explicitly-targeted completed route instead of both
-            # showing "selected" at once. Found live in browser: with
-            # exactly one unrun ship left, clicking a settled row to
-            # target it for "Clear Selected Route" left that lone unrun
-            # ship's own row still highlighted too, since current_ship's
-            # single-ship auto-resolve doesn't care what
-            # @selected_completed_ship_id is.
+            # current_ship still auto-resolves to the sole remaining
+            # unrun ship regardless, but its row's highlight must defer
+            # to an explicitly-targeted completed route instead of both
+            # showing "selected" at once.
             selected = @selected_completed_ship_id ? nil : current_ship_choice(entity)
             # Blocks switching ships both while actively flying and while
             # a just-finished flight is still awaiting Submit/Discard --
@@ -119,24 +106,19 @@ module Engine
             can_cancel = cancellable.include?(ship)
             # Not unconditionally false -- a locally-finished,
             # not-yet-submitted flight (ship == pending_ship) is still
-            # the one the player's action bar belongs to, same as an
-            # unrun ship mid-flight (see unrun_ship_row); only a
-            # genuinely already-*submitted* route (any other @ran_ships
-            # entry) is a settled fact, selected only if it's the one the
-            # "Clear Ship" control currently targets.
+            # the one the player's action bar belongs to; only a
+            # genuinely already-*submitted* route is a settled fact,
+            # selected only if it's the one the "Clear Ship" control
+            # currently targets.
             is_pending = ship == pending_ship
             is_selected = is_pending || (can_cancel && ship.id == @selected_completed_ship_id)
             # Locked: a later route this turn already explored a hex, so
-            # this one's own submission can never be safely reopened (see
-            # cancellable_ships' own comment -- a replayed reopen risks
-            # the game drawing a different tile/rotation than it actually
-            # did live). Never true for the currently-pending flight,
-            # which is still fully live via its own Submit/Clear bar, not
-            # settled history. Flagged separately from `blocked` (an
-            # unrun ship mid-flight) so ShipSelector can grey this row
-            # out and explain *why* on click, instead of a locked route
-            # looking identical to a still-cancellable one and silently
-            # doing nothing when clicked.
+            # this one's own submission can never be safely reopened
+            # (cancellable_ships -- a replayed reopen risks the game
+            # drawing a different tile/rotation than it actually did
+            # live). Flagged separately from `blocked` (an unrun ship
+            # mid-flight) so ShipSelector can grey this row out and
+            # explain *why* on click.
             locked = !can_cancel && !is_pending
             locking_ship = locking_ship_for(ship) if locked
             {
@@ -173,13 +155,11 @@ module Engine
               live_revenue = @game.format_currency(@game.trace_revenue(entity, ship, @trace, @cargo))
             elsif !@auto_fill_declined.include?(ship) && (preview = preview_last_route(entity, ship))
               # Not gated on !mid_flight -- a *different* ship's own
-              # already-hand-flown-elsewhere-blocked row still has a
-              # perfectly good preview to show; the player's just not
-              # allowed to act on it right now (see `blocked` below), not
-              # that it stopped existing. IS gated on @auto_fill_declined
-              # -- "Clear All" (see Route#clear_all!) declines every
-              # still-unrun ship specifically so this preview stops
-              # showing, not just so auto-fill skips it.
+              # blocked row still has a perfectly good preview to show;
+              # the player's just not allowed to act on it right now.
+              # IS gated on @auto_fill_declined -- "Clear All"
+              # (Route#clear_all!) declines every still-unrun ship
+              # specifically so this preview stops showing.
               is_preview = true
               explored = preview[:hexes].count { |h| needs_exploration?(h) }
               refuels = preview[:refueled_hex_ids].size
@@ -190,22 +170,14 @@ module Engine
             # Real per-turn "pick this ship" action only exists once
             # there's an actual choice to make -- ship_choices only has
             # this key with 2+ still-unrun ships and nothing flying yet
-            # (a lone remaining ship auto-resolves as current with no
-            # action needed -- see current_ship). Treating the row as
-            # choice-clickable regardless of that used to be harmless
-            # (nothing ever prompted a click on an already-auto-current
-            # row), but became a genuine server-side "Invalid route
-            # choice" once the highlight fix above could leave that same
-            # lone row looking unselected (a completed route targeted
-            # instead -- see select_completed_ship!) and so worth
-            # clicking.
+            # (a lone remaining ship auto-resolves as current -- see
+            # current_ship).
             real_choice = ship_choice if !mid_flight && ship_choices(entity).key?(ship_choice)
             # No real choice to make, but a completed route is still
             # targeted for "Clear Selected Route" -- let the row still
-            # do something sensible on click: drop that targeting,
-            # purely locally (see deselect_completed_ship!), the same
-            # symmetric way targeting a completed route already drops
-            # this ship's own selection.
+            # drop that targeting on click (deselect_completed_ship!),
+            # the same symmetric way targeting a completed route
+            # already drops this ship's own selection.
             offer_local_deselect = !mid_flight && !real_choice && @selected_completed_ship_id
             {
               choice: real_choice,
@@ -223,20 +195,12 @@ module Engine
           end
 
           # Public: {ship => hexes} for every still-unrun ship's own
-          # passively-previewed prior route (see preview_last_route/
-          # ship_rows) -- lets the map draw all of them simultaneously
-          # instead of just the one ship on screen, matching ship_rows'
-          # own "show every ship's history at once" change. A Hash (not
-          # just the hexes) so View::Game::Map#render_route_lines can look
-          # each ship's own route_color_index up directly, rather than
-          # assuming draw order lines up with row color -- it doesn't,
-          # the moment a submitted route or the live ship join the same
-          # pass and shift how many entries are even being drawn. The
-          # @trace.empty? gate alone is enough to exclude whichever ship
-          # is actually mid-flight (only one ship's trace is ever live at
-          # a time) -- Modify/Submit/Auto all apply-then-consume a route
-          # within a single click, so there's no separate "actively selected
-          # but not yet built" ship to exclude anymore.
+          # passively-previewed prior route -- lets the map draw all of
+          # them simultaneously. A Hash (not just the hexes) so
+          # View::Game::Map#render_route_lines can look each ship's own
+          # route_color_index up directly, rather than assuming draw
+          # order lines up with row color -- it doesn't, the moment a
+          # submitted route or the live ship join the same pass.
           def previewed_ship_routes(entity)
             return {} unless entity == current_entity
             return {} unless @trace.empty?
@@ -324,20 +288,12 @@ module Engine
 
           # Public: builds `ship`'s last-recorded route as a local,
           # finished-but-not-yet-submitted flight -- preview_last_route's
-          # own replay logic, applied for real (see apply_pending_
-          # suggestion!) rather than just displayed. Selects the ship
-          # first (mirroring the row-click a player would do by hand) so
-          # it works for any unrun ship, not only whichever one already
-          # happens to be selected. Used by "Submit All Routes" to rebuild
-          # every still-unrun, non-declined ship from its last-OR route in
-          # one click. Returns true if a route was actually built (ready
-          # for finish_and_submit_choice), false if there's nothing on
-          # record, it's no longer viable, or the ship was explicitly
-          # declined (Clear Ship) this turn -- an explicit decline
-          # shouldn't get silently resubmitted anyway just because
-          # "Submit All Routes" swept it up, any more than ship_rows' own
-          # passive preview still shows it. The caller should just move
-          # on to the next ship either way.
+          # own replay logic, applied for real rather than just
+          # displayed. Used by "Submit All Routes" to rebuild every
+          # still-unrun, non-declined ship from its last-OR route in one
+          # click. Returns false if there's nothing on record, it's no
+          # longer viable, or the ship was explicitly declined (Clear
+          # Ship) this turn.
           def apply_previous_route!(entity, ship)
             return false if @auto_fill_declined.include?(ship)
 
@@ -349,52 +305,35 @@ module Engine
             true
           end
 
-          # Public: hands a computed suggestion (see preview_last_route,
-          # for Modify/Submit, or suggestion_from_result, for Auto) off
-          # to hand-flying -- every caller lands in the exact same place:
-          # a fully local, not-yet-submitted flight the player can either
-          # Submit as-is or back out of the tail end (clicking the
-          # route's own endpoint, repeatedly, to taste) and fly on from
-          # wherever they backed up to.
+          # Public: hands a computed suggestion off to hand-flying --
+          # every caller lands in the exact same place: a fully local,
+          # not-yet-submitted flight the player can either Submit as-is
+          # or back out of the tail end and fly on from wherever they
+          # backed up to.
           #
           # Replays the suggestion through local_choose! itself, hop by
           # hop -- exactly as if the player had clicked each of those
           # hexes by hand. A suggestion never explores unexplored
-          # territory: the autorouter's own travel-cost graph
-          # (Game#hex_bfs) is happy to fly it straight through unexplored
-          # hexes to reach an already-known one (only its GOALS -- pickups
-          # and endpoints -- have to be already-explored, since those need
-          # a known ore/tile type), and every unexplored hop along the way
-          # replays below as a plain FLYOVER, never an Explore. So this
-          # never explores anything and needs no rollback concerns beyond
-          # what local_choose!/pick_up already handle for an ordinary
-          # hand-flown pickup. Once this returns, either the
-          # flight auto-finished (MP exhausted) and Submit/Cancel are on
-          # offer, or @trace is non-empty and normal map clicks
-          # (compute_choices) take over from the suggested endpoint
-          # exactly like any other in-progress local flight -- same
-          # Discard/Submit machinery, nothing new to keep in sync.
+          # territory: the autorouter's own travel-cost graph (Game#
+          # hex_bfs) is happy to fly it straight through unexplored
+          # hexes to reach an already-known one, and every unexplored
+          # hop along the way replays below as a plain FLYOVER, never
+          # an Explore.
           def apply_pending_suggestion!(entity, suggestion)
             return unless suggestion
 
             @round.laid_hexes = []
 
             hexes = suggestion[:hexes]
-            # A once-only queue, not a static hex_id => [entries] lookup --
-            # each entry is removed the moment it's actually applied, so a
-            # route that revisits the same hex a second time purely for
-            # pathing (a real, valid pattern -- see the loop's own comment)
-            # finds nothing left pending there. Re-offering an already-
-            # applied pickup a second time used to be harmless (the mine
-            # was already marked used, so `choices` simply didn't offer it
-            # again) -- but pick_up now doubles as an undo whenever the
-            # SAME mine is still this ship's own cargo from earlier in this
-            # visit (see Route#pick_up/#undo_pickup!), so re-attempting it
-            # on a later revisit would silently UNDO the earlier pickup
-            # instead of no-op'ing (found live: a suggested/previous route
-            # that revisited one hex lost that hex's whole pickup this
-            # way, applying for noticeably less revenue than the search
-            # itself had found).
+            # A once-only queue, not a static hex_id => [entries] lookup
+            # -- each entry is removed the moment it's actually applied,
+            # so a route that revisits the same hex a second time purely
+            # for pathing finds nothing left pending there. This
+            # matters because pick_up doubles as an undo whenever the
+            # SAME mine is still this ship's own cargo from earlier in
+            # this visit (Route#pick_up/#undo_pickup!), so re-attempting
+            # it on a later revisit would silently UNDO the earlier
+            # pickup instead of no-op'ing.
             pending_cargo = suggestion[:cargo].dup
 
             local_choose!(entity, hexes.first.id)
@@ -402,14 +341,11 @@ module Engine
             hexes.each_cons(2) do |from, to|
               break if @trace.empty? # maybe_auto_finish! already closed it out
 
-              # A suggestion never *explores* a hex it doesn't need to
-              # (the autorouter never reveals a tile speculatively), but
-              # it does fly straight through unexplored ones it has no reason
-              # to stop at, same as a player would by hand. compute_choices
-              # only offers a bare hex id for a genuine "Move to" (destination
-              # already explored) or a no-stop shortcut hop; an unexplored direct
-              # neighbor is only ever reachable as FLYOVER (Skip) or the
-              # 2-MP Explore, and since the latter never applies here, the
+              # A suggestion never *explores* a hex it doesn't need to,
+              # but it does fly straight through unexplored ones it has
+              # no reason to stop at. An unexplored direct neighbor is
+              # only ever reachable as FLYOVER (Skip) or the 2-MP
+              # Explore, and since the latter never applies here, the
               # former is always the right one.
               choice = from.neighbors.value?(to) && needs_exploration?(to) ? "#{Route::FLYOVER}#{to.id}" : to.id
               local_choose!(entity, choice)
@@ -418,44 +354,33 @@ module Engine
               matches, pending_cargo = pending_cargo.partition { |c| c[:hex_id] == to.id }
               matches.each do |c|
                 pickup_choice = c[:mine_idx] ? "#{Route::PICKUP}#{c[:mine_idx]}" : Route::TRANSSHIP
-                # Re-validate right before applying, same graceful-skip-if-
-                # no-longer-available philosophy as replay_cargo/Previous
-                # Route -- a suggestion computed against a mine another
-                # ship has since claimed would otherwise dispatch a choice
-                # compute_choices no longer offers, raising "Invalid route
-                # choice" instead of just quietly not picking it up.
+                # Re-validate right before applying -- a suggestion
+                # computed against a mine another ship has since
+                # claimed would otherwise dispatch a choice
+                # compute_choices no longer offers, raising "Invalid
+                # route choice" instead of just quietly not picking it up.
                 local_choose!(entity, pickup_choice) if choices.key?(pickup_choice)
               end
 
               # §7.12: apply the plan's own refuel decisions as real
-              # actions -- move_to itself never auto-refuels any more, so
-              # without this a suggestion's (or reloaded route's) chosen
-              # refuel timing would just silently vanish on replay. Same
-              # graceful-skip-if-no-longer-available guard as the pickup
-              # dispatch above.
+              # actions -- move_to itself never auto-refuels any more,
+              # so without this a suggestion's chosen refuel timing
+              # would just silently vanish on replay.
               local_choose!(entity, Route::REFUEL) if suggestion[:refueled_hex_ids].include?(to.id) && choices.key?(Route::REFUEL)
             end
           end
 
-          # Public opt-in hook for View::Game::Map#render_ship_marker: the
-          # hex the currently-flying ship sits on, which marker icon to
-          # show there, and where on the hex to center it, or nil if
-          # nothing's mid-flight. Previously this was a Part::Icon attached
-          # to the hex's own tile (like the refueling-station marker) --
-          # but that ties the marker's size to the small-icon slot system
-          # (which shrinks/repositions icons to avoid overlapping others on
-          # the same hex, clipping a marker bigger than its slot) and to
-          # per-hex DOM paint order (a later-drawn neighboring hex can
-          # visually cover an overflowing icon). Since the marker is transient,
-          # it's fine for it to spill into a neighbor or cover part of its own
-          # hex -- rendering it instead as a top-level map overlay (same technique
-          # already used for route lines, Map#render_route_lines/Hex.coordinates)
-          # lets it paint above every hex unconditionally and be sized independently
-          # of any per-hex layout. Positioning: dead center for a double-mine hex
-          # (both mine circles are already symmetric around center, so centering
-          # the marker doesn't favor either one); a bit below center, horizontally
-          # centered, for everything else (leaves the hex's own top-standardized label/
-          # single mine circle/city token clear.
+          # Public opt-in hook for View::Game::Map#render_ship_marker:
+          # the hex the currently-flying ship sits on, which marker icon
+          # to show, and where to center it. Rendered as a top-level
+          # map overlay (same technique as route lines) rather than a
+          # per-hex Part::Icon, since that ties the marker's size to the
+          # small-icon slot system, which shrinks/repositions icons to
+          # avoid overlapping others. Positioning: dead center for a
+          # double-mine hex (both mine circles already sit symmetric
+          # around center); a bit below center for everything else
+          # (leaves the hex's top-standardized label/single mine
+          # circle/city token clear).
           def ship_marker(entity)
             return nil unless entity == current_entity
             return nil if @trace.empty?

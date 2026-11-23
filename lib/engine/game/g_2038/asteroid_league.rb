@@ -73,14 +73,12 @@ module Engine
         # AL always pars at $125 -- see form_asteroid_league! just above.
         AL_INSERTION_MAX_PRICE = 124
 
-        # AL forms mid-OR (buying a Phase III ship, which triggers
-        # eligibility, is itself an OR action) but wasn't in this round's
-        # @entities snapshot -- confirmed with the user: it may still slot
-        # into *this* OR, at its rightful $125 position ahead of any
-        # corporation priced $124 or lower, but only if no such corporation
-        # has operated yet this round. Once one has, it's too late to
-        # insert AL fairly ahead of it, so AL simply waits for the next OR
-        # (where it's included from the start in the normal way).
+        # AL forms mid-OR but wasn't in this round's @entities snapshot --
+        # it may still slot into *this* OR, at its rightful $125 position
+        # ahead of any corporation priced $124 or lower, but only if no
+        # such corporation has operated yet this round. Once one has,
+        # it's too late to insert AL fairly ahead of it, so AL simply
+        # waits for the next OR.
         def insert_al_into_current_or_if_eligible!
           return unless round.is_a?(Engine::Round::Operating)
 
@@ -132,12 +130,9 @@ module Engine
           # invalidates Game::Base's own @crowded_corps memoization
           # (checked by Step::DiscardShip#active?/crowded_corps to force
           # an over-limit discard). A manual loop bypasses that
-          # invalidation entirely, so a merge that pushes AL over its own
-          # train_limit (§9g -- AL's own train_limit is real, just like
-          # any corp's) went completely undetected until something else
-          # happened to touch @crowded_corps later -- found live in
-          # browser: AL sitting at 5 ships with its own limit at 4, no
-          # discard ever prompted.
+          # invalidation, so a merge that pushes AL over its own
+          # train_limit (§9g) went completely undetected until something
+          # else happened to touch @crowded_corps later.
           transfer(:trains, minor, @al_corporation)
 
           transfer_independent_base!(minor, @al_corporation, counted: true)
@@ -169,24 +164,21 @@ module Engine
         def pay_independent_merge_cash!(minor, owner, first_opportunity, recipient)
           owner_gets_half = first_opportunity || (!optional_short_game? && !minor.trains.empty?)
           # .round guards against a non-integer minor.cash -- money here
-          # should always be whole dollars, but this is defensive in case
-          # some earlier turn's arithmetic left a fractional residue.
-          # Confirmed with the user: the owner's share rounds UP, the
-          # recipient's share rounds DOWN -- the opposite of what this
-          # used to do (owner got floor(total/2), recipient got the ceil
-          # remainder). Both amounts are computed up front from the same
-          # rounded total, rather than spending the owner's half and then
-          # relying on whatever's left in minor.cash for the recipient's
-          # share, so a leftover fractional cent can never carry over via
-          # the second spend.
+          # should always be whole dollars, but this is defensive in
+          # case some earlier turn's arithmetic left a fractional
+          # residue. The owner's share rounds UP, the recipient's share
+          # rounds DOWN. Both amounts are computed up front from the
+          # same rounded total, rather than spending the owner's half
+          # and relying on whatever's left in minor.cash for the
+          # recipient's share, so a leftover fractional cent can never
+          # carry over via the second spend.
           #
           # (total_cash + 1) / 2 is plain Integer#/ -- Opal/browser float
-          # division, not Ruby's -- so this line was itself the actual
-          # source of a stale $72.5 found live in browser (total_cash ==
-          # 144: (144 + 1) / 2 == 72.5 in the browser, 72 in Ruby/MRI
-          # specs, which is why this passed every spec while still broken
-          # live). The .to_f/.floor below replicates Ruby's own integer-
-          # division result exactly, in both environments.
+          # division, not Ruby's, so a bare `/` here would silently
+          # return 72.5 instead of 72 for total_cash == 144, passing
+          # every MRI spec while still broken live. The .to_f/.floor
+          # below replicates Ruby's own integer-division result exactly
+          # in both environments.
           total_cash = minor.cash.round
           half_cash = owner_gets_half ? ((total_cash + 1).to_f / 2).floor : 0
           remaining_cash = total_cash - half_cash
@@ -200,22 +192,18 @@ module Engine
           half_cash
         end
 
-        # Shared by merge_independent_into_al! (entity: AL, counted: true)
-        # and form_growth_corporation! (entity: the new Growth Corp,
-        # counted: false) -- the two are NOT identical: confirmed with the
-        # user that a base the AL receives via merger DOES count against
-        # its own base_limit (a Growth Corp's own inherited base, from the
-        # one independent it converted from, stays an uncounted extra, as
-        # before). This matters beyond bookkeeping -- base_limit(AL)
-        # already reserves capacity for not-yet-merged independents by
-        # shrinking as remaining_independents.size grows and giving it
-        # back as they merge in (§8.12/Phase 9h); if a merged-in base
-        # never actually consumed any of that returning capacity, AL could
-        # end up placing its own full allotment of bases AND keep every
-        # inherited one too, exceeding its real combined total. Counting
-        # it here (via @base_hexes, the same array base_hexes(entity).size
-        # is checked against in Step::BuyInfrastructure#base_choices)
-        # keeps the two exactly offsetting, so the true combined cap holds.
+        # Shared by merge_independent_into_al! (entity: AL, counted:
+        # true) and form_growth_corporation! (entity: the new Growth
+        # Corp, counted: false) -- the two are NOT identical: a base the
+        # AL receives via merger DOES count against its own base_limit
+        # (a Growth Corp's own inherited base stays an uncounted extra).
+        # base_limit(AL) already reserves capacity for not-yet-merged
+        # independents by shrinking as remaining_independents.size grows
+        # and giving it back as they merge in (§8.12/Phase 9h); if a
+        # merged-in base never consumed any of that returning capacity,
+        # AL could end up placing its own full allotment of bases AND
+        # keep every inherited one too, exceeding its real combined
+        # total.
         def transfer_independent_base!(minor, entity, counted:)
           return unless (token = minor.tokens.find(&:used))
 

@@ -16,20 +16,16 @@ module Engine
 
           # §8: a player who just bought the very ship that both crowds
           # their own corp AND hands them the Form-AL/merge decision
-          # should resolve their OWN discard first (see stock_round's own
-          # comment in game.rb on why DiscardShip is ordered ahead of
-          # FormAsteroidLeague/MergeIntoLeague in the step list) -- but
-          # that global ordering must not ALSO block a completely
-          # different, unrelated player's own pending Form-AL/merge
+          # should resolve their OWN discard first (DiscardShip is
+          # ordered ahead of FormAsteroidLeague/MergeIntoLeague in the
+          # step list) -- but that global ordering must not ALSO block a
+          # completely unrelated player's own pending Form-AL/merge
           # decision just because someone else's corp happens to be
           # crowded at the same moment. Round::Base#process_action picks
           # the first active+blocking step in list order and raises
           # immediately if it can't handle the incoming action, so
           # without this, any crowded corp globally blocks every other
-          # player's unrelated actions. Found live: game 187, where
-          # donnydimes' crowded LE blocked phil's completely unrelated
-          # Form-AL choice, crashing the round for an entity that had
-          # nothing to do with LE at all.
+          # player's unrelated actions.
           def blocking?
             return false if unrelated_blocking_step_pending?
 

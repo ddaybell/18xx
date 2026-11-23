@@ -28,15 +28,12 @@ module Engine
 
         # Cheap, admissible upper bound on one ship's best possible
         # revenue, ignoring ordering entirely (as if it had the whole
-        # board to itself) -- every hold filled with the single best mine
-        # or transshipment value reachable anywhere, ignoring MP cost and
-        # ignoring that an earlier ship in the same ordering may have
-        # already claimed the best of it. Deliberately loose (a real
-        # search would find less), never tight -- but safe for Step::
-        # Route#try_ordering!'s own cross-ordering pruning, where an
-        # over-estimate can only ever fail to prune a hopeless ordering
-        # early, never wrongly discard a genuinely-better one.
-        #
+        # board to itself) -- every hold filled with the single best
+        # mine or transshipment value reachable anywhere. Deliberately
+        # loose, never tight -- but safe for Step::Route#try_ordering!'s
+        # own cross-ordering pruning, where an over-estimate can only
+        # ever fail to prune a hopeless ordering early, never wrongly
+        # discard a genuinely-better one.
         def solo_ceiling(entity, ship)
           holds = cargo_holds_for_ship(ship)
           per_slot = [max_reachable_mine_value(entity), max_transshipment_value(ship)].max
@@ -77,24 +74,21 @@ module Engine
           best
         end
 
-        # no bonus assumption baked in -- the feasibility solver (Game::
-        # Autorouter's own component) needs this to build a real
-        # cargo list and let Game#trace_revenue compute actual bonuses
-        # for whatever destination a specific route really reaches, since
-        # `value`'s bonus assumption is only a safe over-estimate for
-        # ranking, not necessarily achievable for any single combo.
+        # `raw_value` keeps no bonus assumption baked in -- the
+        # feasibility solver needs this to build a real cargo list and
+        # let Game#trace_revenue compute actual bonuses for whatever
+        # destination a specific route really reaches, since `value`'s
+        # bonus assumption is only a safe over-estimate for ranking.
         CandidateSlot = Struct.new(:hex_id, :mine_idx, :ore, :value, :raw_value, keyword_init: true)
 
-        # Public: every slot this entity+ship could currently pick up --
-        # every unclaimed-or-entity-owned, not-yet-used-this-OR mine, plus
-        # every currently-paying transshipment hex -- each tagged with an
-        # admissible (never too low) ceiling on what a single unit there
-        # could ever contribute: its own pickup/transshipment value, plus
-        # #best_case_ore_bonus for whatever ore it is. The alternative-
-        # ordering search (component 2 of the "optimal set" autorouter --
-        # see also Game#solo_ceiling, the earlier per-ship version
-        # of this same idea) ranks candidate cargo combinations by summing
-        # these values, highest first.
+        # Public: every slot this entity+ship could currently pick up
+        # -- every unclaimed-or-entity-owned, not-yet-used-this-OR
+        # mine, plus every currently-paying transshipment hex -- each
+        # tagged with an admissible ceiling on what a single unit there
+        # could ever contribute: its own pickup/transshipment value,
+        # plus #best_case_ore_bonus. The alternative-ordering search
+        # ranks candidate cargo combinations by summing these values,
+        # highest first.
         def candidate_slots(entity, ship)
           slots = []
 
@@ -122,25 +116,20 @@ module Engine
           slots
         end
 
-        # The best-case additional bonus (beyond raw pickup/transshipment
-        # value) a single unit of `ore` could ever contribute for this
-        # entity+ship -- entity's own company_ore_bonuses entry, its assigned
-        # pilot's ore bonus, OSR's own claim-delivery bonus (if this unit
-        # is a mine OSR itself has claimed), and whichever home_delivery_
-        # bonuses hex pays the MOST for this ore.
+        # The best-case additional bonus (beyond raw pickup/
+        # transshipment value) a single unit of `ore` could ever
+        # contribute -- entity's own company_ore_bonuses entry, its
+        # assigned pilot's ore bonus, OSR's own claim-delivery bonus,
+        # and whichever home_delivery_bonuses hex pays the MOST for
+        # this ore.
         #
         # Deliberately loose, not exact: a real route only ever ends at
         # ONE hex, so at most one home_delivery_bonus can actually be
-        # realized across the whole cargo -- crediting every slot its own
-        # independently-best bonus assumes they could all somehow deliver
-        # to their own ideal destination at once, which overstates the
-        # true achievable total if two slots' best-paying hexes differ.
-        # That's fine and intentional here, the same admissible-bound
-        # philosophy Game#solo_ceiling already uses for ranking/
-        # pruning candidates against each other -- it can only ever fail
-        # to prune something early, never wrongly discard a genuinely-
-        # better combination. transshipment slots (ore nil) never get a
-        # bonus -- none of these bonus types key off a nil ore.
+        # realized across the whole cargo -- crediting every slot its
+        # own independently-best bonus overstates the true achievable
+        # total if two slots' best-paying hexes differ. That's fine and
+        # intentional, the same admissible-bound philosophy Game#
+        # solo_ceiling already uses.
         def best_case_ore_bonus(entity, ship, ore, claimed:)
           return 0 unless ore
 
@@ -148,17 +137,12 @@ module Engine
         end
 
         # Just the destination-INDEPENDENT slice of #best_case_ore_bonus
-        # -- entity's own company_ore_bonuses entry, its assigned pilot's ore
-        # bonus, and OSR's own claim-delivery bonus -- every one of these
-        # applies no matter where the route ends, unlike the home_
+        # -- applies no matter where the route ends, unlike the home_
         # delivery_bonus portion. Pulled out so Autorouter's per-
-        # destination-ore-focused sweeps (see that file's own comment on
-        # why summing every slot's own independently-best home bonus made
-        # the search's stopping point too slow to reach on a rich board)
-        # can credit this exact, non-estimated part unconditionally, and
-        # only add a home bonus when a slot's ore matches that sweep's
-        # one assumed destination -- keeping each sweep's own per-slot
-        # values genuinely additive/separable, unlike the combined bound.
+        # destination-ore-focused sweeps can credit this exact,
+        # non-estimated part unconditionally, and only add a home bonus
+        # when a slot's ore matches that sweep's one assumed
+        # destination.
         def entity_fixed_ore_bonus(entity, ship, ore, claimed:)
           return 0 unless ore
 

@@ -66,17 +66,15 @@ module View
         @game_data[:mode] == :hotseat
       end
 
-      # Opt-in escape hatch, checked before any of the real action pipeline
-      # below (network POST, hotseat storage, action-history growth):
-      # lets a step build up a multi-step move entirely client-side and
-      # only ever submit one self-contained action for the whole thing
-      # (see G2038::Step::Route's SUBMIT_FLIGHT/local_choose! for the
-      # motivating case -- a hand-flown route can touch a dozen hexes,
-      # and recording every click as its own permanent action bloats the
-      # history the same way Suggest Route's search preview used to,
-      # before it became a local computation too). A step that doesn't
-      # implement local_choose?/local_pass? is unaffected -- this whole
-      # branch is skipped and every action behaves exactly as before.
+      # Opt-in escape hatch, checked before any of the real action
+      # pipeline below (network POST, hotseat storage, action-history
+      # growth): lets a step build up a multi-step move entirely
+      # client-side and only ever submit one self-contained action for
+      # the whole thing (G2038::Step::Route's SUBMIT_FLIGHT/
+      # local_choose! -- a hand-flown route can touch a dozen hexes,
+      # and recording every click as its own permanent action would
+      # bloat the history). A step that doesn't implement local_choose?/
+      # local_pass? is unaffected.
       def process_local_action(action)
         step = @game.round.active_step
         return false unless step

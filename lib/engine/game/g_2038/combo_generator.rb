@@ -32,14 +32,12 @@ module Engine
       # from being generated twice via two different neighbor paths.
       #
       # The frontier itself is a real binary max-heap (array-based, each
-      # entry its value precomputed once at push time), not a plain array
-      # re-sorted on every pop -- found live on a real 39-candidate board:
-      # with the frontier growing into the thousands over a single sweep,
-      # an O(F log F) sort_by! on every #next_combo call (previously
-      # re-deriving each combo's value from scratch on every comparison,
-      # too) cost over 100 seconds by itself. A proper heap makes both
-      # push and pop O(log F), with each combo's value computed exactly
-      # once.
+      # entry its value precomputed once at push time), not a plain
+      # array re-sorted on every pop -- on a real 39-candidate board,
+      # with the frontier growing into the thousands over a single
+      # sweep, an O(F log F) sort_by! on every #next_combo call cost
+      # over 100 seconds by itself. A proper heap makes both push and
+      # pop O(log F).
       class ComboGenerator
         def initialize(slots, holds)
           @sorted = slots.sort_by { |s| -s.value }
@@ -81,12 +79,10 @@ module Engine
         end
 
         def push(combo)
-          # A plain string key, not the combo array itself -- MRI Ruby
-          # has an optimized native path for hashing/comparing arrays as
-          # Hash keys, but Opal has to emulate that on
-          # top of JavaScript, which has no native array-value-equality
-          # hashing at all. String keys are natively fast hash/Map keys in
-          # both MRI and JS, so this is a portable fix, not a JS-only one.
+          # A plain string key, not the combo array itself -- Opal has
+          # to emulate array-value-equality hashing on top of
+          # JavaScript, which has no native support for it. String keys
+          # are natively fast hash/Map keys in both MRI and JS.
           key = combo.join(',')
           return if @visited[key]
 

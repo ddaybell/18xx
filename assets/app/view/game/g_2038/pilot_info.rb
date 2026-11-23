@@ -3,17 +3,10 @@
 module View
   module Game
     module G2038
-      # A Growth Corp's inherited pilot ability/abilities (Phase 8),
-      # displayed the same way View::Game::Company shows an owned private
-      # company on a corp's charter (see Company#render_company_on_card):
-      # just the pilot's name, clickable to toggle a hidden description
-      # div open/closed, rather than one long string dumped onto the
-      # card. Reuses that exact toggle mechanism -- a plain DOM style
-      # flip on click (not a Snabberb store update) -- so an expanded
-      # description survives the next unrelated re-render the same way
-      # Company's own hidden company-description divs do (their `style:
-      # { display: 'none' }` prop never itself changes between renders,
-      # so Snabbdom's diff never patches the live-toggled value back).
+      # A Growth Corp's inherited pilot ability/abilities (Phase 8).
+      # Reuses Company#render_company_on_card's toggle mechanism -- a
+      # plain DOM style flip on click, not a Snabberb store update -- so
+      # an expanded description survives the next unrelated re-render.
       class PilotInfo < Snabberb::Component
         needs :corporation
         needs :game

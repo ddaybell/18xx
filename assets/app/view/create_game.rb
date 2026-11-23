@@ -22,6 +22,7 @@ module View
     needs :selected_variant, default: nil, store: true
     needs :title, default: nil
     needs :production, default: nil
+    needs :only_game, default: nil
     needs :optional_rules, default: [], store: true
     needs :is_async, default: nil, store: true
     needs :keywords, default: nil, store: true

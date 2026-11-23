@@ -13,39 +13,28 @@ module Engine
           end
 
           # TSI's pre-float turn only exists to let ST's owner fly the
-          # Probe (see Game#tsi_pre_float?/#probe_available?) -- if the
-          # Probe has since rusted (buying a Phase 3 ship rusts it same as
-          # any other ship, independent of TSI ever floating; see
-          # probe_available?'s own comment on why the Variant Start
-          # Packet can make this reachable), there's nothing left for that
-          # turn to do and no normal corporate turn to fall back to
-          # either, since TSI still hasn't floated. Skipping the entity
-          # here -- the same mechanism `closed?` already uses -- routes
-          # straight past `start_operating`'s `acting_for_entity(entity)
-          # .name` log line entirely, rather than reaching it with nothing
-          # valid to hand control to. Game#operating_order also stops
-          # inserting TSI once the Probe is gone, but that only takes
-          # effect on the *next* round built from scratch -- this is what
-          # catches the Probe rusting *during* a round where TSI's turn
-          # was already queued before that happened (found live: the
-          # round got stuck exactly this way).
+          # Probe (Game#tsi_pre_float?/#probe_available?) -- if the Probe
+          # has since rusted, there's nothing left for that turn to do
+          # and no normal corporate turn to fall back to either, since
+          # TSI still hasn't floated. Game#operating_order also stops
+          # inserting TSI once the Probe is gone, but only takes effect
+          # on the *next* round built from scratch -- this catches the
+          # Probe rusting *during* a round where TSI's turn was already
+          # queued before that happened.
           def skip_entity?(entity)
             return true if @game.tsi_pre_float?(entity) && !@game.probe_available?
 
             super
           end
 
-          # An independent that owns no ship and can't afford the cheapest
-          # one left in the Depot must merge into the AL (§7.39/Phase 9f)
-          # -- but only once it's had its own turn and is *still* shipless
-          # at the end of it, not pre-emptively before that turn even
-          # starts. The rule text ties this to the independent's own
-          # turn ending shipless, not to a shipless check firing whenever
-          # any *other* company's turn happens to end with this
-          # independent up next in rotation. Checked in after_end_of_turn
-          # instead of skip_entity?, so the independent's own turn (Route
-          # auto-skips with no ships, but BuyTrain still runs -- the owner
-          # could choose to buy it a replacement ship there) happens first.
+          # An independent that owns no ship and can't afford the
+          # cheapest one left in the Depot must merge into the AL
+          # (§7.39/Phase 9f) -- but only once it's had its own turn and
+          # is *still* shipless at the end of it, not pre-emptively
+          # before that turn even starts. Checked in after_end_of_turn
+          # instead of skip_entity?, so the independent's own turn
+          # (BuyTrain still runs -- the owner could buy a replacement
+          # ship there) happens first.
           def after_end_of_turn(operator)
             super
 
@@ -56,17 +45,12 @@ module Engine
           end
 
           # TSI's pre-float turn (flying the Probe under ST's owner's
-          # control -- see Game#tsi_pre_float?) is Route only. Once Route
-          # is done deciding, the rest of a normal corp turn --
-          # Dividend/BuyTrain/BuyCompany/BuyInfrastructure -- doesn't
-          # really apply yet (no real president, no real revenue/price
-          # mechanics) and going through them one by one either misbehaves
-          # (Dividend's default "withhold" still moves the share price
-          # even off $0 revenue) or just adds noise (a string of "TSI
-          # skips ..." lines). Once Route finishes, silently end the turn
-          # instead. While Route is still the live decision (blocking),
-          # this falls through to the ordinary behavior unchanged -- only
-          # takes over once nothing is left to decide there.
+          # control -- Game#tsi_pre_float?) is Route only. The rest of a
+          # normal corp turn doesn't really apply yet (no real president,
+          # no real revenue/price mechanics) -- going through them one
+          # by one either misbehaves (Dividend's default "withhold"
+          # still moves the share price even off $0 revenue) or adds
+          # noise. Once Route finishes, silently end the turn instead.
           def skip_steps
             entity = @entities[@entity_index]
             return super unless @game.tsi_pre_float?(entity)
@@ -81,17 +65,14 @@ module Engine
 
           def pay_fast_buck_treasury
             # Whichever company entities.rb marks as a treasury_income
-            # source (Fast Buck today; Game#treasury_income_source_sym)
-            # earns its flat amount per OR into its own treasury, not to
-            # its owner -- and once it's been absorbed (Growth Corp
-            # conversion or an AL merger), the same amount follows it into
+            # source (Fast Buck today) earns its flat amount per OR into
+            # its own treasury -- and once absorbed (Growth Corp
+            # conversion or an AL merger), the amount follows it into
             # whichever corp now holds that treasury (Game#
-            # fast_buck_income_recipient, reassigned at absorption time).
-            # Reading the recipient via that indirection rather than
-            # @game.minor_by_id(source_sym) directly matters because
-            # Minor#close! unconditionally sets the source's own @floated
-            # to false -- paying it directly post-absorption would
-            # silently stop the income forever instead of continuing it.
+            # fast_buck_income_recipient). Reading the recipient via that
+            # indirection matters because Minor#close! unconditionally
+            # sets the source's own @floated to false -- paying it
+            # directly post-absorption would silently stop the income.
             recipient = @game.fast_buck_income_recipient
             return unless recipient&.floated?
 

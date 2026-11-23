@@ -74,12 +74,11 @@ module Engine
             @claims_this_round = Hash.new(0)
           end
 
-          # Provides opt-in hooks for assets/app/view/game/hex.rb: while this
+          # Opt-in hooks for assets/app/view/game/hex.rb: while this
           # entity is actively choosing a base/station/claim location,
           # its own already-placed bases and stations both get
-          # highlighted.  A base gets the generic hex-border highlight, 
-          # a station gets a highlight around its own teardrop icon instead, 
-       
+          # highlighted. A base gets the generic hex-border highlight, a
+          # station a highlight around its own teardrop icon instead.
           def highlight_base_hexes(entity)
             return [] unless entity&.operator?
             return [] unless %i[base station claim].include?(@sub_phase[entity])
@@ -368,19 +367,15 @@ module Engine
           end
 
           # Corporations may buy an already-claimed mine directly from the
-          # independent holding it, at a flat price: available from Phase 2 
-          # on (same start as bases/stations, since claims themselves have 
-          # no such gate but this transfer does), still counts against the 
-          # buyer's lifetime claim_limit like any other claim it ends up 
-          # holding, but is NOT limited by the per-round escalating schedule/
-          # count (@claims_this_round) above since it's a flat-price transfer, 
-          # not a new placement.
-          # `minor_by_id` returns nil for a corp-owned mine (including one
-          # this entity already owns itself), so this naturally only ever
-          # offers independent-held claims. Gated on can_buy_companies_or_claims?
-          # rather than after_phase_1? -- unlike bases/stations, this stops
-          # at Phase 5 once every independent has merged into the AL and
-          # there's no one left to sell a claim.
+          # independent holding it, at a flat price: counts against the
+          # buyer's lifetime claim_limit like any other claim, but is
+          # NOT limited by the per-round escalating schedule
+          # (@claims_this_round) since it's a flat-price transfer, not a
+          # new placement. `minor_by_id` returns nil for a corp-owned
+          # mine, so this naturally only offers independent-held claims.
+          # Gated on can_buy_companies_or_claims? rather than
+          # after_phase_1? -- unlike bases/stations, this stops at Phase
+          # 5 once every independent has merged into the AL.
           def buy_independent_claim_choices(entity)
             result = {}
             return result unless @game.can_buy_companies_or_claims?

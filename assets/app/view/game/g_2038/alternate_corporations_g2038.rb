@@ -20,7 +20,7 @@ module View
           @host.h(...)
         end
 
-        # Used by G2038: `reserved` (AL only, bases only) counts how many of
+        # `reserved` (AL only, bases only) counts how many of
         # the not-yet-placed slots below are actually held back for
         # independents still outside the League, marked "Res." instead of
         # looking like any other open, unclaimed slot.
@@ -72,7 +72,7 @@ module View
         # value.
         CLAIM_VALUE_RANGE = (10..70)
 
-        # Used by G2038: One column per claim slot, plus one more for each
+        # One column per claim slot, plus one more for each
         # free claim actually placed (Robot Smelters' one-time ability) --
         # those don't consume a counted slot (see Game#claims_placed_
         # lifetime's own comment) but are still real, placed claims that

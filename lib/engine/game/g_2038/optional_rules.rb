@@ -78,15 +78,10 @@ module Engine
 
         # §13b: with OSR/MR in play, Phase VI ('9/7') needs *two* Phase V
         # ships bought first, not the base game's one -- shared by
-        # Step::BuyShip#buyable_trains (the ordinary purchase list) and
-        # #discountable_trains_for below (the separate exchange-discount
-        # UI, assets/app/view/game/buy_trains.rb) so both actually agree.
-        # Found live in browser: buyable_trains alone correctly hid 9/7
-        # from the plain purchase list after only one Phase V ship, but
-        # the base engine's own discountable_trains_for (which reads
-        # @depot.depot_trains + Train#discount directly, never consulting
-        # this step override at all) still offered a 9/5->9/7 Exchange
-        # button regardless.
+        # Step::BuyShip#buyable_trains and #discountable_trains_for below
+        # so both agree; the base engine's own discountable_trains_for
+        # reads @depot.depot_trains + Train#discount directly and never
+        # consults this step override on its own.
         def phase_vi_unlocked?
           return true unless optional_new_corporations?
 
@@ -98,45 +93,25 @@ module Engine
           ships = super
           return ships if phase_vi_unlocked?
 
-          # Not `|_train, discount_train, ...|` -- Opal's implicit block-
-          # param destructuring of each yielded 4-element tuple doesn't
-          # reliably match MRI's here (found live in browser: `discount_
-          # train` came back nil, crashing on `.name`, despite every
-          # tuple `super` returns always being a real 4-element array).
-          # Indexing the single yielded tuple directly sidesteps the
-          # runtime disagreement entirely.
+          # Not `|_train, discount_train, ...|` -- Opal's implicit
+          # block-param destructuring of each yielded 4-element tuple
+          # doesn't reliably match MRI's here. Indexing the single
+          # yielded tuple directly sidesteps the runtime disagreement.
           ships.reject { |t| t[1].name == '9/7' }
         end
 
-        # §13b: On-Site Refining's and Mining Robotics' starting bases are
-        # plain pre-printed base hexes with no mine/ore content at all --
-        # exactly like every other corp's home (TSI's K9, MM's A1, etc.),
-        # not a randomly-explored asteroid tile.
-        # `optional_hexes` (below) is what actually makes B14/O13 exist as
-        # real base hexes at all; from there they go through the exact
-        # same `place_home_token`/`coordinates:` flow as any other corp,
-        # so this base is also automatically uncounted against
-        # base_limit/bases.size the same way every other corp's home
-        # already is (home placement never touches @base_hexes -- only
-        # place_base! does).
+        # §13b: On-Site Refining's and Mining Robotics' starting bases
+        # are plain pre-printed base hexes with no mine/ore content,
+        # exactly like every other corp's home -- not a randomly-
+        # explored asteroid tile. These two hexes (B14/O13) don't exist
+        # as bases at all without this rule, unlike OPC/RCC; this moves
+        # both coordinates from `blue` to `gray` only when the rule is
+        # active, building fresh arrays/hashes rather than mutating
+        # HEXES's own (frozen) nested structures.
         #
-        # These two hexes don't exist as bases at all without this rule
-        # -- unlike OPC/RCC (whose bases are part of the standard 13 and
-        # exist regardless of any optional rule), B14/O13 are ordinary
-        # unexplored blue hexes in the Full Game as printed. `optional_hexes`
-        # (see Game::Base's own "use to modify hexes based on optional
-        # rules" comment) is the designated override point -- moves both
-        # coordinates from `blue` to `gray` only when the rule is active,
-        # so a Full Game without the expansion keeps its normal 100
-        # unexplored blue hexes untouched. Builds fresh arrays/hashes
-        # rather than mutating HEXES's own (frozen) nested structures.
-        #
-        # OSR_MR_HOME_HEXES is defined on Game itself (currently in the
-        # Infrastructure module) -- qualified with Game:: rather than a
-        # specific module name since a bare reference here would only see
-        # this module's OWN (empty) ancestry, not Game's; Game:: always
-        # resolves via Game's full ancestry regardless of which included
-        # module actually owns the constant.
+        # OSR_MR_HOME_HEXES is defined on Game itself -- qualified with
+        # Game:: since a bare reference here would only see this
+        # module's OWN (empty) ancestry, not Game's.
         def optional_hexes
           return game_hexes unless optional_new_corporations?
 
@@ -147,14 +122,11 @@ module Engine
         end
 
         # §13b: `init_hexes` (base.rb) builds every corp's home-hex
-        # *reservation* from `reservation_corporations` (default:
-        # `corporations`) -- and it does this *before* `setup` ever runs,
-        # so OSR/MR are still sitting in `@corporations` at that point
-        # regardless of whether optional_new_corporations? is on (the
+        # *reservation* from `reservation_corporations`, and does this
+        # *before* `setup` runs, so OSR/MR are still in `@corporations`
+        # at that point regardless of optional_new_corporations? (the
         # exclusion in `setup` happens later). Without this override,
-        # B14/O13 correctly stay ordinary blank hexes (optional_hexes
-        # above), but still end up with a stray, city-less reservation
-        # label for OSR/MR floating over them.
+        # B14/O13 stay blank but still get a stray reservation label.
         def reservation_corporations
           return super if optional_new_corporations?
 
