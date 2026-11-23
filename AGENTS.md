@@ -79,6 +79,7 @@ Derived from a review of ~90 merged PRs' reviewer comments (2025-08 to 2026-08) 
 - Descriptive names — reviewers routinely rename vague variables (`result`, bare `number`) and overly generic or overly long identifiers
 - Errors should raise, not silently no-op, when an invariant is violated
 - `make style` (rubocop) must actually pass in CI — not optional, despite not running it during development
+- In-code comments should be the exception, not the rule — most code should speak for itself; a developer can use `git blame` to find the originating PR for more context when it's genuinely needed (crericha, PR #13141 review)
 
 ### Rules fidelity
 - Cite the specific rulebook section when implementing or debating a mechanic — disagreements get resolved by citation, not opinion
