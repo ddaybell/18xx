@@ -1380,14 +1380,14 @@ module Engine
             stored = @game.last_route(ship)
             return nil unless stored
 
-            path, refueled_hex_ids = replay_path(entity, ship, stored[:hexes], stored[:refueled_hex_ids])
+            path, refueled_hex_ids, refuel_mp = replay_path(entity, ship, stored[:hexes], stored[:refueled_hex_ids])
             cargo = replay_cargo(entity, ship, path, stored[:cargo])
             revenue = @game.trace_revenue(entity, ship, path, cargo)
 
             no_longer_viable = path.size < 2 || (revenue.zero? && ship.name != 'Probe')
             return nil if no_longer_viable
 
-            { hexes: path, cargo: cargo, revenue: revenue, refueled_hex_ids: refueled_hex_ids }
+            { hexes: path, cargo: cargo, revenue: revenue, refueled_hex_ids: refueled_hex_ids, refuel_mp: refuel_mp }
           end
 
           # Re-walks a stored hex-id path with today's MP rules, stopping
@@ -1412,11 +1412,12 @@ module Engine
           # same choices as real actions (see apply_pending_suggestion!).
           def replay_path(entity, ship, hex_ids, stored_refueled_hex_ids)
             hexes = hex_ids.map { |id| @game.hex_by_id(id) }
-            return [[], []] if hexes.empty?
+            return [[], [], 0] if hexes.empty?
 
             full_mp = @game.ship_distance(entity, ship)
             mp_left = full_mp
             refueled = []
+            refuel_mp = 0
             path = [hexes.first]
 
             hexes.each_cons(2) do |_prev, nxt|
@@ -1425,13 +1426,15 @@ module Engine
 
               if stored_refueled_hex_ids.include?(nxt.id) && @game.refueling_station_owner(nxt.id) == entity &&
                  !refueled.include?(nxt.id)
-                mp_left = [mp_left + 3, full_mp].min
+                gained = [mp_left + 3, full_mp].min - mp_left
+                mp_left += gained
+                refuel_mp += gained
                 refueled << nxt.id
               end
               path << nxt
             end
 
-            [path, refueled]
+            [path, refueled, refuel_mp]
           end
 
           # Re-collects only the stored pickups that fall within the
@@ -1887,17 +1890,13 @@ module Engine
           # refuel!'s own §7.11 once-per-station-per-flight rule).
           # Public: the Hexes column's "Y" denominator -- the ship's own
           # base movement allowance (@game.ship_distance) plus however
-          # much refueling actually extended it this route. Per the user:
-          # a 4-MP ship that refuels twice shows a max of 10 (4 + 3 + 3),
-          # not 4 -- each refueling-station stop is worth a flat +3 MP of
-          # EXTRA range on top of the ship's own allowance (§7.11/7.12),
-          # same figure refuel! itself grants (capped there at however
-          # much MP had actually been spent so far, which only matters
-          # for a refuel taken very early in a route; this column is a
-          # simple "how far could this ship have gone" ceiling, not a
-          # replay of that edge case).
-          def max_hexes(entity, ship, refuels)
-            @game.ship_distance(entity, ship) + (3 * refuels)
+          # much refueling actually extended it this route. `refuel_mp`
+          # is the real, already-capped total refuel! granted (see its
+          # own comment) -- a refuel taken early in a route, with little
+          # MP spent yet, gains less than 3, so this sums the real
+          # per-refuel gains rather than assuming a flat 3 per stop.
+          def max_hexes(entity, ship, refuel_mp)
+            @game.ship_distance(entity, ship) + refuel_mp
           end
 
           def route_stats(explored, cargo, hexes, max_hexes, refuels)
@@ -2056,6 +2055,7 @@ module Engine
             # re-trace after cancelling) gets its own full set of stations
             # again.
             @refueled_hexes = []
+            @refuel_mp_gained = 0
             hex = @game.hex_by_id(hex_id)
             @trace << hex
             @hexes_entered += 1
@@ -2222,6 +2222,7 @@ module Engine
             gained = [@mp_spent, 3].min
             @mp_spent -= gained
             @refueled_hexes << hex.id
+            @refuel_mp_gained += gained
             @log << "#{entity.name}'s #{ship.name} refuels at #{hex.id} (+#{gained} MP)"
           end
 
@@ -2295,6 +2296,7 @@ module Engine
               cargo: @cargo.dup,
               hexes: trace.size - 1,
               refuels: @refueled_hexes.size,
+              refuel_mp: @refuel_mp_gained,
             }
             @ran_ships << ship
             @trace = []

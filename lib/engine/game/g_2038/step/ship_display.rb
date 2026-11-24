@@ -75,7 +75,7 @@ module Engine
               selected: is_selected,
               ship_id: ship.id,
               stats: stats && route_stats(stats[:explored], stats[:cargo], stats[:hexes],
-                                          max_hexes(entity, ship, stats[:refuels]), stats[:refuels]),
+                                          max_hexes(entity, ship, stats[:refuel_mp]), stats[:refuels]),
               revenue: route && @game.format_currency(route.revenue),
               color_index: route_color_index(entity, ship),
               locked_by_label: locking_ship && ship_label(locking_ship),
@@ -92,7 +92,7 @@ module Engine
             is_preview = false
             if mid_flight && is_selected
               live_stats = route_stats(@hexes_explored_this_trip, @cargo, @trace.size - 1,
-                                       max_hexes(entity, ship, @refueled_hexes.size), @refueled_hexes.size)
+                                       max_hexes(entity, ship, @refuel_mp_gained), @refueled_hexes.size)
               live_revenue = @game.format_currency(@game.trace_revenue(entity, ship, @trace, @cargo))
             elsif !@auto_fill_declined.include?(ship) && (preview = preview_last_route(entity, ship))
               # Not gated on !mid_flight -- a different ship's blocked
@@ -101,7 +101,7 @@ module Engine
               explored = preview[:hexes].count { |h| needs_exploration?(h) }
               refuels = preview[:refueled_hex_ids].size
               live_stats = route_stats(explored, preview[:cargo], preview[:hexes].size - 1,
-                                       max_hexes(entity, ship, refuels), refuels)
+                                       max_hexes(entity, ship, preview[:refuel_mp]), refuels)
               live_revenue = @game.format_currency(preview[:revenue])
             end
             real_choice = ship_choice if !mid_flight && ship_choices(entity).key?(ship_choice)
