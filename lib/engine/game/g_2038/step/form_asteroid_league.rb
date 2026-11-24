@@ -6,30 +6,15 @@ module Engine
   module Game
     module G2038
       module Step
-        # Forces AE's owner to explicitly form-or-decline the Asteroid
-        # League once eligible (Phase 3-4). This must interrupt play and
-        # force a real yes/no, not sit as a take-it-or-leave-it side
-        # option. The generic engine's `choose_ability` mechanism
-        # (Step::SpecialChoose) can only ever be non-blocking -- its
-        # `blocks?` is hardcoded false -- so a dedicated step was the
-        # only way to make this a real, forced decision. AE's
-        # `choose_ability` ability was removed from entities.rb; this
-        # replaces it entirely.
+        # Step::SpecialChoose's `blocks?` is hardcoded false, so it can't
+        # force a real yes/no decision -- a dedicated step was the only
+        # way to do that, replacing AE's `choose_ability` ability entirely.
         #
-        # Modeled directly on MergeIntoLeague's same shape: overrides
-        # active_entities/active? (eligibility can begin partway through
-        # a round, since buying the Phase III ship is itself an OR
-        # action) and a round_state flag that resets for free on every
-        # new round instance, giving "ask again next round" per
-        # EVENTS_TEXT -- wired into both stock_round and operating_round
-        # in game.rb.
-        #
-        # Named `al_formation_declined`, not `declined`: both this step
-        # and MergeIntoLeague are wired into the same operating_round,
-        # and round_state is applied step by step with no namespacing --
-        # a same-named key here would silently clobber MergeIntoLeague's
-        # own `declined` (an array), corrupting it to `false` and
-        # crashing the next `Array#-` call on it.
+        # `al_formation_declined`, not `declined`: this step and
+        # MergeIntoLeague share the same operating_round's unnamespaced
+        # round_state, and `declined` is already MergeIntoLeague's own
+        # (an array) -- reusing that key would silently corrupt it to
+        # `false`.
         class FormAsteroidLeague < Engine::Step::Base
           ACTIONS = %w[choose].freeze
           FORM = 'form'

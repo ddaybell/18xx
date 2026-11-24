@@ -6,11 +6,8 @@ require 'view/game/actionable'
 module View
   module Game
     module G2038
-      # Hex-anchored replacement for the shared top-banner Confirm (see
-      # View::Confirm) for Step::Route#explore_would_lock_other_routes? --
-      # persists until the player picks a button, unlike Confirm's fixed
-      # 3-second auto-dismiss, since exploring here locks in every route
-      # already submitted this OR.
+      # Unlike View::Confirm, persists until the player picks a button --
+      # see Step::Route#explore_would_lock_other_routes?.
       class ExploreLockPrompt < Snabberb::Component
         include Actionable
         include Lib::Settings
@@ -31,8 +28,6 @@ module View
                         style: { color: '#FFFFFF', fontSize: '14px', marginBottom: '4px' },
                       }, '⚠️ Exploring locks in every route already submitted this turn.')
 
-          # No per-button drop-shadow here (unlike HexChoiceSelector) --
-          # the card casts one as a whole (see style[:filter] below).
           button_style = {
             display: 'inline-block',
             cursor: 'pointer',
@@ -58,9 +53,6 @@ module View
             gap: '5px',
             maxWidth: "#{POPUP_MAX_WIDTH}px",
             position: 'absolute',
-            # Opaque card -- without it the white message text sat
-            # directly on whatever hex color was underneath, unreadable on
-            # some hexes.
             backgroundColor: 'rgba(0, 0, 0, 0.85)',
             borderRadius: '6px',
             padding: '8px',
@@ -82,10 +74,6 @@ module View
           h(:div, { style: style }, [message, h(:div, [confirm, cancel])])
         end
 
-        # Runs the dispatch callback HexChoiceSelector#choose had already
-        # built before this prompt intercepted it. Also marks the warning
-        # acknowledged (Step::Route#acknowledge_lock_warning!) so it
-        # doesn't pop up again before every later explore this turn.
         def confirm!
           step = @game.round.active_step
           step.acknowledge_lock_warning! if step.respond_to?(:acknowledge_lock_warning!)

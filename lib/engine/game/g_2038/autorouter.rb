@@ -5,39 +5,24 @@ require_relative 'combo_generator'
 module Engine
   module Game
     module G2038
-      # The ship-route search engine ("Auto"/"Suggest Route", and the
-      # multi-ship ordering search in Step::Route#try_ordering!). Reuses
-      # Game#hex_bfs, Game#candidate_slots, and ComboGenerator (this
-      # file is the feasibility solver plus the orchestrating
-      # #suggest_route entry point).
+      # Pulls candidate cargo combinations from ComboGenerator in
+      # strictly decreasing ceiling order. The search can stop the
+      # moment the next combo's ceiling can no longer beat the best
+      # REAL revenue already found -- a provable stopping point, not a
+      # timeout or a guess, since every ceiling is admissible (never
+      # too low) and ComboGenerator guarantees later combos never rank
+      # higher.
       #
-      # Strategy: pull candidate cargo combinations from ComboGenerator in
-      # strictly decreasing ceiling order. For each, ask "can a real route
-      # actually collect all of it, and if so, what's the best real
-      # revenue reachable" (#route_for_combo below). Because ComboGenerator
-      # guarantees every later combo has a ceiling <= this one, and every
-      # combo's ceiling is an admissible (never too low) bound on its own
-      # true achievable revenue, the search can stop the moment the next
-      # combo's ceiling can no longer beat the best REAL revenue already
-      # found -- at that point no untried combo could possibly do better.
-      # This is a provable stopping point, not a timeout or a guess.
-      #
-      # Note this is *not* simply "first feasible combo wins": a combo's
-      # ceiling assumes every slot in it could independently reach its own
-      # best-case destination bonus, which a single real route often can't
-      # simultaneously realize (only one hex is ever the actual delivery
-      # destination) -- so a combo can be fully feasible (every slot
-      # reachable) yet still fall short of its own ceiling. The ceiling-
-      # vs-best-real-found comparison handles that correctly; a naive
-      # "stop at first feasible" would not.
+      # Not simply "first feasible combo wins": a combo's ceiling
+      # assumes every slot could independently reach its own best-case
+      # bonus, which a single real route (one actual delivery
+      # destination) often can't simultaneously realize -- so a fully
+      # feasible combo can still fall short of its own ceiling.
       class Autorouter
-        # timed_out is always false here: this engine has no time cap at
-        # all, it runs to proof. certified_bound/proven_optimal: when a
-        # run stops early via #stop_early! instead of reaching full
-        # proof, certified_bound is the proven maximum any route could
-        # still pay ("$430, and nothing can beat $470") -- a bounded
-        # statement, never a guess. proven_optimal is true only for a
-        # full run to proof (bound == revenue).
+        # timed_out is always false -- this engine has no time cap, it
+        # runs to proof. certified_bound is the proven maximum any route
+        # could still pay when a run stops early via #stop_early!.
+        # proven_optimal is true only for a full run to proof.
         Result = Struct.new(:hexes, :cargo, :revenue, :timed_out, :elapsed, :combos_tried,
                             :destination_hex_id, :certified_bound, :proven_optimal, :refueled_hex_ids,
                             keyword_init: true)
@@ -52,38 +37,26 @@ module Engine
           @game = game
         end
 
-        # Runs one full search per possible "destination ore focus" (see
-        # #scoped_slots_for) plus the max real revenue found across all
-        # of them wins. Necessary, not just an optimization: Combo
-        # Generator's correctness depends on per-slot values being
-        # additive/separable, but Game#candidate_slots' combined
-        # ceiling (every slot crediting its OWN best-case home bonus)
-        # is NOT separable, since it silently assumes multiple
-        # different bonus-paying hexes could all be the same real
-        # ending at once. On a real 39-candidate, 7-hold board this
-        # meant the search's proof of optimality took 40,000+ combos
-        # and never finished within 10 minutes.
-        #
-        # Splitting into one sweep per assumed destination ore fixes
-        # this: within a single sweep, every slot's value only ever
-        # credits a bonus for THAT one ore, so two slots' values
-        # genuinely can be summed and trusted as a real joint ceiling.
-        # Synchronous entry point (the dev Compare button; scripts).
-        # Runs to proof (or until #stop_early! is called externally) --
-        # there's no timeout knob, by design.
+        # One full search per possible destination-ore focus (see
+        # #scoped_slots_for), not just an optimization: ComboGenerator
+        # needs per-slot values to be additive, but Game#candidate_slots'
+        # combined ceiling (every slot crediting its OWN best-case home
+        # bonus) isn't separable -- it assumes multiple different
+        # bonus-paying hexes could all be the same real ending at once.
+        # Without the split, proof of optimality on a real 39-candidate,
+        # 7-hold board took 40,000+ combos and never finished in 10
+        # minutes. Within one sweep, every slot credits a bonus for only
+        # that sweep's ore, so values genuinely can be summed and
+        # trusted as a real joint ceiling.
         def suggest_route(entity, ship)
           start_chunk!(entity, ship)
           loop { break if run_one_chunk! }
           finish_chunk!
         end
 
-        # Chunked interface (Step::Route#auto_route_all_tick! drives it):
-        # start_chunk! sets up the whole run, run_one_chunk! does at most
-        # CHUNK_DURATION of work and returns true once genuinely finished,
-        # finish_chunk! returns the final
-        # Result (or nil). The only way a run ends before full proof is an
-        # external #stop_early! call (the per-ship "Accept & next ship"
-        # skip button).
+        # Chunked interface (Step::Route#auto_route_all_tick! drives it).
+        # The only way a run ends before full proof is an external
+        # #stop_early! call (the "Accept & next ship" skip button).
         def start_chunk!(entity, ship)
           @entity = entity
           @ship = ship
@@ -97,8 +70,6 @@ module Engine
           @peeked = []
           @done = false
 
-          # Always-on phase profiling (a few Time.now calls per combo,
-          # negligible)
           @prof = Hash.new(0.0)
           @prof_n = Hash.new(0)
 
@@ -108,27 +79,21 @@ module Engine
           @ctx = slots.empty? ? nil : build_search_context(entity, ship, slots)
           return unless @ctx
 
-          # Feasibility results memoized across the WHOLE run, all
-          # sweeps included -- the expensive state search
-          # (#search_goals) depends only on which HEXES must be
-          # visited, never on which specific mine on a double-mine
-          # hex, which sweep's ore focus is asking, or the cargo's
-          # values. Found via profiling: the per-combo search was ~99%
-          # of a 313s real-board run, much of it byte-identical repeat
-          # searches.
+          # Memoized across the WHOLE run, all sweeps included --
+          # #search_goals depends only on which hexes must be visited,
+          # never on sweep/cargo values. Per profiling, the per-combo
+          # search was ~99% of a 313s real-board run, much of it
+          # byte-identical repeat searches.
           @goal_memo = {}
 
           focus_ores = @game.home_delivery_bonuses.values.map(&:first).uniq
           focus_ores = [nil] if focus_ores.empty?
           sweep_slot_lists = focus_ores.map { |ore| scoped_slots_for(entity, ship, slots, ore) }
 
-          # One merged frontier across EVERY (ore-focus sweep, combo
-          # size) generator. #best_peeked_index already picks the
-          # globally-highest-ceiling entry across however many
-          # generators it's given, so merging every generator into one
-          # frontier gets this for free: the moment the single best
-          # peeked ceiling across ALL generators drops to or below the
-          # floor, nothing anywhere can beat it.
+          # One merged frontier across every (sweep, combo size)
+          # generator -- the moment the single best peeked ceiling
+          # across all of them drops to or below the floor, nothing
+          # anywhere can beat it.
           @generators = sweep_slot_lists.flat_map do |sweep_slots|
             max_size = [@holds, sweep_slots.size].min
             next [] if max_size.zero?
@@ -137,14 +102,8 @@ module Engine
           end
           @peeked = @generators.map(&:next_combo)
 
-          # Same "rank by promise, cheaply, once" idea applied to the
-          # entity's own launch bases: geometrically_feasible?'s
-          # `@ctx[:launch_idxs].any? { ... }` otherwise walks them in
-          # whatever arbitrary order entity.tokens happened to return.
-          # Ranking cost: for each base, the SAME mst_lower_bound
-          # already built for the per-combo check, summed across every
-          # sweep's own top-`holds`-value combo. Cheap, and completely
-          # safe: this only changes which base `.any?` checks first,
+          # Ranks launch bases so geometrically_feasible?'s `.any?` checks
+          # the most promising one first -- only changes search order,
           # never whether a combo is accepted.
           top_combo_idxs = sweep_slot_lists.map do |sweep_slots|
             top = sweep_slots.sort_by(&:value).last([@holds, sweep_slots.size].min)
@@ -177,37 +136,23 @@ module Engine
                      proven_optimal: !@stopped_early, refueled_hex_ids: @best[:refueled_hex_ids])
         end
 
-        # The certified maximum ANY untried combination could still pay
-        # right now: simply the single highest ceiling among every
-        # generator's currently-peeked candidate, across every sweep and
-        # combo size at once. Every generator's own emission is ceiling-descending, and ceilings
-        # are admissible (never too low), so "best_found vs this bound"
-        # is a proven statement about the whole remaining search space at
-        # any moment -- the basis for both #stop_early!'s certified bound
-        # and the live "no remaining route can beat $X" display.
+        # The highest ceiling among every generator's currently-peeked
+        # candidate -- since ceilings are admissible, this is a proven
+        # statement about the whole remaining search space at any
+        # moment.
         def certified_bound
           @cur_ceiling
         end
 
-        # Best revenue found so far (nil before the first accepted
-        # build) -- with #certified_bound, powers the live gap display.
         def best_so_far
           @best && @best[:revenue]
         end
 
-        # The current best's own concrete hex path -- for drawing it on
-        # the map live while the search continues (see
-        # Step::Route#auto_route_all_preview_hexes/map.rb's
-        # render_route_lines), same underlying data #best_so_far's
-        # revenue comes from, just the path instead of the number.
         def best_hexes
           @best && @best[:hexes]
         end
 
-        # Bailout feature: stops a search and accepts the current best.
-        # The Result comes back with the honest certified_bound at the moment of stopping and
-        # proven_optimal: false. No-op until a first best exists; there'd
-        # be nothing to accept.
+        # No-op until a first best exists.
         def stop_early!
           return unless @best
 
@@ -217,35 +162,21 @@ module Engine
           @cur_ceiling = nil
         end
 
-        # Live progress reader for the view's dev-only console throughput
-        # logging (see ship_selector.rb's run_auto_route_all_tick!) --
-        # how many combos the in-flight chunked run has tried so far.
         def combos_so_far
           @total_combos || 0
         end
 
-        # The combo index the final best answer surfaced at (nil if no
-        # run/answer) -- see the comment where it's set.
         attr_reader :best_found_at_combo
 
-        # What fraction of the combos tried SO FAR were needed to find
-        # the current best -- an honest, live "found early vs found
-        # late" signal, not a fabricated confidence percentage. This
-        # ratio only ever shrinks the longer a run goes without
-        # improving: 50% right after the find, trending toward single
-        # digits the more proof-work piles up with nothing to show for
-        # it -- exactly the situation "Accept & next ship" exists for.
+        # An honest, live "found early vs found late" signal, not a
+        # fabricated confidence percentage -- shrinks the longer a run
+        # goes without improving.
         def found_at_ratio
           return nil unless @best_found_at_combo && @total_combos&.positive?
 
           @best_found_at_combo.to_f / @total_combos
         end
 
-        # Per-phase wall-clock breakdown of the most recent run -- see
-        # start_chunk!'s own comment on why this is always-on. The dev
-        # "Time Optimal" button appends this to its alert, so a browser
-        # slowness report arrives with the actual in-browser hotspot
-        # named.
         def profile_summary
           return 'no run recorded' unless @prof
 
@@ -254,13 +185,9 @@ module Engine
           (phases + [counts]).join("\n")
         end
 
-        # Live heartbeat every PROGRESS_LOG_EVERY combos -- browser
-        # console under Opal (console messages render even while a
-        # synchronous run has the tab itself frozen), stderr under MRI --
-        # so a long run shows real-time progress AND leaves its last
-        # snapshot behind even if the user gives up and reloads before it
-        # finishes. Answers "is it stuck or just slow, and where is the
-        # time going" without waiting for the final alert.
+        # Console messages render even while a synchronous Opal run has
+        # the tab itself frozen, so this heartbeat shows real-time
+        # progress without waiting for the final alert.
         PROGRESS_LOG_EVERY = 1000
 
         def log_progress!
@@ -285,16 +212,10 @@ module Engine
           @done
         end
 
-        # One bounded unit of work: try exactly one combo. Every (sweep,
-        # combo size) generator peeks its own next candidate, merged into
-        # one frontier (see #start_chunk!); each step tries whichever
-        # peeked combo has the single highest ceiling across ALL of them,
-        # ending the instant that global best can no longer beat the best
-        # VERIFIED revenue found so far. An improving combo only actually
-        # raises that floor after #build_flight succeeds -- turning the
-        # abstract feasibility answer into a concrete, MP-verified hex
-        # path -- so the floor is always something the player could
-        # genuinely submit, never just a paper claim.
+        # Ends the instant the global best ceiling can no longer beat
+        # the best VERIFIED revenue found so far. The floor only rises
+        # after #build_flight succeeds, turning the abstract feasibility
+        # answer into a concrete, MP-verified path -- never a paper claim.
         def step_combo!
           t0 = Time.now
           idx, ceiling = best_peeked_index(@peeked)
@@ -323,11 +244,6 @@ module Engine
             @prof_n[:builds] += 1
             if built && built[:revenue] > floor
               @best = built
-              # Which combo the winning answer actually surfaced at --
-              # observed (one real board) to be a tiny fraction of the
-              # total, with everything after being pure proof-of-
-              # optimality; tracked so that hypothesis can be tested
-              # across a sample of boards rather than one anecdote.
               @best_found_at_combo = @total_combos
             end
           end
@@ -337,14 +253,10 @@ module Engine
           @prof[:next_combo] += Time.now - t0
         end
 
-        # Returns [best_idx, best_ceiling] -- the caller (step_combo!)
-        # needs both, and used to recompute the winning combo's own
-        # ceiling a second time via a fresh .sum(&:value) right after
-        # this method already computed the identical value while finding
-        # it. That doubled the cost of the single hottest per-combo
-        # operation across the whole search (tens of thousands of combos
-        # on a real board, per this file's own profiling) for zero
-        # benefit -- returning the value already in hand here instead.
+        # Returns [best_idx, best_ceiling] -- the caller used to
+        # recompute the ceiling a second time right after this method
+        # already found it; returning it here avoids that redundant sum
+        # over tens of thousands of combos.
         def best_peeked_index(peeked)
           best_idx = nil
           best_ceiling = -1
@@ -362,21 +274,13 @@ module Engine
           [best_idx, best_idx && best_ceiling]
         end
 
-        # Rebuilds `slots` with each one's ranking `.value` scoped to a
-        # single assumed destination ore (or none, if `focus_ore` is
-        # nil) -- unlike Game#candidate_slots' own `.value` (not
-        # separable across a combo), a slot here only ever gets
-        # home-bonus credit if its ore matches THIS sweep's focus,
-        # making every sweep's own values genuinely additive.
-        #
-        # Only one sweep per *value* in home_delivery_bonuses.values is
-        # needed, and no separate "no bonus" sweep either: for any real
-        # combo, whichever slots end up sharing one real destination's
-        # ore either don't exist (every sweep scores it identically) or
-        # do exist for some ore O, in which case the O-focused sweep
-        # credits those slots their real bonus exactly -- so the true
-        # best combo can never rank low enough, in at least one sweep,
-        # to be pruned away before being tried.
+        # A slot here only gets home-bonus credit if its ore matches
+        # THIS sweep's focus, making every sweep's values genuinely
+        # additive. Only one sweep per value in home_delivery_bonuses is
+        # needed, and no separate "no bonus" sweep: for any real combo,
+        # whichever ore its destination actually pays, that ore's sweep
+        # credits it exactly -- so the true best combo can never rank
+        # low enough, in at least one sweep, to be pruned away.
         def scoped_slots_for(entity, ship, slots, focus_ore)
           amount = focus_ore && @game.best_home_delivery_amount(focus_ore)
 
@@ -391,19 +295,12 @@ module Engine
           end
         end
 
-        # Game#candidate_slots (component 2) returns every currently
-        # pickable slot game-wide, with no notion of distance at all --
-        # fine for ranking, but combinatorially disastrous for the actual
-        # search.
-        #
-        # This filters out any slot that's farther than the ship's own
-        # theoretical maximum reach -- MP budget plus +3 for every one
-        # of entity's own stations on the whole map (an admissible,
-        # safe over-estimate: a real flight could never benefit from
-        # more refuels than stations that exist at all) -- from EVERY
-        # one of entity's launch hexes. A slot beyond that cap from
-        # every launch hex is provably unreachable by any real route,
-        # so dropping it up front can never lose the true optimum.
+        # Game#candidate_slots has no notion of distance -- fine for
+        # ranking, combinatorially disastrous for the actual search.
+        # Filters out any slot farther than the ship's theoretical max
+        # reach (MP plus +3 per station, an admissible over-estimate)
+        # from every launch hex -- provably unreachable, so dropping it
+        # can never lose the true optimum.
         def reachable_slots(entity, ship)
           max_mp = @game.ship_distance(entity, ship)
           launch_hexes = entity.tokens.filter_map { |t| t.city&.hex }.uniq
@@ -418,24 +315,12 @@ module Engine
           end
         end
 
-        # Checks whether this specific combo (a fixed set of pickup
-        # slots) can actually be collected by a single flight -- some
-        # launch hex, some visiting order, some insertion of refuels at
-        # entity's own stations, all within the ship's MP budget -- and
-        # if so, the best real revenue reachable. Returns nil if no
-        # real route can collect every slot in the combo at all.
-        #
-        # Modeled as a small state-space search over just the
-        # "important" hexes -- launch candidates, this combo's own
-        # waypoints, entity's own refueling stations, and every
-        # home_delivery_bonus hex. Pairwise distances between these are
-        # already free (Game#hex_bfs), so a detour through a station
-        # on the shortest path is automatically free too, with no
-        # special-casing needed. State = (current hex, MP remaining,
-        # bitmask of waypoints collected, bitmask of stations already
-        # refueled this flight) explored via BFS with a visited-state
-        # memo, small enough to run in milliseconds even though it's
-        # exhaustive.
+        # Returns nil if no real route can collect every slot in the
+        # combo. Modeled as a state-space search over only the
+        # "important" hexes (launch candidates, waypoints, stations,
+        # home-bonus hexes) -- pairwise distances between these are
+        # already free via Game#hex_bfs, so a detour through a station
+        # is automatically free too, no special-casing needed.
         def route_for_combo(entity, ship, combo)
           t0 = Time.now
           wp_ids = combo.map(&:hex_id).uniq.sort
@@ -469,46 +354,31 @@ module Engine
           revenue
         end
 
-        # Cheap, purely-geometric admissible pre-check: any real flight
-        # visiting every hex in a combo must cover at least the cost of
-        # the MINIMUM SPANNING TREE connecting those hexes plus the
-        # launch point -- a provable lower bound on total travel
-        # distance. Comparing that lower bound against the most
-        # generous possible MP budget can only ever REJECT combos that
-        # are truly impossible, never one that might still be
-        # reachable -- so a `false` here is always safe to skip on.
-        #
-        # Exists because a combo's ceiling ranking (raw slot value
-        # only) has no idea about map geometry at all: a high-value
-        # combo mixing hexes near two of the entity's own distant bases
-        # can rank near the top while being utterly unreachable in one
-        # trip, otherwise only discoverable as infeasible by paying for
-        # the full, much more expensive BFS in search_goals.
+        # Any real flight visiting every hex in a combo must cover at
+        # least the cost of the MINIMUM SPANNING TREE connecting those
+        # hexes plus the launch point -- a provable lower bound, so a
+        # `false` here is always safe (rejects only truly impossible
+        # combos). Exists because a combo's ceiling ranking has no idea
+        # about map geometry, and could otherwise only be discovered
+        # infeasible by paying for the full BFS in search_goals.
         def geometrically_feasible?(wp_ids)
           idx = @ctx[:index]
           wp_idxs = wp_ids.map { |id| idx[id] }
           budget = @ctx[:max_mp] + (3 * @ctx[:station_count])
 
-          # The MST above only accounts for connecting the combo's own
-          # hexes together -- it says nothing about the flight also
-          # needing to END somewhere deliverable (a base or transship
-          # point). ctx[:nearest_deliverable] is precomputed per node
-          # (distance to ITS OWN closest deliverable hex, 0 if the node
-          # already is one) -- the cheapest case across every combo
-          # member is a safe, still-admissible lower bound on that
-          # unavoidable extra cost.
+          # The MST only connects the combo's own hexes -- it says
+          # nothing about also needing to END somewhere deliverable.
+          # The cheapest nearest_deliverable case across every member
+          # is a safe, still-admissible lower bound on that extra cost.
           ending_extra = wp_idxs.filter_map { |i| @ctx[:nearest_deliverable][i]&.first }.min || 0
 
           @ctx[:launch_idxs].any? { |launch_idx| mst_lower_bound([launch_idx, *wp_idxs]) + ending_extra <= budget }
         end
 
-        # Prim's algorithm over the precomputed `dist` matrix -- `idxs`
-        # is small (one launch node plus at most `holds` waypoints, so
-        # under ~10 nodes total), so the naive O(n^2) approach is already
-        # cheap next to a real BFS. Returns Float::INFINITY if any node
-        # is unreachable from the rest within this node set (a nil
-        # dist[a][b] entry), which correctly fails the budget comparison
-        # above rather than needing its own special case there.
+        # Prim's algorithm -- `idxs` is small (under ~10 nodes), so
+        # naive O(n^2) is cheap. Returns Float::INFINITY if any node is
+        # unreachable within this set, failing the budget comparison
+        # above without needing its own special case.
         def mst_lower_bound(idxs)
           return 0 if idxs.size <= 1
 
@@ -540,23 +410,13 @@ module Engine
           total
         end
 
-        # build_search_context represent everything about the state search
-        # that does NOT depend on the specific combo, computed once per
-        # suggest_route call instead of once per combo:
-        #
-        # - Every hex the search will ever visit (launch bases, entity's
-        #   stations, home-bonus hexes, every candidate slot's hex) gets a
-        #   small integer index, and pairwise distances become a plain 2D
-        #   array -- integer array indexing instead of nested string-hash
-        #   lookups in the hottest loop (a large constant-factor win in
-        #   Opal especially, same lesson as the string-key fix before it).
-        #
-        # - nearest_deliverable[i]: the closest hex where a flight may
-        #   legally END (any tokened base or transshipment hex, per Game#
-        #   deliverable_destination?) from node i, with its distance. A
-        #   refuel-en-route ending is still covered: any helpful station is
-        #   itself a node, so the state AT that station (post-refuel) is
-        #   where this per-node check gets applied.
+        # Everything about the state search that does NOT depend on the
+        # specific combo, computed once per suggest_route call instead
+        # of once per combo. Assigns every hex a small integer index and
+        # builds pairwise distances as a plain 2D array -- integer
+        # indexing instead of nested string-hash lookups in the hottest
+        # loop. nearest_deliverable[i]: the closest legal-ending hex
+        # from node i, with its distance.
         def build_search_context(entity, ship, slots)
           launch_hexes = entity.tokens.filter_map { |t| t.city&.hex }.uniq
           return nil if launch_hexes.empty?
@@ -608,24 +468,17 @@ module Engine
           }
         end
 
-        # search_goals is the state search for one waypoint-hex-set:
-        # can a single flight visit every hex in `wp_ids` (some launch hex,
-        # some visiting order, MAY refuel at entity's own stations --
-        # §7.12, never automatic -- within MP budget), and if so, where
-        # can it legally end? Returns nil if infeasible, else
-        # { generic: <hex id of a plain no-bonus ending, or nil>,
-        # specific: [in-graph ending hex ids -- notably the home-bonus
-        # hexes, whose ending choice changes revenue] }.
+        # §7.12: refueling at entity's own stations is a MAY, never
+        # automatic. Returns nil if infeasible, else { generic: <hex id
+        # of a plain no-bonus ending, or nil>, specific: [in-graph
+        # ending hex ids whose choice changes revenue] }.
         #
-        # State = (node index, MP remaining, waypoints-collected bitmask,
-        # stations-refueled bitmask), explored via an indexed-queue BFS
-        # with dominance pruning on best-MP-per-(node, masks) | (node <<
-        # v_bits+r_bits) | (visited << r_bits) | refueled -- the fastest
-        # hash key both MRI and JS have. Visiting a not-yet-refueled
-        # station branches into two separate states (refuel now / decline
-        # -- see the transition loop's own comment) whenever declining
-        # could plausibly pay off later; the two are distinguished by the
-        # `refueled` bit in this same key, never conflated.
+        # State = (node, MP remaining, waypoints-collected bitmask,
+        # stations-refueled bitmask), packed into one integer key for
+        # dominance pruning. Visiting a not-yet-refueled station
+        # branches into two states (refuel now / decline) whenever
+        # declining could plausibly pay off later, distinguished by the
+        # `refueled` bit so the two are never conflated.
         def search_goals(wp_ids)
           ctx = @ctx
           idx = ctx[:index]
@@ -641,20 +494,15 @@ module Engine
           wp_bit = Array.new(ctx[:ids].size)
           wp_idxs.each_with_index { |ni, b| wp_bit[ni] = b }
           # Collecting transshipment always ends the flight immediately
-          # (Step::Route's TRANSSHIP dispatch calls finish_route right
-          # after pick_up_transshipment!), unlike an ordinary mine pickup,
-          # which lets the ship keep flying. `transship_bit[b]` is
-          # true when waypoint bit `b`'s hex is a transshipment pickup.
+          # (unlike an ordinary mine pickup). `transship_bit[b]` is true
+          # when waypoint bit `b`'s hex is a transshipment pickup.
           transship_bit = wp_ids.map { |id| @game.transshipment_hex?(id) }
 
           nodes = (ctx[:core_idxs] + wp_idxs).uniq
 
-          # State keys: the packed (node|visited|refueled) integer,
-          # STRINGIFIED before use as the hash key -- the .to_s is
-          # load-bearing, not cosmetic: Opal's Hash only has a native
-          # fast path for STRING keys, integer keys fall through to its
-          # slow generic bucket path, and this loop does 2-3 hash ops
-          # per edge.
+          # .to_s is load-bearing: Opal's Hash only has a native fast
+          # path for string keys, integer keys fall through to its slow
+          # generic bucket path.
           best_mp = {}
           queue = []
           head = 0
@@ -683,11 +531,8 @@ module Engine
               specific[ctx[:ids][ni]] = true if nd&.zero?
             end
 
-            # A state sitting at a transshipment waypoint is a dead end
-            # for further travel -- see the comment on transship_bit
-            # above. This holds regardless of whether v == full_mask
-            # yet: if other waypoints still haven't been visited, this
-            # branch could never have legally continued to them either.
+            # A state at a transshipment waypoint is a dead end for
+            # further travel, regardless of whether v == full_mask yet.
             wb_here = wp_bit[ni]
             next if wb_here && transship_bit[wb_here]
 
@@ -704,18 +549,10 @@ module Engine
               nv |= (1 << wb) if wb
 
               sb = station_bit[mi]
-              # §7.12: refueling is a MAY, not a MUST. Once mp_spent
-              # (max_mp - nmp) reaches 3, refueling right now already
-              # gets the maximum possible +3, and per this class's own
-              # comment on the math, deferring further can never do
-              # better -- so past that point refuel-now weakly dominates
-              # declining (same eventual best case, never less fuel in
-              # the meantime) and there's no need to branch: apply it
-              # unconditionally, same as before. Only while mp_spent < 3
-              # is declining a genuine, potentially-better choice, worth
-              # exploring as its own separate state (distinguished from
-              # refueling by the `nr` bit, so dominance pruning below
-              # never conflates the two).
+              # Once mp_spent reaches 3, refueling already gets the max
+              # possible +3, so refuel-now weakly dominates declining --
+              # no need to branch past that point. Below 3, declining is
+              # a genuine choice worth its own state.
               can_refuel = sb && (r & (1 << sb)).zero?
               defer_worth_exploring = can_refuel && (max_mp - nmp) < 3
 
@@ -736,15 +573,9 @@ module Engine
           { generic: generic, specific: specific.keys }
         end
 
-        # Shared enqueue step for search_goals' transition loop: the
-        # dead-branch prune (once every waypoint is collected, a state
-        # can only become a valid ending if SOME delivery point is
-        # still reachable, and nearest_deliverable[mi] gives the
-        # shortest possible remaining distance to one -- crediting
-        # every still-unrefueled station's full +3 keeps this
-        # admissible) plus the packed-key dominance check/update.
-        # Factored out so it runs once per refuel-choice branch instead
-        # of being duplicated inline for each.
+        # Once every waypoint is collected, prunes a state unless SOME
+        # delivery point is still reachable -- crediting every
+        # still-unrefueled station's full +3 keeps this admissible.
         def enqueue_goal_state(nmp, nv, nr, mi, best_mp, queue, v_bits, r_bits, full_mask, nearest)
           if nv == full_mask
             nd = nearest[mi] && nearest[mi][0]
@@ -762,11 +593,6 @@ module Engine
           queue << [mi, nmp, nv, nr]
         end
 
-        # Among every reachable valid ending, the real cargo revenue
-        # (Game#trace_revenue, the same method a real submitted route
-        # gets scored by) differs only by home_delivery_bonus -- so try
-        # every specific in-graph ending (the bonus hexes) plus the
-        # generic no-bonus one, and keep whichever actually maximizes it.
         def best_revenue_for_goals(entity, ship, combo, goals)
           cargo = combo.map { |slot| { hex_id: slot.hex_id, mine_idx: slot.mine_idx, ore: slot.ore, value: slot.raw_value } }
 
@@ -789,36 +615,20 @@ module Engine
           { destination_hex_id: best_hex_id, revenue: best_revenue }
         end
 
-        # Turns an abstract "this combo is collectible, best ending X"
-        # answer into a concrete, MP-verified hex-by-hex flight the
-        # Step::Route suggestion machinery can actually apply/submit --
-        # the same {hexes:, cargo:, revenue:} shape Autorouter::Result
-        # carries. Returns nil if no legal concrete path could be built
-        # (see the expansion fallback below); the caller then simply
-        # doesn't accept the combo, keeping the search floor honest.
-        #
-        # The revenue returned is trace_revenue on the REAL built path
-        # and cargo -- normally identical to the abstract claim, but
-        # always recomputed rather than trusted, so anything surprising
-        # in the concrete path (e.g. an ending pass-through) can never
-        # inflate the reported number past what submitting would pay.
+        # Returns nil if no legal concrete path could be built, so the
+        # caller simply doesn't accept the combo. The revenue returned
+        # is always recomputed from the REAL built path and cargo, so
+        # anything surprising in the concrete path can never inflate
+        # the reported number past what submitting would pay.
         def build_flight(combo, target_hex_id)
           node_path, refueled_hex_ids = plan_node_path(combo.map(&:hex_id).uniq, target_hex_id)
           return nil unless node_path
 
-          # First expansion uses each leg's arbitrary BFS shortest path.
-          # That can accidentally pass THROUGH one of entity's own
-          # stations mid-leg -- but since flight_within_mp? below only
-          # ever credits the PLANNED refueled_hex_ids (never an
-          # incidental pass-through, matching the "no refueling anywhere
-          # unplanned" rule), that no longer risks silently consuming a
-          # station's once-per-flight use earlier than the abstract plan
-          # assumed. If the MP walk still fails (e.g. an accidental
-          # pass-through ate MP the plan didn't budget for some other
-          # reason), retry with station-avoiding legs (planned refuel
-          # stations are leg ENDPOINTS, so only accidental pass-throughs
-          # get avoided); if even that can't produce a legal flight, give
-          # up on this combo.
+          # First expansion's arbitrary BFS shortest path can
+          # accidentally pass through one of entity's own stations
+          # mid-leg. If the MP walk fails because of that, retry with
+          # station-avoiding legs (planned refuel stations are leg
+          # endpoints, so they're unaffected).
           hexes = expand_node_path(node_path, avoid_stations: false)
           hexes = expand_node_path(node_path, avoid_stations: true) unless hexes && flight_within_mp?(hexes, refueled_hex_ids)
           return nil unless hexes && hexes.size > 1 && flight_within_mp?(hexes, refueled_hex_ids)
@@ -828,16 +638,11 @@ module Engine
             refueled_hex_ids: refueled_hex_ids }
         end
 
-        # plan_node_path re-runs the same state search as #search_goals
-        # (including its §7.12 refuel-or-decline branching), but tracking
-        # parents and stopping at the FIRST state that satisfies the
-        # chosen ending -- returns [path, refueled_hex_ids]: the
-        # node-level hex-id path (launch first, ending last; the generic
-        # ending hex appended if it isn't itself a graph node) and which
-        # of those nodes the winning path actually chose to refuel at.
-        # Runs once per ACCEPTED combo (a few dozen per suggest_route at
-        # most), not per tried combo, so the double-search cost is
-        # negligible next to the main loop.
+        # Re-runs the same state search as #search_goals, but tracking
+        # parents and stopping at the FIRST state matching the chosen
+        # ending -- returns [path, refueled_hex_ids]. Runs once per
+        # ACCEPTED combo, not per tried combo, so the double-search
+        # cost is negligible.
         def plan_node_path(wp_ids, target_hex_id)
           ctx = @ctx
           idx = ctx[:index]
@@ -854,9 +659,6 @@ module Engine
           wp_bit = Array.new(ctx[:ids].size)
           wp_idxs.each_with_index { |ni, b| wp_bit[ni] = b }
           nodes = (ctx[:core_idxs] + wp_idxs).uniq
-          # See the matching comment in #search_goals: collecting
-          # transshipment always ends the flight, so travel can never
-          # continue past a visited transshipment waypoint.
           transship_bit = wp_ids.map { |id| @game.transshipment_hex?(id) }
 
           best_mp = {}
@@ -864,8 +666,6 @@ module Engine
           queue = []
           head = 0
 
-          # Stringified packed-int state keys, same as #search_goals (and
-          # for the same Opal-fast-path reason -- see the comment there).
           ctx[:launch_idxs].each do |ni|
             v = wp_bit[ni] ? (1 << wp_bit[ni]) : 0
             k = (((ni << v_bits) | v) << r_bits).to_s
@@ -885,24 +685,14 @@ module Engine
             next if best_mp[k] != mp
 
             if v == full_mask
-              # target_idx alone isn't enough to know `target_hex_id` is
-              # actually reachable as a normal transition node here --
-              # ctx[:ids]/idx also covers this entity's own launch hexes
-              # (kept there for the distance matrix/nearest_deliverable
-              # lookups below), which are deliberately excluded from
-              # `nodes` (this method never needs to travel THROUGH its
-              # own launch point mid-flight). A generic ending can
-              # legitimately resolve to one of those launch hexes --
-              # flying out and back to base is a perfectly normal
-              # delivery -- so without the `nodes.include?` guard this
-              # fell through to expecting a literal revisit of a node
-              # this search graph never offers a transition to, and
-              # always failed to find it (found live: a real, better-
-              # paying combo silently lost to build_flight returning nil
-              # here, discarding an otherwise-winning route). Falling
-              # back to the same nearest_deliverable check the `else`
-              # branch already uses for a true non-graph target handles
-              # this exactly like any other generic ending.
+              # `nodes` deliberately excludes launch hexes (no mid-flight
+              # travel through them), but a generic ending can legally
+              # resolve to one (fly out and back to base). Without the
+              # `nodes.include?` guard this expected a literal revisit
+              # this graph never offers, and silently lost real,
+              # better-paying combos to a nil here. Falling back to the
+              # nearest_deliverable check handles it like any other
+              # generic ending.
               if target_idx && nodes.include?(target_idx)
                 if ni == target_idx
                   goal_key = k
@@ -932,10 +722,7 @@ module Engine
               wb = wp_bit[mi]
               nv |= (1 << wb) if wb
 
-              # §7.12 refuel-or-decline branch -- see search_goals' own
-              # comment for why this is only worth exploring as a
-              # separate state while mp_spent < 3, and unconditional
-              # (same as before) past that point.
+              # Same refuel-or-decline branching as search_goals.
               sb = station_bit[mi]
               can_refuel = sb && (r & (1 << sb)).zero?
               defer_worth_exploring = can_refuel && (max_mp - nmp) < 3
@@ -954,12 +741,9 @@ module Engine
 
           return nil unless goal_key
 
-          # Walk parent[] back from the goal, collecting the node-level
-          # hex path AND -- new for §7.12 -- which of those nodes the
-          # winning path actually chose to refuel at: a state's `r` bits
-          # only ever differ from its parent's by the one station bit set
-          # on the transition that reached it (see the branch above), so
-          # a changed bit means a refuel happened arriving at that node.
+          # A state's `r` bits only differ from its parent's by the one
+          # station bit set on the transition that reached it, so a
+          # changed bit means a refuel happened arriving at that node.
           mask = (1 << r_bits) - 1
           shift = v_bits + r_bits
           path = []
@@ -977,9 +761,6 @@ module Engine
           [path, refueled_hex_ids]
         end
 
-        # Shared dominance-check-and-enqueue step for plan_node_path's
-        # transition loop, factored out so it runs once per refuel-choice
-        # branch (see the call site) instead of being duplicated inline.
         def try_enqueue_path_state(mi, nmp, nv, nr, k, best_mp, parent, queue, v_bits, r_bits)
           nk = ((((mi << v_bits) | nv) << r_bits) | nr).to_s
           cur = best_mp[nk]
@@ -1008,8 +789,6 @@ module Engine
           hexes
         end
 
-        # The a->b hop sequence off Game#hex_bfs's (memoized) predecessor
-        # tree -- excludes a, includes b.
         def predecessor_leg(a_id, b_id)
           _dist, pred = @game.hex_bfs(@game.hex_by_id(a_id))
           leg = []
@@ -1023,16 +802,9 @@ module Engine
           leg
         end
 
-        # Shortest a->b path treating `blocked_ids` hexes as impassable --
-        # only used by the avoid-stations fallback, so it runs a handful
-        # of times per suggest_route at most. Delegates to Game#hex_bfs's
-        # own blocked:-aware walk (see that method's own comment) instead
-        # of a second, hand-rolled BFS-over-neighbors implementation --
-        # the two had identical core logic (skip empty hexes, track a
-        # predecessor, breadth-first queue), duplicated in a way that
-        # could silently drift if a future rule ever changed what counts
-        # as a passable neighbor (e.g. a new impassable hex type) and
-        # only one copy got updated.
+        # Delegates to Game#hex_bfs's own blocked:-aware walk rather than
+        # a second, hand-rolled implementation that could silently drift
+        # if a future rule changed what counts as a passable neighbor.
         def bfs_leg(start_hex, target_id, blocked_ids)
           dist, pred = @game.hex_bfs(start_hex, blocked: blocked_ids)
           return nil unless dist.key?(target_id)
@@ -1046,16 +818,10 @@ module Engine
           leg
         end
 
-        # Mirrors Step::Route#replay_path's MP accounting (1 MP per hop;
-        # +3 capped at max) -- the concrete flight must survive this to
-        # be accepted, since it's the same walk the real submission will
-        # effectively perform. Only applies the bump at hexes in
-        # `refueled_hex_ids` (the plan's own §7.12 decisions, from
-        # plan_node_path) -- NOT at every eligible station encountered,
-        # since an unplanned mid-leg pass-through (see build_flight's own
-        # comment on avoid_stations) must never silently refuel either,
-        # matching the "no incidental refueling anywhere" rule now used
-        # everywhere else.
+        # Only applies the +3 bump at hexes in refueled_hex_ids (the
+        # plan's own decisions) -- not at every eligible station
+        # encountered, so an unplanned mid-leg pass-through never
+        # silently refuels either.
         def flight_within_mp?(hexes, refueled_hex_ids)
           full = @ctx[:max_mp]
           mp = full

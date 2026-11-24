@@ -7,16 +7,10 @@ module View
     class RestartTurnButton < Snabberb::Component
       include Actionable
 
-      # Whether the current entity's turn has real, undo-worthy progress
-      # that never made it into the action log -- e.g. G2038's routes
-      # are built entirely client-side and stay unrecorded until Submit
-      # (Step::Route#local_undo?, the same opt-in hook the ordinary
-      # Undo button already consults via actionable.rb). Without this,
-      # turn_start_action_id == last_game_action_id looks identical
-      # whether the turn genuinely hasn't started yet or the player has
-      # hand-flown most of a route without submitting anything real.
-      # `local_undo?` is only ever defined by G2038's Route step, so
-      # this returns false for every other game.
+      # Without this, turn_start_action_id == last_game_action_id looks
+      # identical whether the turn hasn't started, or the player has
+      # hand-flown most of a route (see Step::Route#local_undo?) without
+      # submitting anything real yet.
       def local_turn_pending?
         step = @game.round.active_step
         entity = @game.round.current_entity
@@ -32,13 +26,8 @@ module View
           end
 
         action = lambda do
-          # Discard any local, unsubmitted progress in one shot before
-          # dispatching the real Undo -- process_action (actionable.rb)
-          # always checks local_undo? first, and local_undo! only
-          # steps back one hex at a time (right for the ordinary Undo
-          # button, but not for this one). Without this, clicking
-          # Restart Turn while mid-Modify got silently reduced to that
-          # same single-hex step.
+          # local_pass! discards all local progress at once; local_undo!
+          # (what process_action checks first) only steps back one hex.
           step = @game.round.active_step
           entity = @game.current_entity
           step.local_pass!(entity) if local_turn_pending? && step.respond_to?(:local_pass!)

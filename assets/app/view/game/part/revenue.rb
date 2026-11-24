@@ -10,37 +10,20 @@ module View
       class Revenue < Base
         include SmallItem
 
-        # Part::Base doesn't declare :game -- no Part needed it before
-        # these opt-in hooks did. default: nil keeps every existing
-        # h(Revenue, ...) call site working unchanged.
+        # default: nil keeps every existing h(Revenue, ...) call site
+        # working unchanged.
         needs :game, default: nil, store: true
 
-        # Opt-in hook: a game can force this hex's revenue box to the
-        # bottom-of-hex candidate location instead of whatever the
-        # region-occupancy algorithm below would otherwise pick (e.g.
-        # G2038's transshipment points, which have nothing else
-        # competing for space, so the default always lands at
-        # dead-center -- exactly where that game wants to draw its own
-        # centered satellite icon instead, see hex_g2038.rb).
         def forced_to_bottom?
           @tile&.hex && @game.respond_to?(:offboard_forced_bottom?) && @game.offboard_forced_bottom?(@tile.hex)
         end
 
-        # Opt-in hook: a game can force this hex's revenue box to never
-        # render at all, regardless of its printed value (e.g. G2038's
-        # H10 transshipment point, whose printed value becomes stale
-        # the moment the Asteroid League forms and takes the hex over
-        # as its own base -- see Game#hide_revenue?).
         def hidden_by_game?
           @tile&.hex && @game.respond_to?(:hide_revenue?) && @game.hide_revenue?(@tile.hex)
         end
 
-        # Opt-in hook: a game can override the *displayed* text for a
-        # specific phase-color box without touching the real revenue
-        # value underneath (e.g. G2038's H10 showing "AL" once that
-        # phase-color's $0 can never actually be paid any more). The
-        # engine's real RevenueCenter#revenue is untouched -- only this
-        # display-only copy is modified.
+        # Display-only -- the engine's real RevenueCenter#revenue is
+        # never modified.
         def display_revenues
           return @revenue unless @game.respond_to?(:revenue_text_override)
 

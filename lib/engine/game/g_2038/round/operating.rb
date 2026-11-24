@@ -12,29 +12,19 @@ module Engine
             pay_fast_buck_treasury
           end
 
-          # TSI's pre-float turn only exists to let ST's owner fly the
-          # Probe (Game#tsi_pre_float?/#probe_available?) -- if the Probe
-          # has since rusted, there's nothing left for that turn to do
-          # and no normal corporate turn to fall back to either, since
-          # TSI still hasn't floated. Game#operating_order also stops
+          # Catches the Probe rusting mid-round, after TSI's pre-float
+          # turn was already queued -- Game#operating_order stops
           # inserting TSI once the Probe is gone, but only takes effect
-          # on the *next* round built from scratch -- this catches the
-          # Probe rusting *during* a round where TSI's turn was already
-          # queued before that happened.
+          # on the next round built from scratch.
           def skip_entity?(entity)
             return true if @game.tsi_pre_float?(entity) && !@game.probe_available?
 
             super
           end
 
-          # An independent that owns no ship and can't afford the
-          # cheapest one left in the Depot must merge into the AL
-          # (§7.39/Phase 9f) -- but only once it's had its own turn and
-          # is *still* shipless at the end of it, not pre-emptively
-          # before that turn even starts. Checked in after_end_of_turn
-          # instead of skip_entity?, so the independent's own turn
-          # (BuyTrain still runs -- the owner could buy a replacement
-          # ship there) happens first.
+          # §7.39/Phase 9f. Checked here rather than skip_entity? so
+          # BuyTrain still runs first -- the owner could buy a
+          # replacement ship during this same turn.
           def after_end_of_turn(operator)
             super
 
@@ -44,13 +34,9 @@ module Engine
             @game.merge_independent_into_al!(operator)
           end
 
-          # TSI's pre-float turn (flying the Probe under ST's owner's
-          # control -- Game#tsi_pre_float?) is Route only. The rest of a
-          # normal corp turn doesn't really apply yet (no real president,
-          # no real revenue/price mechanics) -- going through them one
-          # by one either misbehaves (Dividend's default "withhold"
-          # still moves the share price even off $0 revenue) or adds
-          # noise. Once Route finishes, silently end the turn instead.
+          # TSI's pre-float turn is Route only -- the rest of a normal
+          # corp turn doesn't apply yet (e.g. Dividend's default
+          # "withhold" would still move the share price at $0 revenue).
           def skip_steps
             entity = @entities[@entity_index]
             return super unless @game.tsi_pre_float?(entity)
@@ -64,15 +50,9 @@ module Engine
           private
 
           def pay_fast_buck_treasury
-            # Whichever company entities.rb marks as a treasury_income
-            # source (Fast Buck today) earns its flat amount per OR into
-            # its own treasury -- and once absorbed (Growth Corp
-            # conversion or an AL merger), the amount follows it into
-            # whichever corp now holds that treasury (Game#
-            # fast_buck_income_recipient). Reading the recipient via that
-            # indirection matters because Minor#close! unconditionally
-            # sets the source's own @floated to false -- paying it
-            # directly post-absorption would silently stop the income.
+            # Read via Game#fast_buck_income_recipient, not the source
+            # company directly -- Minor#close! sets its @floated to
+            # false on absorption, which would silently stop the income.
             recipient = @game.fast_buck_income_recipient
             return unless recipient&.floated?
 

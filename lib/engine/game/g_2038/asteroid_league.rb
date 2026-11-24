@@ -18,22 +18,13 @@ module Engine
           form_asteroid_league!(company_by_id('AE')&.owner)
         end
 
-        # Phase 5 mandatory merger (§9e): every independent still active
-        # merges into the AL immediately, no player choice involved -- AL is
-        # guaranteed to already exist by this point (Phase 4's
-        # asteroid_league_must_form event above always runs first). Mirrors
-        # 1835's event_forced_pr_exchange! (force-loop + direct merge calls,
-        # bypassing the voluntary MergeIntoLeague step entirely).
+        # §9e: AL is guaranteed to already exist by this point, since
+        # Phase 4's asteroid_league_must_form event above always runs first.
         def event_independents_must_join_league!
           remaining_independents.dup.each { |minor| merge_independent_into_al!(minor) }
         end
 
-        # §7.39/Phase 9f: an independent that owns no ship and can't afford
-        # the cheapest one left in the Depot must merge into the AL rather
-        # than go bankrupt -- checked at the END of its own OR turn (see
-        # G2038::Round::Operating#after_end_of_turn's own comment on why
-        # not pre-emptively before that turn even starts). Moot before the
-        # AL exists, since there's nowhere for it to merge into yet.
+        # §7.39/Phase 9f.
         def independent_must_merge?(minor)
           return false unless @asteroid_league_formed
           return false unless minor.minor?
@@ -44,11 +35,8 @@ module Engine
           cheapest.nil? || minor.cash < cheapest
         end
 
-        # AL is neither a Public Corp (needs 50% floated) nor a Growth Corp
-        # (the engine has no such distinction) -- per the rules it's active
-        # immediately on formation with a fixed $250 grant, so `floated` is
-        # set directly rather than via `float_corporation` (which would pay
-        # out par x total_shares, the wrong amount here).
+        # `floated` is set directly, not via `float_corporation` -- the
+        # rules grant a fixed $250 on formation, not par x total_shares.
         def form_asteroid_league!(owner)
           return if @asteroid_league_formed
           return unless owner
@@ -73,12 +61,9 @@ module Engine
         # AL always pars at $125 -- see form_asteroid_league! just above.
         AL_INSERTION_MAX_PRICE = 124
 
-        # AL forms mid-OR but wasn't in this round's @entities snapshot --
-        # it may still slot into *this* OR, at its rightful $125 position
-        # ahead of any corporation priced $124 or lower, but only if no
-        # such corporation has operated yet this round. Once one has,
-        # it's too late to insert AL fairly ahead of it, so AL simply
-        # waits for the next OR.
+        # AL forms mid-OR, after this round's @entities snapshot was
+        # taken -- slots it into the current OR at its $125 position only
+        # if no corporation priced $124 or lower has operated yet.
         def insert_al_into_current_or_if_eligible!
           return unless round.is_a?(Engine::Round::Operating)
 
@@ -94,30 +79,14 @@ module Engine
           @asteroid_league_formed
         end
 
-        # Independents (minors) that haven't yet merged into the AL or
-        # converted into a Growth Corp -- the pool Step::MergeIntoLeague
-        # offers each round, and the Phase 5/bankruptcy mandatory triggers
-        # sweep in directly (Phase 9).
         def remaining_independents
           @minors.reject(&:closed?)
         end
 
-        # Records that `entity` has been offered (accepted or declined) an
-        # AL merge -- called by Step::MergeIntoLeague#process_choose, the
-        # one interactive path where a player actually sees this offer.
-        # `al_independents_ever_offered` stays an attr_reader-only ivar
-        # otherwise, matching the rest of the codebase's convention of
-        # exposing a named mutator (rand_state=, merge_independent_into_al!)
-        # rather than letting a step reach into game-class state directly.
         def record_al_independent_offered!(entity)
           @al_independents_ever_offered << entity.id unless @al_independents_ever_offered.include?(entity.id)
         end
 
-        # Merges `minor` into the Asteroid League (Phase 9c, and the forced
-        # paths: event_independents_must_join_league! at Phase 5, and
-        # independent bankruptcy). Mirrors form_growth_corporation!'s asset
-        # transfer shape (Phase 8) minus the par/president's-cert dance --
-        # AL already exists, already floated, at this point.
         def merge_independent_into_al!(minor, first_opportunity: !@al_independents_ever_offered.include?(minor.id))
           owner = minor.owner
           half_cash = pay_independent_merge_cash!(minor, owner, first_opportunity, @al_corporation)
@@ -126,13 +95,9 @@ module Engine
           reserved_share.buyable = true
           share_pool.buy_shares(owner, reserved_share, exchange: :free)
 
-          # transfer (not a manual owner-reassign loop) -- it also
-          # invalidates Game::Base's own @crowded_corps memoization
-          # (checked by Step::DiscardShip#active?/crowded_corps to force
-          # an over-limit discard). A manual loop bypasses that
-          # invalidation, so a merge that pushes AL over its own
-          # train_limit (§9g) went completely undetected until something
-          # else happened to touch @crowded_corps later.
+          # `transfer`, not a manual owner-reassign loop -- a manual loop
+          # skips invalidating @crowded_corps, so a merge pushing AL over
+          # its train_limit (§9g) went undetected by Step::DiscardShip.
           transfer(:trains, minor, @al_corporation)
 
           transfer_independent_base!(minor, @al_corporation, counted: true)
@@ -146,64 +111,29 @@ module Engine
           log_independent_al_merge!(minor, owner, half_cash)
         end
 
-        # The owner only receives half the treasury on the independent's
-        # first opportunity to merge (when the AL forms). Any later merge
-        # -- a decline followed by accepting a subsequent offer, the
-        # Phase 5 forced merge, or a bankruptcy-forced merge -- gives the
-        # owner nothing unless the independent still owns a ship at the
-        # moment of merger. Short Game exception (§13a):
-        # "Independent owners receive 1/2 of their cash-on-hand only if
-        # they join the Asteroid League when it first forms (regardless
-        # of whether they still possess a spaceship if they join later)"
-        # -- the "still owns a ship" exception for a later merge simply
-        # doesn't exist under this optional rule; only the
+        # §13a Short Game exception: the "still owns a ship" exception for
+        # a later merge doesn't exist under this optional rule -- only the
         # first-opportunity case ever pays out.
-        #
-        # Returns half_cash so the caller's own log line can distinguish
-        # a split payout from a keep-everything one.
         def pay_independent_merge_cash!(minor, owner, first_opportunity, recipient)
           owner_gets_half = first_opportunity || (!optional_short_game? && !minor.trains.empty?)
-          # .round guards against a non-integer minor.cash -- money here
-          # should always be whole dollars, but this is defensive in
-          # case some earlier turn's arithmetic left a fractional
-          # residue. The owner's share rounds UP, the recipient's share
-          # rounds DOWN. Both amounts are computed up front from the
-          # same rounded total, rather than spending the owner's half
-          # and relying on whatever's left in minor.cash for the
-          # recipient's share, so a leftover fractional cent can never
-          # carry over via the second spend.
-          #
+          # The owner's share rounds up, the recipient's rounds down.
           # (total_cash + 1) / 2 is plain Integer#/ -- Opal/browser float
-          # division, not Ruby's, so a bare `/` here would silently
-          # return 72.5 instead of 72 for total_cash == 144, passing
-          # every MRI spec while still broken live. The .to_f/.floor
-          # below replicates Ruby's own integer-division result exactly
-          # in both environments.
+          # division, not Ruby's, so a bare `/` here silently returns
+          # 72.5 instead of 72 for total_cash == 144. .to_f/.floor
+          # replicates Ruby's own result in both environments.
           total_cash = minor.cash.round
           half_cash = owner_gets_half ? ((total_cash + 1).to_f / 2).floor : 0
           remaining_cash = total_cash - half_cash
-          # check_positive: false on top of the .positive? guards themselves
-          # (not just belt-and-suspenders) -- matches Step::Dividend#
-          # payout_entity's own zero-guard + check_positive: false pairing
-          # for the same "split revenue between multiple parties, some
-          # shares legitimately zero" shape.
           minor.spend(half_cash, owner, check_positive: false) if half_cash.positive?
           minor.spend(remaining_cash, recipient, check_positive: false) if remaining_cash.positive?
           half_cash
         end
 
-        # Shared by merge_independent_into_al! (entity: AL, counted:
-        # true) and form_growth_corporation! (entity: the new Growth
-        # Corp, counted: false) -- the two are NOT identical: a base the
-        # AL receives via merger DOES count against its own base_limit
-        # (a Growth Corp's own inherited base stays an uncounted extra).
-        # base_limit(AL) already reserves capacity for not-yet-merged
-        # independents by shrinking as remaining_independents.size grows
-        # and giving it back as they merge in (§8.12/Phase 9h); if a
-        # merged-in base never consumed any of that returning capacity,
-        # AL could end up placing its own full allotment of bases AND
-        # keep every inherited one too, exceeding its real combined
-        # total.
+        # A base AL receives via merger counts against its own
+        # base_limit; a Growth Corp's inherited base stays an uncounted
+        # extra. base_limit(AL) reserves capacity for not-yet-merged
+        # independents (§8.12/Phase 9h) -- an uncounted merged-in base
+        # would let AL exceed its real combined total.
         def transfer_independent_base!(minor, entity, counted:)
           return unless (token = minor.tokens.find(&:used))
 
@@ -217,32 +147,20 @@ module Engine
           end
         end
 
-        # Claims transfer too, and DO count against entity's own
-        # claim_limit (§9g/Phase 8 alike) -- a plain ownership
-        # reassignment, since claims_placed_lifetime/claim_limit are
-        # always computed fresh from @mine_state, nothing else to keep in
-        # sync. Shared by merge_independent_into_al! and
-        # form_growth_corporation!.
+        # Claims count against entity's own claim_limit too (§9g/Phase 8).
+        # A plain ownership reassignment is enough -- claim_limit is
+        # always computed fresh from @mine_state.
         def transfer_independent_mine_claims!(minor, entity)
           @mine_state.each_value do |state|
             state[:mines].each { |m| m[:owner] = entity.id if m[:owner] == minor.id }
           end
         end
 
-        # Fast Buck has no in-flight pilot ability (its $15/OR income is
-        # passive, unrelated to any ship) -- only push a pilot source for
-        # independents PILOT_NAMES actually recognizes, or pilot_
-        # description would render a blank "<nil>: <nil>" entry for it.
-        # A treasury_income source's (Fast Buck today) own per-OR income
-        # follows it wherever it's absorbed -- otherwise Minor#close!
-        # (called by the caller right after this) sets its own @floated
-        # to false forever, and pay_fast_buck_treasury would just
-        # silently stop paying anyone. Shared by merge_independent_into_al!
-        # and form_growth_corporation!.
-        #
-        # Game::PILOT_NAMES -- qualified since PILOT_NAMES is defined
-        # directly on Game, not in this module; a bare reference here
-        # would only see this module's own (empty) ancestry, never Game's.
+        # Only push a pilot source for independents PILOT_NAMES actually
+        # recognizes, or pilot_description would render a blank
+        # "<nil>: <nil>" entry for it. The treasury-income source's
+        # per-OR income must follow it here too, or Minor#close! (called
+        # right after this) sets @floated false and silently ends it.
         def carry_over_independent_special_status!(minor, entity)
           (@growth_corp_pilot[entity.id] ||= []) << minor.id if Game::PILOT_NAMES.key?(minor.id)
           @fast_buck_income_recipient = entity if minor.id == treasury_income_source_sym

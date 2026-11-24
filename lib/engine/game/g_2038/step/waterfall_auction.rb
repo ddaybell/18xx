@@ -7,30 +7,16 @@ module Engine
     module G2038
       module Step
         class WaterfallAuction < Engine::Step::WaterfallAuction
-          # Round::Stock re-runs every step's `setup` at the start of EACH
-          # entity's turn (Round::Stock#start_entity), not just once per
-          # round -- harmless for steps with no state that spans multiple
-          # turns, but the base `setup` (`setup_auction` -> `@bids =
-          # Hash.new{...}`) would silently wipe out bids placed by earlier
-          # players in this same round every time a new player's turn
-          # begins. Only the very first call for a given step instance
-          # (fresh off Round::Base#initialize, @bids still unset) should
-          # actually initialize anything; @companies/@bids/@bidders are
-          # already self-maintaining after that via direct mutation
-          # (buy_company's @companies.delete, add_bid, etc.), so later
-          # calls within the same round must be a no-op.
+          # Round::Stock re-runs `setup` at the start of EVERY entity's
+          # turn, not just once per round -- without this guard, the base
+          # setup would wipe out bids placed earlier in this same round.
           def setup
             return if @bids
 
             super
-            # Base sorts @companies by value (cheapest-first) -- correct
-            # for every other game, but wrong here under the Variant
-            # Start Packet: it swaps in cheaper certificates for some
-            # companies *in their original deck slot*, not a re-sort
-            # (e.g. Tunnel Systems drops to $20 but stays dealt after
-            # $100 companies like Lucky). Restoring the game's own
-            # declared order is a no-op at baseline and correct under
-            # the variant.
+            # Base sorts @companies cheapest-first -- wrong under the
+            # Variant Start Packet, which swaps in cheaper certificates
+            # in their original deck slot rather than re-sorting.
             @companies = @game.initial_auction_companies
             @cheapest = @companies.first
           end
@@ -70,31 +56,16 @@ module Engine
             @game.minors.any? { |m| m.id == company.id }
           end
 
-          # View::Game::Round::Stock picks `round.active_step` (no
-          # entity arg) as *the* step to render corp-buying UI against,
-          # and calls `.ipo_type` on it unconditionally -- true for
-          # every other game, where a Stock round's only ever-blocking
-          # step is a BuySellParShares-family one that defines this. Now
-          # that WaterfallAuction is folded directly into Game#
-          # stock_round, it can ALSO win that no-arg active_step slot
-          # while any company remains unsold, crashing the stock round
-          # view with a NoMethodError until this existed. round/
-          # auction.rb already guards the same call with `respond_to?
-          # (:ipo_type) ? ... : :par` for the equivalent reason in a
-          # plain Engine::Round::Auction.
+          # View::Game::Round::Stock calls `.ipo_type` unconditionally on
+          # `round.active_step` -- this step can win that slot while any
+          # company remains unsold, crashing the view without this.
           def ipo_type(_entity)
             nil
           end
 
-          # A fresh WaterfallAuction instance gets folded into EVERY
-          # later Stock round too, and once all 12 Private/Independent
-          # Companies are sold, `@companies` stays permanently empty --
-          # but Round::Base#skip_steps still called `step.skip!` on it
-          # once per entity per turn for the rest of the game, logging
-          # "X skips bid on companies" every single time (pure noise
-          # once nothing's left to sell). Reporting blocks? as false
-          # here doesn't change `blocking?` (already false) -- it only
-          # changes skip_steps's path to a silent `next`.
+          # Once @companies is permanently empty, this stops skip_steps
+          # from logging a "skips bid on companies" noise line every turn
+          # for the rest of the game.
           def blocks?
             !@companies.empty?
           end
@@ -106,14 +77,9 @@ module Engine
 
             minor.owner = player
             minor.float!
-            # $100 plus half of whatever was bid over $100. `price` can
-            # never actually be less than 100: every independent's face
-            # value is a fixed $100, and this game has no rule that ever
-            # discounts a company below face value.
-            # (price - 100) / 2.0 .floor -- Integer#/ is Opal/browser
-            # float division, not Ruby's, so bids in $5 increments over
-            # $100 ($105, $115, ...) would otherwise produce a literal
-            # fractional dollar in the browser. §5.11: round down.
+            # §5.11: $100 plus half of any bid over $100, rounded down.
+            # Explicit `.floor`, not relying on integer division -- Opal's
+            # Integer#/ returns a float, unlike native Ruby's.
             capital = ((price - 100) / 2.0).floor
             @game.bank.spend(100 + capital, minor)
           end
@@ -128,13 +94,9 @@ module Engine
               if all_bids_processed?
                 round_end_auction_complete
               else
-                # A bid-upon company had 2+ bids and is now a live
-                # mini-auction (@auctioning set) still waiting on its
-                # bidders -- Round::Stock#finished? reads every entity's
-                # OWN passed? flag, still true from the all-pass that
-                # got us here, so without this the round would look
-                # "finished" and end right out from under the pending
-                # resolution.
+                # Round::Stock#finished? reads passed?, still true from
+                # the all-pass that got us here -- without this the
+                # round would end out from under the pending mini-auction.
                 entities.each(&:unpass!)
               end
             else
@@ -147,22 +109,11 @@ module Engine
             resolve_bids
           end
 
-          # Everything left in @companies at this point never got a
-          # single bid. This is just an ordinary Stock round
-          # (WaterfallAuction folded into Game#stock_round, not a
-          # dedicated Auction round), so:
-          #  - leftover companies simply stay in @companies, unowned, to
-          #    be offered again later -- no clearing.
-          #  - every entity is (re-)passed so Round::Stock's ordinary
-          #    all-entities-passed `finished?` check can fire right
-          #    after this. Without it, when resolve_bids had to unpass
-          #    everyone first for a live mini-auction to play out,
-          #    nothing ever re-passed them once that resolved down to
-          #    here, and the round just silently kept going.
-          #  - payout_companies/or_set_finished are NOT called here --
-          #    Round::Operating#setup already pays out companies at the
-          #    start of the OR set that follows; calling it again here
-          #    would double-pay every owned company's revenue.
+          # Re-passes everyone, since resolve_bids may have had to
+          # unpass them for a live mini-auction to play out. Doesn't call
+          # payout_companies -- Round::Operating#setup does that at the
+          # start of the OR set that follows; calling it here too would
+          # double-pay every owned company's revenue.
           def round_end_auction_complete
             @process_round_end_auction = false
             entities.each(&:pass!)

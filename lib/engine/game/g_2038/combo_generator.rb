@@ -3,41 +3,22 @@
 module Engine
   module Game
     module G2038
-      # Component 3 of the autorouter (see AI_CONTEXT.md/
-      # conversation history for the full design) -- given a list of
-      # candidate slots (Game#candidate_slots, each tagged with an
-      # admissible value ceiling) and a hold count, lazily generates
-      # r-sized combinations of slots in strictly decreasing total-value
-      # order, one at a time, without ever enumerating the full C(n, r)
-      # space up front (which blows up fast -- C(80, 7) is > 3 billion).
-      #
-      # The intended caller pattern is a feasibility loop:
+      # Lazily generates r-sized combinations of slots in strictly
+      # decreasing total-value order, one at a time, without ever
+      # enumerating the full C(n, r) space up front (C(80, 7) is > 3
+      # billion). Caller pattern:
       #   gen = ComboGenerator.new(slots, holds)
       #   while (combo = gen.next_combo)
       #     break if feasible?(combo)
       #   end
       # The FIRST feasible combo found this way is provably the best
-      # achievable, since every combo emitted before it is guaranteed to
-      # have an equal-or-higher total ceiling.
+      # achievable, since every combo emitted before it has an
+      # equal-or-higher total ceiling.
       #
-      # Algorithm: represent a combo as a strictly increasing tuple of
-      # indices into the value-sorted (descending) slot list. The best
-      # possible combo is always (0, 1, ..., r-1). From any combo, its
-      # "neighbors" are formed by incrementing exactly one position by 1
-      # (staying strictly less than the next position's index, or below N
-      # for the last position) -- the standard single-step neighbor
-      # structure for enumerating r-subsets of a sorted list by sum via a
-      # priority queue. A visited set (keyed on the index tuple itself,
-      # using Ruby's built-in Array equality) prevents the same combo
-      # from being generated twice via two different neighbor paths.
-      #
-      # The frontier itself is a real binary max-heap (array-based, each
-      # entry its value precomputed once at push time), not a plain
-      # array re-sorted on every pop -- on a real 39-candidate board,
-      # with the frontier growing into the thousands over a single
-      # sweep, an O(F log F) sort_by! on every #next_combo call cost
-      # over 100 seconds by itself. A proper heap makes both push and
-      # pop O(log F).
+      # The frontier is a real binary max-heap, not a plain array
+      # re-sorted on every pop -- on a real 39-candidate board, with the
+      # frontier growing into the thousands, an O(F log F) sort_by! on
+      # every #next_combo call measured over 100 seconds by itself.
       class ComboGenerator
         def initialize(slots, holds)
           @sorted = slots.sort_by { |s| -s.value }
@@ -51,9 +32,6 @@ module Engine
           push((0...@r).to_a)
         end
 
-        # Returns the next-best combo as an array of `holds` (or fewer,
-        # if there simply aren't enough candidate slots) CandidateSlot
-        # objects, or nil once every combination has been exhausted.
         def next_combo
           return nil if @heap.empty?
 
@@ -79,10 +57,8 @@ module Engine
         end
 
         def push(combo)
-          # A plain string key, not the combo array itself -- Opal has
-          # to emulate array-value-equality hashing on top of
-          # JavaScript, which has no native support for it. String keys
-          # are natively fast hash/Map keys in both MRI and JS.
+          # String key, not the array itself -- Opal has no native
+          # array-value-equality hashing on top of JS.
           key = combo.join(',')
           return if @visited[key]
 
@@ -103,9 +79,8 @@ module Engine
 
         def sift_up(i)
           while i.positive?
-            # Integer#/ is Opal/browser float division, not Ruby's -- an
-            # even i (e.g. 2) made this 0.5 in the browser, and indexing
-            # @heap[0.5] crashes (undefined method `[]' for nil).
+            # Opal's Integer#/ is browser float division, not Ruby's --
+            # plain (i - 1) / 2 produced 0.5 and crashed @heap[0.5].
             parent = ((i - 1).to_f / 2).floor
             break if @heap[parent][0] >= @heap[i][0]
 

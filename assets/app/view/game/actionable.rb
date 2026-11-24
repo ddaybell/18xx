@@ -66,15 +66,10 @@ module View
         @game_data[:mode] == :hotseat
       end
 
-      # Opt-in escape hatch, checked before any of the real action
-      # pipeline below (network POST, hotseat storage, action-history
-      # growth): lets a step build up a multi-step move entirely
-      # client-side and only ever submit one self-contained action for
-      # the whole thing (G2038::Step::Route's SUBMIT_FLIGHT/
-      # local_choose! -- a hand-flown route can touch a dozen hexes,
-      # and recording every click as its own permanent action would
-      # bloat the history). A step that doesn't implement local_choose?/
-      # local_pass? is unaffected.
+      # Lets a step build a multi-step move entirely client-side and
+      # submit one self-contained action for the whole thing (see
+      # G2038::Step::Route's SUBMIT_FLIGHT/local_choose!). A step that
+      # doesn't implement local_choose?/local_pass? is unaffected.
       def process_local_action(action)
         step = @game.round.active_step
         return false unless step
@@ -89,11 +84,8 @@ module View
 
           step.local_pass!(action.entity)
         when Engine::Action::Undo
-          # Without this, the real Undo button/ctrl+z had nothing of the
-          # current entity's own to undo yet (a hand-built route touches
-          # no real recorded action until Submit -- see local_choose!
-          # above), and so reached past it into the *previous* entity's
-          # last real action instead.
+          # Without this, Undo/ctrl+z would reach past a hand-built,
+          # not-yet-submitted route into the previous entity's last action.
           return false unless step.respond_to?(:local_undo?) && step.local_undo?(action.entity)
 
           step.local_undo!(action.entity)

@@ -3,10 +3,8 @@
 module View
   module Game
     module G2038
-      # A Growth Corp's inherited pilot ability/abilities (Phase 8).
-      # Reuses Company#render_company_on_card's toggle mechanism -- a
-      # plain DOM style flip on click, not a Snabberb store update -- so
-      # an expanded description survives the next unrelated re-render.
+      # A plain DOM style flip on click, not a Snabberb store update, so an
+      # expanded description survives the next unrelated re-render.
       class PilotInfo < Snabberb::Component
         needs :corporation
         needs :game

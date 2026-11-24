@@ -5,19 +5,9 @@ module Engine
     module G2038
       module Step
         module AutoRouteAll
-          # Public: searches for and locally builds (finish_route, not
-          # yet submitted) `ship`'s best route -- callable for any
-          # specific ship, not just current_ship. Selects the ship
-          # first if more than one remains unrun (must go through
-          # local_choose! rather than a bare @selected_ship_id
-          # assignment, so the rest of this entity's state stays
-          # consistent with whichever ship is actually being built).
-          # Returns the Autorouter::Result if a route was found and
-          # applied, nil (having already logged "No profitable route
-          # found") if not -- shared by both best_ship_order's own
-          # discarded trial orderings and the real, final application of
-          # whichever ordering wins (see ship_selector.rb's
-          # auto_route_all_button).
+          # Must select the ship via local_choose!, not a bare
+          # @selected_ship_id assignment, so the rest of this entity's
+          # state stays consistent with whichever ship is being built.
           def build_ship_route!(entity, ship, timeout: Autorouter::DEFAULT_TIMEOUT)
             router = @game.autorouter
             router.start_chunk!(entity, ship)
@@ -32,10 +22,6 @@ module Engine
             apply_ship_result!(entity, ship, result)
           end
 
-          # Shared by build_ship_route! above (the synchronous path, still
-          # used by try_ordering!'s ranking trials) and the chunked final-
-          # build loop in auto_route_all_tick! below, so there's only one
-          # place a found Result actually gets turned into a local route.
           def apply_ship_result!(entity, ship, result)
             suggestion = suggestion_from_result(ship, result)
             return nil unless suggestion
@@ -45,75 +31,39 @@ module Engine
             result
           end
 
-          # The joint "autoroute everything still unfilled" search (the
-          # global "Auto" button). Two ships autorouted individually one
-          # after another can total less revenue than routing them
-          # together in a different order (whichever goes first gets
-          # first pick of every mine), so the single-ship search alone
-          # can't be trusted once more than one ship is involved. With
-          # at most 4 ships this game ever hands any one entity,
-          # exhaustively trying every ordering (<=4! = 24) and keeping
-          # the best-scoring one is cheap enough to just do outright
-          # rather than reach for a heuristic.
+          # Two ships autorouted individually can total less revenue than
+          # routing them together in a different order (whichever goes
+          # first gets first pick of every mine) -- with at most 4
+          # ships, exhaustively trying every ordering (<=4! = 24) is
+          # cheap enough to just do outright.
           #
-          # Default (and floor) for the per-ship, per-ordering trial
-          # budget -- user-configurable as "Ranking timeout" on the
-          # Tools tab, since a real board can hide a slow ship's true
-          # value well past 4s. This bounds each ordering trial, not the
-          # caller's own `timeout:` (long vestigial here: the final
-          # per-ship pass always runs Autorouter to full proof) -- the
-          # real total search count is up to N x N! individual searches
-          # (96 for 4 ships), not just 24 orderings. Every trial is
-          # rolled back regardless of outcome and exists only to *rank*
-          # orderings against each other.
+          # Bounds each ordering trial, not the final per-ship pass
+          # (which always runs Autorouter to full proof) -- real total
+          # search count is up to N x N! (96 for 4 ships), not just 24.
           TRIAL_TIMEOUT = 4.0
 
-          # One ordering's worth of the search above. Every ship in
-          # `order` is actually built (so later ships in the ordering
-          # see the earlier ones' mines/stations already claimed, the
-          # whole reason ordering matters at all) then fully unwound in
-          # reverse before returning.
-          #
-          # `current_best_total` (the best confirmed total from
-          # orderings already tried) lets this bail out of `order`
-          # early once it's provably unable to win: before building
-          # each remaining ship, `ceiling_remaining` is the sum of
-          # Game#solo_ceiling for every not-yet-built ship -- an
-          # admissible upper bound on what they could contribute even
-          # with the whole board to themselves. If what's already been
-          # earned plus that generous ceiling still can't beat
-          # current_best_total, this order is abandoned without
-          # spending real search time proving it more precisely.
+          # Builds every ship in `order` (so later ships see earlier
+          # ones' mines/stations already claimed), then fully unwinds in
+          # reverse. `ceiling_remaining` (sum of Game#solo_ceiling for
+          # not-yet-built ships, an admissible upper bound) lets this
+          # bail out early: if what's already earned plus that generous
+          # ceiling still can't beat current_best_total, the order is
+          # abandoned without spending real search time proving it.
           def try_ordering!(entity, order, timeout, current_best_total)
-            # Computed once per ship (not once for the initial sum and
-            # again per iteration below) -- solo_ceiling scans every
-            # explored mine on the map and isn't cached, so recomputing
-            # it a second time for the same ship against identical,
-            # unmutated state doubled real cost across up to 24 orderings
-            # x 4 ships every single Auto click for no benefit.
             ceilings = order.to_h { |t| [t, @game.solo_ceiling(entity, t)] }
             ceiling_remaining = ceilings.values.sum
             rollbacks = []
             total = 0
-            # A ship's trial result is only safe to reuse verbatim in
-            # the final-build phase (auto_route_all_tick!) if its own
-            # precondition -- everything earlier ships in THIS ordering
-            # left behind -- is guaranteed to be identical there too.
-            # That only holds for a PREFIX of ships whose own trial
-            # results were each proven_optimal, not merely the best
-            # found within `timeout`. The first non-proven (or unbuilt,
-            # pruned-away) ship ends the reusable prefix.
+            # Only a PREFIX of ships whose trial results were each
+            # proven_optimal (not merely best-found-within-timeout) is
+            # safe to reuse verbatim in the final-build phase -- the
+            # first non-proven ship ends the reusable prefix.
             cached = {}
             chain_valid = true
             # Different orderings sharing the same leading ships face an
-            # IDENTICAL board at that point, so build_ship_route! --
-            # deterministic given the same starting state and the same
-            # TRIAL_TIMEOUT cap -- would search and find the exact same
-            # thing again. @auto_all_prefix_cache (reset per Auto click)
-            # is keyed by the ship-id sequence seen so far THIS trial,
-            # shared across every trial in the ranking phase -- a repeat
-            # prefix skips straight to re-applying the previously found
-            # result instead of re-searching.
+            # identical, deterministic board at that point -- a repeat
+            # prefix (keyed by ship-id sequence) skips straight to
+            # re-applying the previously found result.
             @auto_all_prefix_cache ||= {}
             prefix_ids = []
 
@@ -127,14 +77,11 @@ module Engine
               @rollback = capture_rollback!
               memo = @auto_all_prefix_cache[prefix_key]
               result = memo ? apply_ship_result!(entity, ship, memo) : build_ship_route!(entity, ship, timeout: timeout)
-              # A suggested/optimal route doesn't always spend every
-              # last MP, so apply_ship_result! can leave @trace
-              # non-empty (mid-flight). This trial loop builds several
-              # ships back-to-back and needs an explicit finish here, or
-              # the NEXT ship's own SHIP-selection choice sees a
-              # still-live @trace and gets rejected as invalid. The
-              # returned submit choice is discarded -- this trial gets
-              # fully rolled back regardless of outcome.
+              # apply_ship_result! can leave @trace non-empty
+              # (mid-flight) -- the next ship's SHIP-selection choice
+              # would see that and get rejected as invalid. The
+              # returned submit choice is discarded; this trial is
+              # rolled back regardless of outcome.
               finish_and_submit_choice(entity) if result
               @auto_all_prefix_cache[prefix_key] ||= result if result
               total += result.revenue if result
@@ -152,10 +99,6 @@ module Engine
             { total: total, cached: cached }
           end
 
-          # Every ship built during this trial (see try_ordering! above)
-          # gets torn back down, in reverse build order, once the trial's
-          # total is known -- a ranking trial only ever exists to compare
-          # orderings against each other, never to keep its own result.
           def rollback_trial_ordering!(entity, rollbacks)
             rollbacks.reverse_each do |r|
               @rollback = r
@@ -163,59 +106,34 @@ module Engine
             end
           end
 
-          # Chunked equivalent of "compute best_ship_order, then actually
-          # build+submit each ship in that order" so the caller can yield
-          # (a real setTimeout, same as Autorouter's own) between ticks
-          # instead of blocking the browser for the whole operation. State
-          # lives entirely on this step instance (long-lived on
-          # @game.round.steps for the whole round, unlike a view component
-          # that a store(:game, ...) call mid-flow could tear down and rebuild)
-          # so the view-layer caller can safely resume across ticks purely
-          # by calling auto_route_all_tick! again -- it never needs to hold any
-          # state of its own besides "keep calling until :done".
+          # State lives on this step instance (long-lived on
+          # @game.round.steps), not a view component, so the caller can
+          # safely resume across ticks just by calling
+          # auto_route_all_tick! again. Deliberately does NOT submit the
+          # built route itself -- returns :built (caller's turn to
+          # submit before the next tick), :ranking, or :done.
           #
-          # Deliberately does NOT submit the built route itself
-          # (Action::Choose/process_action are Actionable/view-layer
-          # concerns, not this step's) -- returns :built so the caller
-          # knows a route was just built and it's their turn to submit it
-          # before the next tick, :ranking for a trial tick with nothing
-          # to submit, or :done once there's nothing left to do at all.
-          # Orderings are deduplicated by ship *name*, not object identity --
-          # two same-named ships (a twin pair, say two 6/5s) are fully
-          # interchangeable as far as the search is concerned (only
-          # distance/cargo_holds ever matter, never which physical ship
-          # object), so swapping their positions in an ordering can never
-          # change the outcome. ships.permutation.to_a treats them as
-          # distinct anyway, so without this a twin pair doubles the real
-          # work for no possible gain (a triplet multiplies it by 6).
+          # Orderings are deduplicated by ship *name*: two same-named
+          # ships are fully interchangeable for the search (only
+          # distance/cargo_holds matter), but ships.permutation.to_a
+          # treats them as distinct, doubling real work for a twin pair
+          # with no possible gain.
           #
-          # The surviving orderings are then resorted so whichever one
-          # matches "longest range first" (ships sorted by ship_distance,
-          # descending) is tried first, not wherever permutation happened
-          # to place it -- the ship with the most to lose from going last
-          # is a reasonable guess at the best order, and trying it first
-          # means try_ordering!'s own cross-ordering pruning (see its own
-          # comment) has a real, high bar to prune every later ordering
-          # against from the very start, instead of ratcheting up slowly.
-          # This never risks correctness -- every ordering the dedup above
-          # kept is still fully tried, just not necessarily in permutation
-          # order.
+          # Surviving orderings are resorted so "longest range first" is
+          # tried first -- the ship with the most to lose from going
+          # last is a reasonable guess at the best order, giving
+          # try_ordering!'s pruning a high bar from the start.
           def start_auto_route_all!(entity, timeout:, ranking_timeout: TRIAL_TIMEOUT)
-            # Set first, before any of the setup work below (permutation
-            # generation/dedup, the longest-range-first sort) -- all real
-            # wall-clock time the click already spent by the time a player
-            # sees anything on screen.
             @auto_all_started_at = Time.now
             @auto_all_entity = entity
-            # A hard floor, not a clamp against reasonable user values --
-            # 0 or negative would spin start_chunk!/run_one_chunk! without
-            # ever advancing past the ranking phase's very first combo.
+            # A hard floor: 0 or negative would spin start_chunk!/
+            # run_one_chunk! without ever advancing past the ranking
+            # phase's first combo.
             @auto_all_trial_timeout = [ranking_timeout.to_f, 0.1].max
             @auto_all_final_timeout = timeout
             ships = available_ships(entity).reject { |t| t.name == 'Probe' }
             orderings = ships.size <= 1 ? [] : ships.permutation.to_a.uniq { |order| order.map(&:name) }
-            # A SINGLE surviving ordering has nothing to be ranked
-            # against, so trialing it is pure waste.
+            # A single surviving ordering has nothing to rank against.
             orderings = [] if orderings.size == 1
             unless orderings.empty?
               heuristic_first = ships.sort_by { |t| -@game.ship_distance(entity, t) }
@@ -226,35 +144,23 @@ module Engine
             @auto_all_best_total = -1
             @auto_all_cached_results = nil
             @auto_all_prefix_cache = {}
-            # Per-ship snapshot of found_at_ratio, captured the instant
-            # each ship's own final search completes (see the final-build
-            # loop below) -- unlike @game.autorouter's own live
-            # value, this survives past that ship's own turn so its row
-            # can keep showing "how early was this found" after the fact,
-            # not just while it's the currently active ship. Never
-            # populated for a ship served from the ranking-trial cache
-            # (@auto_all_cached_results) -- that reuses a result from a
-            # trial's own, already-discarded router instance, with no
-            # found_at history of its own to carry over.
+            # Survives past a ship's own turn, unlike @game.autorouter's
+            # live found_at_ratio, so its row keeps showing "how early
+            # was this found" after the fact. Never populated for a
+            # ship served from the ranking-trial cache -- that reuses a
+            # result from an already-discarded router instance.
             @auto_all_found_at = {}
             @auto_all_trial_index = 0
             @auto_all_final_index = 0
             @auto_all_final_ship = nil
             @auto_all_finished_at = nil
-            # Hard backstop, independent of every lower-level timeout
-            # Rather than only trusting Autorouter's own internal per-search
-            # deadline to always fire correctly, this caps the *entire*
-            # multi-ship operation at a generous but genuinely finite multiple
-            # of its own worst-case legitimate cost, so a bug anywhere in the
-            # chain still can't run forever -- see the check at the top of
-            # auto_route_all_tick!.
-            # The final phase now runs Autorouter (uncapped -- it
-            # runs to proof, no route_timeout involved), so its slice of
-            # the backstop can't be derived from a configured timeout any
-            # more; a generous flat per-ship allowance replaces it (an
-            # hour per ship -- far past anything observed even on the
-            # worst real board tested, ~168s in-browser, while still
-            # genuinely finite).
+            # Caps the *entire* multi-ship operation at a generous but
+            # finite multiple of its worst-case legitimate cost, so a
+            # bug anywhere in the chain still can't run forever. The
+            # final phase runs Autorouter uncapped (to proof), so an
+            # hour-per-ship flat allowance stands in for it -- far past
+            # anything observed (~168s in-browser on the worst board
+            # tested) while still genuinely finite.
             worst_case_trials = orderings.size * @auto_all_trial_timeout * [ships.size, 1].max
             worst_case_final = 3600 * [ships.size, 1].max
             @auto_all_deadline = @auto_all_started_at + worst_case_trials + worst_case_final + 30
@@ -270,10 +176,8 @@ module Engine
             run_auto_route_final_build_tick!(entity)
           end
 
-          # Hard backstop, independent of every lower-level timeout -- see
-          # start_auto_route_all!'s own comment on @auto_all_deadline for
-          # why this exists at all. Returns true (and tears the run down)
-          # only in the "should never happen" case; false otherwise.
+          # Returns true (and tears the run down) only in the "should
+          # never happen" case; false otherwise.
           def auto_route_all_deadline_exceeded!(entity)
             return false unless @auto_all_deadline && Time.now > @auto_all_deadline
 
@@ -285,10 +189,6 @@ module Engine
             true
           end
 
-          # One ordering trial per call (see try_ordering!'s own comment).
-          # Returns :ranking while trials remain, nil once every ordering
-          # has been tried and it's time to move on to the final build
-          # phase below.
           def run_auto_route_ranking_trial_tick!(entity)
             return nil unless @auto_all_trial_index < @auto_all_orderings.size
 
@@ -303,19 +203,11 @@ module Engine
             :ranking
           end
 
-          # Chunked (start_chunk!/run_one_chunk!/finish_chunk!), not a
-          # single blocking call, so the live clock keeps updating and
-          # the tab stays responsive throughout each ship's search.
-          #
           # @auto_all_cached_results lets a ship whose ranking trial
           # already reached proven_optimal within TRIAL_TIMEOUT skip a
-          # second, identical search here entirely: both stages run the
-          # identical deterministic search under identical conditions,
-          # so a cached ship's route is guaranteed to be exactly what a
-          # real (re-)search would produce anyway. A user manually
-          # cutting a ship's OWN final build short via "Accept & next
-          # ship" doesn't affect this -- that only touches the ship
-          # being built live, never a ranking trial.
+          # second, identical search entirely -- both stages run the
+          # identical deterministic search, so the cached route is
+          # guaranteed to match a real (re-)search.
           def run_auto_route_final_build_tick!(entity)
             while @auto_all_final_index < @auto_all_best_order.size
               ship = @auto_all_best_order[@auto_all_final_index]
@@ -341,8 +233,7 @@ module Engine
               @auto_all_final_index += 1
               result = router.finish_chunk!
               # Captured before apply_ship_result! moves on to the next
-              # ship's own start_chunk! (which would reset the router's
-              # internal found_at bookkeeping).
+              # ship's start_chunk!, which resets this bookkeeping.
               @auto_all_found_at[ship.id] = router.found_at_ratio
               next unless apply_ship_result!(entity, ship, result)
 
@@ -355,24 +246,15 @@ module Engine
             :done
           end
 
-          # Live progress, read directly off this (long-lived, one-per-
-          # round, NOT one-per-entity) step instance. `entity` here
-          # guards against a bug this sharing caused: since this ONE
-          # step instance's @auto_all_* ivars are shared across every
-          # corp's turn all round, they kept showing whichever corp's
-          # run happened most recently even while looking at a totally
-          # different corp that never had Auto clicked at all.
+          # `entity` guards against a real bug: this step instance is
+          # one-per-round, not one-per-entity, so its @auto_all_* ivars
+          # are shared across every corp's turn -- without this check
+          # they kept showing whichever corp's run happened most
+          # recently, even for a corp that never had Auto clicked.
           def auto_route_all_active?(entity)
             @auto_all_active && entity == @auto_all_entity
           end
 
-          # Public: user-initiated "accept this ship's current best and
-          # move on" (see ship_selector.rb's skip button). Only
-          # meaningful during the final phase while the engine actually
-          # holds a best (the engine's stop_early! no-ops otherwise);
-          # the tick chain then completes the ship on its next tick,
-          # submits it, and proceeds to the next ship exactly as if the
-          # proof had finished naturally.
           def skip_current_ship_search!(entity)
             return unless auto_route_all_active?(entity)
             return unless @auto_all_final_ship
@@ -380,17 +262,11 @@ module Engine
             @game.autorouter.stop_early!
           end
 
-          # Public: the ship id of whichever ship the final phase's
-          # chunked search is CURRENTLY building for this entity, or nil
-          # (during trials, or once the run's finished) -- lets
-          # ShipSelector attach the live counter to that ship's own row.
-          # Read-only peek, never mutates search state -- setting
-          # @auto_all_final_ship eagerly here would skip start_chunk!'s
-          # "have I already begun this ship's search" check for the
-          # next ship. Needed because @auto_all_final_ship is
-          # deliberately nil for exactly one tick boundary: the tick
-          # that finishes a ship clears it BEFORE returning :built, and
-          # it's only reassigned to the NEXT ship on some later tick.
+          # @auto_all_final_ship is deliberately nil for exactly one
+          # tick boundary (cleared before :built returns, reassigned to
+          # the next ship only on a later tick) -- this falls back to
+          # the next available ship in that window rather than reporting
+          # nothing.
           def auto_route_all_current_ship_id(entity)
             return nil unless auto_route_all_active?(entity)
             return @auto_all_final_ship.id if @auto_all_final_ship
@@ -400,33 +276,22 @@ module Engine
             next_ship&.id
           end
 
-          # Frozen at whatever it read at completion
-          # (@auto_all_finished_at), not live Time.now, once the run is
-          # done -- otherwise this kept recomputing against the current
-          # time on every *later* re-render for completely unrelated
-          # reasons, so a "Finished: 12s" label would silently keep
-          # climbing long after the search itself had stopped.
+          # Frozen at @auto_all_finished_at, not live Time.now, once the
+          # run is done -- otherwise a "Finished: 12s" label would
+          # silently keep climbing on every later re-render.
           def auto_route_all_elapsed(entity)
             return nil unless @auto_all_started_at && entity == @auto_all_entity
 
             ((@auto_all_finished_at || Time.now) - @auto_all_started_at).round
           end
 
-          # Entity-agnostic, unlike auto_route_all_active? above -- used
-          # to decide whether the view's own live-clock setInterval
-          # should keep ticking at all, even if the player has since
-          # switched to looking at a different corp's panel. If this
-          # were entity-scoped too, the clock would clear itself the
-          # instant the player looked away.
+          # Entity-agnostic, unlike auto_route_all_active? -- if this
+          # were entity-scoped too, the view's live clock would clear
+          # itself the instant the player looked away to another corp.
           def auto_route_all_running?
             @auto_all_active
           end
 
-          # Public: ship/hexes/cargo/revenue computed from an
-          # Autorouter::Result, ready for apply_pending_suggestion! --
-          # or nil (having already logged "No profitable route found")
-          # if the search came up empty. Pure computation; nothing here
-          # touches real game state.
           def suggestion_from_result(ship, result)
             unless result
               @log << "No profitable route found for #{ship_label(ship)}"

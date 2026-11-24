@@ -3,12 +3,8 @@
 module View
   module Game
     module G2038
-      # G2038-only corporation-card rendering: the claims strip (mine-colored
-      # claim circles) and the base/station infrastructure strip. Delegate
-      # object (not a mixin) so View::Game::Corporation's own method table
-      # never carries these -- instantiated per-render by Corporation#g2038,
-      # handed `self` for `h`/`logo_for_user` access since Snabberb's `needs`
-      # only sets ivars, not public readers.
+      # A delegate object, not a mixin, so View::Game::Corporation's own
+      # method table never carries these.
       class AlternateCorporationsG2038
         def initialize(host, game, corporation)
           @host = host
@@ -20,23 +16,14 @@ module View
           @host.h(...)
         end
 
-        # `reserved` (AL only, bases only) counts how many of
-        # the not-yet-placed slots below are actually held back for
-        # independents still outside the League, marked "Res." instead of
-        # looking like any other open, unclaimed slot.
         def infrastructure_tokens_body
           home = @corporation.tokens.first
           logo = @host.logo_for_user(@corporation)
           tokens_body = [[logo, home&.used, @corporation.coordinates]]
           tokens_body.concat(infra_entries(:bases, @game.base_hexes(@corporation), logo,
                                            reserved: @game.reserved_base_count(@corporation)))
-          # Extra bases beyond the corp's own lifetime allotment -- inherited
-          # from a Growth Corp conversion or an AL merger, or
-          # granted by Tunnel Systems' free-base ability.
           tokens_body.concat(@game.extra_base_hexes(@corporation).map { |hex_id| [logo, true, hex_id] })
           tokens_body.concat(infra_entries(:stations, @game.station_hexes(@corporation), @game.station_logo(@corporation)))
-          # Extra stations beyond the corp's own placement list -- granted by
-          # Vacuum Associates' free-station ability.
           tokens_body.concat(@game.extra_station_hexes(@corporation).map do |hex_id|
             [@game.station_logo(@corporation), true, hex_id]
           end)
@@ -58,27 +45,14 @@ module View
           end
         end
 
-        # A played claim's column shows its own mine -- a circle in that
-        # mine's ore color, the ore letter inside it, the claimed value
-        # above it -- instead of a generic flag icon, per the user. Same
-        # RGB values as Part::City::MINE_ORE_COLOR (the mine-tile art's own
-        # ore tint), kept as its own copy rather than reaching into that
-        # view class from this one for three fixed colors.
+        # Mirrors Part::City::MINE_ORE_COLOR -- kept as its own copy rather
+        # than reaching into that view class for three fixed colors.
         CLAIM_MINE_COLOR = { n: [200, 40, 40], i: [40, 100, 210], r: [40, 150, 70] }.freeze
-        # Mirrors Part::City::MINE_VALUE_RANGE/#mine_color's white-blend
-        # tint exactly, so a claim's circle here looks like the same mine
-        # did on the hex (pale for a low value, more saturated for a high
-        # one) instead of a flat, fully-saturated color regardless of
-        # value.
+        # Mirrors Part::City::MINE_VALUE_RANGE/#mine_color's white-blend tint.
         CLAIM_VALUE_RANGE = (10..70)
 
-        # One column per claim slot, plus one more for each
-        # free claim actually placed (Robot Smelters' one-time ability) --
-        # those don't consume a counted slot (see Game#claims_placed_
-        # lifetime's own comment) but are still real, placed claims that
-        # need to actually show up here. A played claim gets its own
-        # mine-colored circle, an unplaced/reserved slot still gets the
-        # generic flag look.
+        # Free claims (Robot Smelters' ability) don't count against limit,
+        # but still need their own placed column.
         def render_claims_display
           limit = @game.claim_limit(@corporation)
           return if limit.infinite?
@@ -111,18 +85,9 @@ module View
             },
           }
 
-          # Explicit, stable keys on every column -- required, not just
-          # stylistic. `entries` gets re-sorted (placed always after
-          # unplaced) on every single render, and the *count* of each kind
-          # shifts the instant a claim is acquired/placed (one fewer
-          # unplaced slot, one more placed column, inserted mid-list) --
-          # Snabbdom's keyless reconciliation matches list children by
-          # position, so without a key here a claim changing hands mid-OR
-          # can silently hand one column's DOM nodes (including its used-
-          # marker) to a completely different column instead of updating
-          # them, which reads to the player as the charter's own white X
-          # vanishing even though claim_details' own `used` value never
-          # actually changed underneath it.
+          # Required, not stylistic: without stable keys, Snabbdom's
+          # positional reconciliation can hand one column's DOM nodes to a
+          # different column when `entries`' re-sort shifts positions.
           columns = entries.each_with_index.map do |(kind, data), i|
             if kind == :placed
               render_claim_column(data[:ore], data[:value], data[:hex_id], data[:used], data[:free],

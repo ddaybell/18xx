@@ -10,32 +10,19 @@ module Engine
         # directly from the independent holding it (§7.4x).
         INDEPENDENT_CLAIM_PRICE = 60
 
-        # Raw CORPORATIONS config for this entity -- `bases:`/`stations:`/
-        # `claim_costs:` are custom per-corp fields (§7.4) that the base
-        # engine's Corporation/Operator classes don't consume or store, so
-        # they're looked up here rather than added to shared engine code.
+        # §7.4.
         def corp_data(entity)
           Entities::CORPORATIONS.find { |c| c[:sym] == entity.id }
         end
 
-        # Same idea as corp_data, but for fields that can appear on either
-        # an independent's MINORS entry or a corp's CORPORATIONS one (e.g.
-        # claim_limit) -- lets callers read that data the same way for any
-        # operating entity, without needing to know or care which array it
-        # actually lives in.
         # Memoized -- called from claim_limit and autorouter_support on
-        # every entity check, and Entities::MINORS + Entities::CORPORATIONS
-        # was otherwise reallocating and linearly rescanning both arrays
-        # on every single call.
+        # every entity check; otherwise reallocates and rescans both
+        # arrays every call.
         def entity_data(entity)
           @entity_data_by_sym ||= (Entities::MINORS + Entities::CORPORATIONS).to_h { |c| [c[:sym], c] }
           @entity_data_by_sym[entity.id]
         end
 
-        # Cost of the *next* base/station this entity places, indexed by how
-        # many it's already placed over the whole game (lifetime, not
-        # per-round) -- costs aren't always constant across the array (e.g.
-        # Outer Planet Consortium's first station is free, the rest aren't).
         def base_cost(entity)
           costs = corp_data(entity)&.dig(:bases) || [50]
           costs[@base_hexes[entity].size] || costs.last
@@ -46,10 +33,6 @@ module Engine
           costs[@station_hexes[entity].size] || costs.last
         end
 
-        # Hex ids where this entity has placed a base/refueling station so
-        # far, in placement order -- the source of truth for both cost
-        # indexing above and the corporation card's token-style display
-        # (View::Game::Corporation#render_infrastructure_tokens).
         def base_hexes(entity)
           @base_hexes[entity]
         end
@@ -58,27 +41,16 @@ module Engine
           @station_hexes[entity]
         end
 
-        # Extra, uncounted bases already placed for this entity -- see the
-        # comment on @extra_base_hexes in #setup for what lands here.
         def extra_base_hexes(entity)
           @extra_base_hexes[entity]
         end
 
-        # Extra, uncounted refueling stations already placed for this
-        # entity -- see the comment on @extra_station_hexes in #setup for
-        # what lands here.
         def extra_station_hexes(entity)
           @extra_station_hexes[entity]
         end
 
-        # Lifetime cap on total bases/stations a corp may ever place --
-        # the length of its own `bases:`/`stations:` cost array. §8.12/
-        # Phase 9h: the AL must hold back 1 base for each independent
-        # that hasn't merged in yet -- its *own* new-placement capacity
-        # shrinks while any remain, growing back by 1 each time one
-        # merges or is forced in. A merged-in base counts against
-        # @base_hexes too (transfer_independent_base!, counted: true for
-        # AL), consuming exactly the capacity this formula gave back.
+        # §8.12/Phase 9h: AL holds back 1 base-placement slot for each
+        # independent that hasn't merged in yet.
         def base_limit(entity)
           limit = corp_data(entity)&.dig(:bases)&.size || Float::INFINITY
           return limit unless entity == @al_corporation
@@ -90,37 +62,21 @@ module Engine
           corp_data(entity)&.dig(:stations)&.size || Float::INFINITY
         end
 
-        # Placeholder refueling-station token art (public/logos/g_2038/
-        # *_station.svg, one per corp) so the corporation card's token strip
-        # can show a distinct icon for stations vs bases, same as any other
-        # game's per-corp logo files -- no shared view/engine code involved.
         def station_logo(entity)
           "/logos/g_2038/#{entity.id}_station.svg"
         end
 
-        # Placeholder claim token art (public/logos/g_2038/*_claim.svg, one
-        # per corp/independent) for the corporation card's claims display.
         def claim_logo(entity)
           "/logos/g_2038/#{entity.id}_claim.svg"
         end
 
-        # Hex ids this entity holds a claim on, one entry per claimed mine
-        # (a double-mine hex claimed twice by the same entity appears
-        # twice) -- derived from @mine_state directly rather than tracked
-        # separately, same source claims_placed_lifetime already reads.
+        # A double-mine hex claimed twice by the same entity appears twice.
         def claim_hexes(entity)
           @mine_state.flat_map { |hex_id, state| [hex_id] * state[:mines].count { |m| m[:owner] == entity.id } }
         end
 
-        # Same one-entry-per-claimed-mine list as claim_hexes above, but
-        # with the specific ore/claimed-value each entry needs to render
-        # as its own mine-colored circle on the corporation card --
-        # claim_hexes alone only has the hex id, not enough to know
-        # which of a double-mine hex's two mines a given slot is.
-        # `free` (Robot Smelters' one-time ability, Phase 10) is
-        # surfaced here too -- an uncounted extra beyond claims_placed_
-        # lifetime/claim_limit, but still a real, placed claim the
-        # charter needs to show.
+        # `free` (Robot Smelters' one-time ability, Phase 10) is surfaced
+        # here too -- an uncounted extra, but still a real claim to show.
         def claim_details(entity)
           @mine_state.flat_map do |hex_id, state|
             state[:mines].each_with_index.select { |m, _idx| m[:owner] == entity.id }
@@ -141,13 +97,8 @@ module Engine
           corp_data(entity)&.dig(:claim_costs) || DEFAULT_CLAIM_COSTS
         end
 
-        # Per-ore claim-value bonus (Map tab's "Claim upgrade" chart) --
-        # every mine of a given ore gains the same fixed amount once
-        # claimed, regardless of which tile it's on (see MINE_DATA: e.g.
-        # every :n mine goes unclaimed 10/claimed 50, unclaimed 20/claimed
-        # 60, always +40). Derived from MINE_DATA itself rather than a
-        # separate hardcoded table, so it can never drift out of sync with
-        # the real tile data.
+        # Derived from MINE_DATA itself, not a separate hardcoded table,
+        # so it can't drift out of sync with the real tile data.
         def claim_ore_upgrade_amounts
           self.class::MINE_DATA.values.flatten.each_with_object({}) do |mine, h|
             h[mine[:ore]] ||= mine[:claimed] - mine[:unclaimed]
@@ -163,16 +114,8 @@ module Engine
         end
 
         CLAIM_UPGRADE_ORE_NAMES = { n: 'Nickel', i: 'Ice', r: 'Rare' }.freeze
-        # Same RGB values as Part::City::MINE_ORE_COLOR/View::Game::
-        # Corporation's CLAIM_MINE_COLOR -- kept as its own copy rather
-        # than a shared reference, same reasoning as those constants' own
-        # comments.
         CLAIM_UPGRADE_ORE_COLOR = { n: '#c82828', i: '#2864d2', r: '#289646' }.freeze
 
-        # Map tab legend (see Game::Base#map_legends/View::Game::
-        # MapLegend#render_legend for the shape this returns) -- one row
-        # per ore, showing the fixed value bonus claiming a mine of that
-        # ore grants (see claim_ore_upgrade_amounts above).
         def claim_upgrade_legend(font_color, _yellow, green, _brown, _gray, _red, action_processor: nil)
           cell_style = {
             border: '1px solid',
@@ -211,14 +154,10 @@ module Engine
           ]
         end
 
-        # Every entity's lifetime claim cap comes straight from its own
-        # entities.rb entry's claim_limit (independents: a flat 2,
-        # §7.4). A claim_limit that itself depends on the game's
-        # optional rules (Mars Mining, §13b) is stored as a Proc rather
-        # than a plain number, since entities.rb's arrays are built once
-        # at load time before any specific game's rules are known.
-        # Same reservation idea as base_limit above, but 2 claims per
-        # remaining independent instead of 1 base (§8.12/Phase 9h).
+        # §7.4; independents: a flat 2. A claim_limit that depends on
+        # optional rules (§13b) is stored as a Proc, since entities.rb's
+        # arrays are built before any specific game's rules are known.
+        # §8.12/Phase 9h: AL holds back 2 claims per remaining independent.
         def claim_limit(entity)
           limit = entity_data(entity)&.dig(:claim_limit) || Float::INFINITY
           limit = limit.call(self) if limit.respond_to?(:call)
@@ -227,12 +166,6 @@ module Engine
           [limit - (remaining_independents.size * 2), 0].max
         end
 
-        # Overrides Game::Base's own token-availability count/string --
-        # both used only by the Spreadsheet view's "Tokens" column.
-        # G2038's corp.tokens are bases, a small fixed count (1-3) that
-        # says little on its own; claims (lifetime-capped, escalating cost,
-        # the resource players actually track over a game) are what's
-        # meaningful there instead.
         def count_available_tokens(entity)
           claim_limit(entity) - claims_placed_lifetime(entity)
         end
@@ -249,14 +182,6 @@ module Engine
           'Claims'
         end
 
-        # How many of AL's base/claim slots are currently held back for
-        # independents that haven't merged in yet -- 0 for anyone else.
-        # Purely derived from remaining_independents.size (the same count
-        # base_limit/claim_limit already subtract), so it shrinks on its
-        # own the instant an independent merges or closes for good -- no
-        # separate "release" step needed, just re-render. Used by the
-        # corporation card to mark held-back slots as "Res." instead of
-        # leaving them looking like any other still-open, unreserved slot.
         def reserved_base_count(entity)
           return 0 unless entity == @al_corporation
 
@@ -269,10 +194,6 @@ module Engine
           [remaining_independents.size * 2, corp_data(entity)&.dig(:claim_limit) || 0].min
         end
 
-        # Used both to enforce lifetime claim caps (BuyInfrastructure) and to
-        # display "claims remaining" on the corporation/minor card. Excludes
-        # free claims (Robot Smelters' one-time ability, Phase 10) -- those
-        # are an uncounted extra, same as a Growth Corp's inherited base.
         def claims_placed_lifetime(entity)
           @mine_state.values.sum { |s| s[:mines].count { |m| m[:owner] == entity.id && !m[:free] } }
         end
@@ -281,11 +202,7 @@ module Engine
           @refueling_stations[hex_id]
         end
 
-        # Hexes reachable by at least one of entity's own spaceships from any
-        # of its placed bases (§7.4), refueling at entity's own stations
-        # along the way. BFS over hex neighbors, mirroring how ships actually
-        # move in `G2038::Step::Route` -- "in range" is the same reachability
-        # question as "could a ship fly there."
+        # §7.4.
         def hexes_in_range(entity)
           base_hexes = entity.tokens.filter_map { |t| t.city&.hex }.uniq
           max_mp = entity.trains.map { |t| ship_distance(entity, t) }.max || 0
@@ -313,26 +230,18 @@ module Engine
           best.keys.map { |id| hex_by_id(id) }
         end
 
-        # Opt-in hook for assets/app/view/game/map.rb: does this hex hold a
-        # mine claimed by the entity whose turn it is? That claim's ring
-        # (View::Game::G2038::Part::City#render_claim_ring) doubles in
-        # size for exactly this case, big enough to extend past this
-        # hex's own boundary into a neighbor's -- and since SVG siblings
-        # paint strictly in array order regardless of geometric overlap,
-        # an unexplored (opaque) neighbor painted later than this hex
-        # would otherwise clip that overflow. Map#render uses this to
-        # push the hex to the back of its own render list instead, the
-        # same "render highest in z space" trick it already uses for the
-        # tile-selector's own hex.
+        # Opt-in hook for assets/app/view/game/map.rb: the active entity's
+        # claim ring can extend past this hex's own boundary into a
+        # neighbor's, so map.rb uses this to render the hex last --
+        # SVG siblings paint in array order regardless of overlap, so an
+        # opaque neighbor painted later would otherwise clip it.
         def hex_has_active_claim?(hex)
           return false unless (entity = round.current_entity)
 
           @mine_state.dig(hex.id, :mines)&.any? { |m| m[:owner] == entity.id } || false
         end
 
-        # A base may be placed on any explored hex with no claimed mine (§7.4,
-        # §7.41). Bases and mines are mutually exclusive on a hex -- laying
-        # the base tile replaces whatever mines were there.
+        # §7.4, §7.41.
         def can_place_base?(hex)
           state = @mine_state[hex.id]
           return false unless state
@@ -340,10 +249,7 @@ module Engine
           state[:mines].none? { |m| m[:owner] }
         end
 
-        # `free:` is Tunnel Systems' one-time ability (Phase 10) -- placed at
-        # no cost and never pushed into @base_hexes, so it's an uncounted
-        # extra beyond the corp's own base allotment (same idea as a Growth
-        # Corp's inherited base, Phase 8).
+        # `free:` is Tunnel Systems' one-time ability (Phase 10).
         def place_base!(entity, hex, free: false)
           token = entity.tokens.find { |t| !t.used }
           raise GameError, "#{entity.name} has no tokens left" unless token
@@ -360,33 +266,18 @@ module Engine
           tile = @tiles.find { |t| t.name == '2023' && !t.hex }
           raise GameError, 'No base tiles available' unless tile
 
-          # '2023' is an 'unlimited'-count tile (init_tile only ever pools a
-          # single instance for those) -- add_extra_tile is the engine's
-          # existing mechanism for replenishing it (duplicates a fresh
-          # instance back into @tiles) every time one is actually laid.
-          # Without this call, only the very first base placed in the whole
-          # game would ever find an unused '2023' instance; every later one
-          # would crash laying a nil tile.
-          #
-          # Not update_tile_lists (the normal tile-laying counterpart) --
-          # that also returns the *replaced* tile to @tiles, right for
-          # an ordinary upgrade but wrong here: the mine tile a base
-          # covers is gone for good, not available to be drawn again.
+          # '2023' is 'unlimited'-count, so init_tile only pools one
+          # instance -- without replenishing it here, only the first base
+          # placed in the game would ever find an unused instance.
+          # Not update_tile_lists: that returns the *replaced* tile to
+          # @tiles, but the mine tile a base covers is gone for good.
           add_extra_tile(tile) if tile.unlimited
           @tiles.delete(tile)
 
-          # A double-mine tile models each mine as its own City part (no
-          # engine token is ever placed there), so laying '2023' (a
-          # single city) over one triggers Hex#lay's move_tokens_to_
-          # new_tile_multi_city! path. That method has a real bug:
-          # reading tokens[new_city] to check for an unmapped city's
-          # tokens inserts an empty-array entry as a side effect, so the
-          # "anything left to migrate" check reads false even though
-          # nothing was added, and it falls into a raise that itself
-          # references undefined locals, crashing as `undefined method
-          # 'token' for the Hex`. Since there are genuinely no tokens to
-          # migrate here, sidestep the buggy multi-city path entirely by
-          # dropping the tile to a single city first.
+          # Hex#lay's move_tokens_to_new_tile_multi_city! crashes
+          # (`undefined method 'token'`) when laying a single-city tile
+          # over a double-mine hex with no tokens to migrate. Drop to a
+          # single city first to sidestep that path entirely.
           hex.tile.cities.slice!(1..) if hex.tile.cities.size > 1
           hex.lay(tile)
           tile.cities.first.place_token(entity, token, check_tokenable: false)
@@ -394,14 +285,9 @@ module Engine
                   "#{free ? '' : " (#{format_currency(cost)})"}"
         end
 
-        # Hex ids for every entity's starting home base (corp + independent +
-        # AL) -- only used to know which hexes the edge-touching exclusion
-        # below applies to. A base a company creates later via place_base!
-        # is never in this set, so it's unconditionally eligible. OSR/MR's
-        # own home hexes (B14/O13) are excluded here unless New Corporations
-        # is active -- otherwise base_tile? below would still treat them as
-        # a placed base (and hex.rb would draw the ring-station art on an
-        # otherwise-ordinary, unexplored blue hex) even with the rule off.
+        # OSR/MR's home hexes (B14/O13) are excluded unless New
+        # Corporations is active, or an otherwise-ordinary unexplored
+        # blue hex would render station-ring art.
         def starting_base_hexes
           @starting_base_hexes ||= (Entities::CORPORATIONS + Entities::MINORS).map { |data| data[:coordinates] }
           return @starting_base_hexes if optional_new_corporations?
@@ -409,14 +295,8 @@ module Engine
           @starting_base_hexes - OSR_MR_HOME_HEXES
         end
 
-        # Which bases may ever receive a refueling station (§7.42): every
-        # interior (non-edge) starting base except AL's, plus any base a
-        # company creates later via place_base! (always eligible, regardless
-        # of position). Edge-touching starting bases (VP/LE/MM/OPC/RCC, all
-        # with fewer than 6 neighbors) never get one. §13b: OSR's/MR's own
-        # starting bases (B14/O13) are an explicit exception on top of
-        # that -- "Refueling Stations may not be placed at either of these
-        # two starting bases".
+        # §7.42: edge-touching starting bases never get a station. §13b:
+        # OSR's/MR's own starting bases are excluded outright.
         OSR_MR_HOME_HEXES = %w[B14 O13].freeze
 
         def station_eligible?(hex)
@@ -424,23 +304,15 @@ module Engine
           return true unless starting_base_hexes.include?(hex.id)
           return hex.all_neighbors.size == 6 unless Array(@al_corporation.coordinates).include?(hex.id)
 
-          # AL's home only becomes "just like any other base" -- including
-          # eligible for a station -- once the League actually forms.
-          # Before that it's just a placeholder
-          # token with no corporation behind it yet.
           @asteroid_league_formed && hex.all_neighbors.size == 6
         end
 
-        # A refueling station may be placed on any base within range that
-        # doesn't already have one -- including a base owned by a *different*
-        # corporation (§7.42 is explicit about this). "Has a base" reuses the
-        # same token-presence check as `deliverable_destination?`.
+        # §7.42: may be placed on a base owned by a different corporation.
         def can_place_station?(hex)
           hex_has_base?(hex) && !refueling_station_owner(hex.id) && station_eligible?(hex)
         end
 
-        # `free:` is Vacuum Associates' one-time ability (Phase 10) -- see
-        # place_base! above for the same "free, uncounted extra" pattern.
+        # `free:` is Vacuum Associates' one-time ability (Phase 10).
         def place_station!(entity, hex, free: false)
           cost = free ? 0 : station_cost(entity)
           entity.spend(cost, bank) if cost.positive?
@@ -455,23 +327,16 @@ module Engine
                   "#{free ? '' : " (#{format_currency(cost)})"}"
         end
 
-        # `free:` is Robot Smelters' one-time ability (Phase 10) -- the
-        # claim still shows up in claim_hexes (the corp card's claim-flag
-        # display), but claims_placed_lifetime excludes it, so it's an
-        # uncounted extra rather than eating into the corp's claim_limit.
+        # `free:` is Robot Smelters' one-time ability (Phase 10).
         def place_claim!(entity, hex, mine_idx, cost, free: false)
           entity.spend(cost, bank) if cost.positive?
           mine = @mine_state[hex.id][:mines][mine_idx]
           mine[:owner] = entity.id
           mine[:free] = true if free
 
-          # The claimed value is now the only one that matters -- only
-          # the claim owner may pick up here, always at the claimed
-          # rate. A plain integer tile revenue parses to the same value
-          # under every phase color, so mirror that shape directly. That
-          # bypass skips `uniq_revenues`'s memoization too, though --
-          # clear it by hand or the map keeps showing the stale
-          # unclaimed value until something else rebuilds the tile.
+          # Must also clear @uniq_revenues by hand -- this bypasses its
+          # memoization, which would otherwise keep showing the stale
+          # unclaimed value.
           city = hex.tile.cities[mine_idx]
           city.revenue = Part::RevenueCenter::PHASES.to_h { |phase| [phase, mine[:claimed]] }
           city.instance_variable_set(:@uniq_revenues, nil)
@@ -480,38 +345,20 @@ module Engine
                   "#{free ? '' : " (#{format_currency(cost)})"}"
         end
 
-        # "R:30"-style identifier for a mine -- the ore's one-letter code,
-        # a colon, its claimed value -- used in claim-related log lines
-        # so the log itself says what was actually claimed, not just
-        # where.
         def claim_label(mine)
           "#{mine[:ore].to_s.upcase}:#{mine[:claimed]}"
         end
 
         # §13b: OSR's own entities.rb entry carries the +$20 surcharge it
-        # alone pays when buying an already-placed claim off an
-        # Independent -- 0 for every other entity. Reading this from
-        # data keeps the actual charge (below) and the affordability
-        # check that gates the purchase choice (Step::BuyInfrastructure#
-        # buy_independent_claim_choices) computed from the exact same
-        # number, rather than two hand-kept-in-sync copies.
+        # alone pays here; 0 for every other entity.
         def independent_claim_surcharge(entity)
           entity_data(entity)&.dig(:independent_claim_surcharge) || 0
         end
 
-        # The real, total cost THIS entity pays to buy an independent's
-        # already-placed claim -- the flat INDEPENDENT_CLAIM_PRICE plus
-        # whatever entity-specific surcharge (OSR only, today) applies.
         def independent_claim_price(entity)
           INDEPENDENT_CLAIM_PRICE + independent_claim_surcharge(entity)
         end
 
-        # A corporation buying an already-placed claim off the independent
-        # holding it. This is a flat INDEPENDENT_CLAIM_PRICE, paid to the
-        # independent, not the bank.
-        # The mine's revenue was already set to its claimed value back when
-        # the independent originally claimed it (place_claim! above), so
-        # only ownership needs to change here.
         def buy_claim_from_independent!(entity, hex, mine_idx)
           mine = @mine_state[hex.id][:mines][mine_idx]
           seller = minor_by_id(mine[:owner])
@@ -526,16 +373,9 @@ module Engine
                   "(#{format_currency(total)})"
         end
 
-        # A corp buying an independent's claim is a cross-player
-        # transaction whenever that independent belongs to a different
-        # player than the buying corp's president -- same caution other
-        # games show for share exchanges, via the shared consent-popup
-        # mechanism (Actionable#check_consent). Only BuyInfrastructure's
-        # BUY_CLAIM choice ever needs consent through this hook; every
-        # other `choose` action returns nil here. Buying a ship from
-        # another player already gets its own consent popup for free
-        # from the base engine's generic ownership check (a real
-        # Action::BuyTrain, not a `choose`).
+        # Only BuyInfrastructure's BUY_CLAIM choice needs consent through
+        # this hook -- a cross-player transaction whenever the selling
+        # independent belongs to a different player.
         def consenter_for_choice(entity, choice, _label)
           step = @round.active_step(entity)
           return unless step.is_a?(G2038::Step::BuyInfrastructure)

@@ -10,28 +10,19 @@ module View
       needs :historical_routes, default: [], store: true
       needs :historical_laid_hexes, default: nil, store: true
       needs :game, default: nil, store: true
-      # Opt-in "Show Last Route" data for games with no track (G2038's
-      # Game#last_route has no connection_hexes/halts/nodes to draw
-      # along) -- an array of hex-id arrays, one per ship.
+      # Array of hex-id arrays, one per ship -- G2038's Game#last_route
+      # has no connection_hexes/halts/nodes for generate_last_route below
+      # to draw along.
       needs :historical_ship_routes, default: [], store: true
 
-      # Opt-in hook: whether the current game implements last_route at
-      # all (currently only G2038).
       def g2038_ship_routes?
         @game.respond_to?(:last_route)
       end
 
-      # "Show Last Route and Tile" draws colored segments along
-      # printed track lanes -- meaningless for a trackless game
-      # (HIDE_TILE_TRACK), which has no lanes to draw along at all.
       def hide_tile_track?
         @game.class.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
       end
 
-      # G2038 equivalent of generate_last_route below -- one hex-id
-      # array per ship, from Game#last_route rather than connection_
-      # hexes/halts/nodes, which G2038 never populates. No "tile"
-      # counterpart -- only the route lines are wanted here.
       def generate_last_ship_routes(entity)
         entity.trains.filter_map { |train| @game.last_route(train)&.dig(:hexes) }
       end
@@ -96,30 +87,16 @@ module View
       def route_controls
         return '' unless @game
 
-        # "Show Last Route and Tile" draws colored segments along
-        # printed track lanes -- meaningless for a trackless game
-        # (hide_tile_track?). A game that separately exposes Game#
-        # last_route (g2038_ship_routes?) gets a working "Show Last
-        # Route" control built from that instead, just without the
-        # "and Tile" half -- see route_change's own branch below.
         return '' if hide_tile_track? && !g2038_ship_routes?
 
         step = @game.round.active_step
         actions = step&.actions(step&.current_entity) || []
-        # Route controls are disabled during dividend and run routes
-        # step. G2038's own Route step never offers the 'run_routes'
-        # action type this check looks for -- it's choose/pass-based
-        # instead -- so it needs its own way to recognize "this IS the
-        # game's route-running step, live and blocking right now," the
-        # same live_route_hexes opt-in hook map_g2038.rb's
-        # render_route_lines already uses to find this exact step.
+        # G2038's Route step is choose/pass-based, never offering
+        # 'run_routes' -- live_route_hexes is its own way to recognize
+        # this is the game's live route-running step.
         g2038_running_routes = step.respond_to?(:live_route_hexes)
         if (%w[run_routes dividend] & actions).any? || g2038_running_routes
           store(:historical_routes, []) if @historical_routes.any?
-          # G2038's own parallel store needs the same reset --
-          # otherwise a route picked from the dropdown for an earlier
-          # company stays drawn on the map straight into the NEXT
-          # company's own live-routing turn.
           store(:historical_ship_routes, []) if @historical_ship_routes.any?
           return ''
         end

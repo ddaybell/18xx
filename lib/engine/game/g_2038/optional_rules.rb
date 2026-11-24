@@ -8,30 +8,18 @@ module Engine
           @optional_rules&.include?(:optional_short_game)
         end
 
-        # §13a: "Remove $6,000 and 2 Phase II ships from the game." Phase
-        # I/II ships are physically double-sided tokens (one face '4/3',
-        # the other its '6/2' variant -- confirmed in the rules text:
-        # "printed on opposite sides of the same certificate"), so
-        # there's a single pool of 10 to remove 2 from, not two separate
-        # counts for the base name and its variant.
-        # §13b: "Add one Phase III, one Phase V and three Phase VI
-        # spaceships" once OSR/MR are in play -- on top of the base
-        # game's own counts, additive with the Short Game's -2 to '4/3'
-        # (though the two can never actually combine in practice --
-        # optional_new_corporations? and optional_short_game? are mutually
-        # exclusive, enforced in setup).
+        # §13a: remove 2 Phase II ships (the '4/3'/'6/2' pool) from the game.
+        # §13b: add one Phase III, one Phase V, and three Phase VI ships
+        # once OSR/MR are in play.
         NEW_CORPORATIONS_EXTRA_SHIPS = { '5/4' => 1, '7/6' => 1, '9/7' => 3 }.freeze
 
         def num_trains(ship_data)
           count = super
           count -= 2 if optional_short_game? && ship_data[:name] == '4/3'
           count += NEW_CORPORATIONS_EXTRA_SHIPS[ship_data[:name]] || 0 if optional_new_corporations?
-          # §13d: "+2 Phase I ships" -- same double-sided-token pool as
-          # '4/3'/'6/2' above, just added to '3/2''s own '5/1'-variant pool
-          # instead of removed from it.
+          # §13d: +2 Phase I ships.
           count += 2 if optional_variant_start_pack? && ship_data[:name] == '3/2'
-          # "Play with only four Phase IV spaceships instead of five" --
-          # guarantees someone must buy a Phase VI ship at full price.
+          # Cutthroat: four Phase IV ships instead of five.
           count -= 1 if optional_cutthroat_game? && ship_data[:name] == '6/5'
           count
         end
@@ -44,15 +32,9 @@ module Engine
           @optional_rules&.include?(:optional_weaker_tsi)
         end
 
-        # §13d: "Reduce TSI's initial stock price, par value and starting
-        # capital to (choose one): $89/890; 78/780; or 67/670" -- Full Game
-        # only (growth_corporations.rb's after_buy_company already forces
-        # $67 under the Short Game regardless, so these are simply ignored
-        # if somehow both were checked at once). Gated on the top-level
-        # optional_weaker_tsi? box, not just its three sub-options, since
-        # create_game.rb's own parent/child checkbox UI already disables
-        # (and clears) the sub-options whenever the parent is unchecked --
-        # this is just the matching engine-side guarantee.
+        # §13d: reduce TSI's starting price to $89, $78, or $67 (Full Game
+        # only -- growth_corporations.rb's after_buy_company already
+        # forces $67 under the Short Game regardless).
         def weaker_tsi_price
           return nil unless optional_weaker_tsi?
 
@@ -68,20 +50,15 @@ module Engine
         end
 
         # The Variant Start Packet always brings the other two expansion
-        # rules along with it (per the expansion text's own setup: "Add
-        # the two Corporations... Use the optional rule Stock
-        # Repurchases..."), so each of these returns true whether its own
-        # box was checked directly or only the Start Packet's was.
+        # rules along with it per the expansion text's own setup.
         def optional_new_corporations?
           optional_variant_start_pack? || @optional_rules&.include?(:optional_new_corporations)
         end
 
-        # §13b: with OSR/MR in play, Phase VI ('9/7') needs *two* Phase V
-        # ships bought first, not the base game's one -- shared by
+        # §13b: with OSR/MR in play, Phase VI ('9/7') needs two Phase V
+        # ships bought first, not the base game's one. Shared by
         # Step::BuyShip#buyable_trains and #discountable_trains_for below
-        # so both agree; the base engine's own discountable_trains_for
-        # reads @depot.depot_trains + Train#discount directly and never
-        # consults this step override on its own.
+        # so both agree.
         def phase_vi_unlocked?
           return true unless optional_new_corporations?
 
@@ -100,18 +77,10 @@ module Engine
           ships.reject { |t| t[1].name == '9/7' }
         end
 
-        # §13b: On-Site Refining's and Mining Robotics' starting bases
-        # are plain pre-printed base hexes with no mine/ore content,
-        # exactly like every other corp's home -- not a randomly-
-        # explored asteroid tile. These two hexes (B14/O13) don't exist
-        # as bases at all without this rule, unlike OPC/RCC; this moves
-        # both coordinates from `blue` to `gray` only when the rule is
-        # active, building fresh arrays/hashes rather than mutating
-        # HEXES's own (frozen) nested structures.
-        #
-        # OSR_MR_HOME_HEXES is defined on Game itself -- qualified with
-        # Game:: since a bare reference here would only see this
-        # module's OWN (empty) ancestry, not Game's.
+        # §13b: OSR/MR's home hexes (B14/O13) are plain pre-printed bases,
+        # not randomly-explored asteroids -- moved from `blue` to `gray`
+        # only when this rule is active. Builds fresh arrays/hashes since
+        # HEXES's own nested structures are frozen.
         def optional_hexes
           return game_hexes unless optional_new_corporations?
 
@@ -121,12 +90,9 @@ module Engine
           hexes
         end
 
-        # §13b: `init_hexes` (base.rb) builds every corp's home-hex
-        # *reservation* from `reservation_corporations`, and does this
-        # *before* `setup` runs, so OSR/MR are still in `@corporations`
-        # at that point regardless of optional_new_corporations? (the
-        # exclusion in `setup` happens later). Without this override,
-        # B14/O13 stay blank but still get a stray reservation label.
+        # base.rb's `init_hexes` builds home-hex reservations before
+        # `setup` runs, so OSR/MR are still in `@corporations` at that
+        # point regardless of optional_new_corporations?.
         def reservation_corporations
           return super if optional_new_corporations?
 

@@ -18,26 +18,16 @@ module View
         needs :tile
         needs :city
         needs :show_revenue
-        # Part::Base doesn't declare :game -- no Part needed it before
-        # G2038's opt-in hooks did. default: nil keeps every existing
-        # h(City, ...) call site working unchanged.
+        # default: nil keeps every existing h(City, ...) call site working
+        # unchanged.
         needs :game, default: nil, store: true
 
-        # Opt-in hook: a game can hide a city part entirely -- e.g.
-        # G2038's H10, whose empty AL-reserved token slot would
-        # otherwise read as "a base is already here" before the AL
-        # actually exists to occupy it (H10 doubles as both a
-        # transshipment point and the AL's future home base).
         def should_render?
           return !@game.hide_city?(@tile&.hex, @city) if @game.respond_to?(:hide_city?)
 
           super
         end
 
-        # G2038's cities carry no track by design (HIDE_TILE_TRACK in
-        # track.rb) -- the revenue-display gate below otherwise
-        # requires @city.paths.any?, a proxy for "connected to the
-        # track network" that's meaningless here.
         def trackless_game?
           @game&.class&.const_defined?(:HIDE_TILE_TRACK) && @game.class::HIDE_TILE_TRACK
         end
@@ -447,6 +437,7 @@ module View
           end
 
           revert_angle = render_location[:angle] + rotation
+
           content = if bonus_ore
                       g2038.render_delivery_bonus(bonus_ore, bonus_amount)
                     else
@@ -456,8 +447,6 @@ module View
                         force: @city.pass?)
                     end
 
-          # The delivery-bonus badge sits a bit farther out from the
-          # base's own center than a plain revenue circle would.
           content_displacement =
             if bonus_ore
               shift = G2038::Part::CityDecorations::DELIVERY_BONUS_RADIAL_SHIFT

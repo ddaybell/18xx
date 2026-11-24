@@ -6,41 +6,25 @@ module Engine
   module Game
     module G2038
       module Step
-        # Adds a second way to start any unfloated, non-AL corporation (§8):
-        # trading in an owned independent for that corp's president's
-        # certificate instead of paying cash. Surfaced as extra buttons
-        # directly in the par UI (assets/app/view/game/par.rb) alongside the
-        # normal par-price buttons, rather than a separate step/action -- see
-        # Game#form_growth_corporation! for the actual asset transfer.
+        # §8: a second way to start a corporation -- trading in an owned
+        # independent for its president's certificate instead of cash.
         class BuySellParShares < Engine::Step::BuySellParShares
           GROW = 'grow_'
 
-          # Two market cells exist solely for special-cased formation paths,
-          # never a player-chosen cash par: $10/par_2 is Growth Corp
-          # conversion's fixed market-token start (Game#
-          # form_growth_corporation!, set directly via `share_price=`), and
-          # $125/par_1 is the Asteroid League's own fixed par
-          # (Game#form_asteroid_league!, via stock_market.set_par). Neither
-          # should appear among the regular 67/77/88/100 par choices.
+          # $10 (Growth Corp conversion) and $125 (Asteroid League) are
+          # each set directly by their own formation code, never chosen
+          # from this list.
           SPECIAL_PAR_PRICES = [10, 125].freeze
 
           def get_par_prices(entity, corp)
             super.reject { |p| SPECIAL_PAR_PRICES.include?(p.price) }
           end
 
-          # The Base can_buy_any_from_ipo?/can_ipo_any? methods look at
-          # corporation.shares to find what's still buyable pre-sellout
-          # -- correct only when ipo_owner == self, true for every game
-          # except this one. Once optional_stock_repurchases points a
-          # full-cap corp's ipo_owner at the bank, those still-unsold
-          # shares move to the bank and corporation.shares goes
-          # permanently empty, even for a corp nobody has parred yet.
-          # corporation.ipo_shares tracks the *right* holder regardless
-          # of where ipo_owner points -- the same fix 1862 already uses
-          # for its own chartered companies. Deliberately doesn't also
-          # check genuine treasury shares here -- the standard
-          # render_treasury_shares/can_buy? path already handles those
-          # on its own once buy_shares is available for any reason.
+          # Base's version reads corporation.shares, correct only when
+          # ipo_owner == self -- not true here once a full-cap corp's
+          # ipo_owner moves to the bank (optional_stock_repurchases).
+          # ipo_shares tracks the right holder regardless (same fix 1862
+          # uses for its own chartered companies).
           def can_buy_any_from_ipo?(entity)
             @game.corporations.each do |corporation|
               next unless corporation.ipoed
@@ -50,17 +34,11 @@ module Engine
             false
           end
 
-          # Base's own version only asks "can this player afford SOME
-          # corp's cheapest cash par price" -- wrong here, since a
-          # Growth Corp conversion starts a corp for FREE (an owned
-          # independent traded in, exchange: :free). Without this
-          # override, a player holding a convertible independent but
-          # unable to afford ANY corp's cheapest cash par lost 'par'
-          # from `actions` entirely -- and since the growth-exchange
-          # buttons only render *inside* the Par component, which only
-          # mounts when 'par' is in @current_actions, losing 'par'
-          # silently hid the exchange option too, even though it needs
-          # no cash at all.
+          # Base's version only asks "can afford SOME corp's cash par" --
+          # wrong here, since a Growth Corp conversion is free. Without
+          # this, a player who can't afford any cash par loses 'par' from
+          # `actions`, and since the exchange buttons only render inside
+          # the Par component, that silently hides the exchange option too.
           def can_ipo_any?(entity)
             return true if choice_available?(entity)
 
@@ -79,13 +57,9 @@ module Engine
             result
           end
 
-          # Without the bought? guard, a player who still holds a second
-          # growth-convertible minor would keep 'choose'/'pass' in
-          # `actions` forever, even after already exchanging once this
-          # turn, and the round would never auto-advance, forcing an
-          # unnecessary manual Done click. A growth exchange is a
-          # purchase-type action (`bought?` above), so it must be
-          # blocked exactly like a second buy_shares/par would be.
+          # Without the bought? guard, a second growth-convertible minor
+          # would keep offering another exchange after this turn's one
+          # purchase-type action is already used up.
           def choice_available?(entity)
             return false unless entity&.player?
             return false if bought?
@@ -93,23 +67,15 @@ module Engine
             !@game.growth_convertible_minors(entity).empty? && !@game.growth_convertible_corporations.empty?
           end
 
-          # The base class's `bought?` only recognizes PURCHASE_ACTIONS
-          # (BuyCompany/BuyShares/Par). A growth-exchange choice
-          # dispatches via Action::Choose, which isn't in that list, so
-          # without this override the engine never registered the
-          # exchange as "having acted" -- the round wouldn't advance
-          # once the queried player had nothing else to do. Scoped to
-          # the "grow_" prefix so it doesn't affect unrelated Choose
-          # actions from other steps.
+          # Base's `bought?` only recognizes PURCHASE_ACTIONS
+          # (BuyCompany/BuyShares/Par) -- a growth exchange dispatches via
+          # Action::Choose instead, so it's otherwise invisible here.
           def bought?
             super || @round.current_actions.any? { |x| x.is_a?(Action::Choose) && x.choice.to_s.start_with?(GROW) }
           end
 
-          # The exchange buttons render directly in par.rb rather than
-          # via the generic bottom-panel Choose component or a map hex
-          # click -- explicitly no-op'd here so choose.rb's
-          # `step.choice_name` and hex.rb's dispatch never crash or
-          # misfire for this step.
+          # The exchange buttons render directly in par.rb, not via the
+          # generic Choose component or a hex click.
           def entity_choices(_entity)
             {}
           end
@@ -122,8 +88,7 @@ module Engine
             {}
           end
 
-          # Called from par.rb: this player's exchange options specifically
-          # for `corporation` (one button per owned independent).
+          # Called from par.rb.
           def growth_exchange_choices(entity, corporation)
             return {} unless choice_available?(entity)
             return {} unless @game.growth_convertible_corporations.include?(corporation)
@@ -145,22 +110,14 @@ module Engine
 
             @game.form_growth_corporation!(entity, minor, corp)
 
-            # Base-class buy/par actions self-record via track_action --
-            # process_choose has no such call by default, so without
-            # this the exchange would never land in @round.
-            # current_actions for `bought?` (above) to find.
+            # process_choose has no track_action call by default, unlike
+            # the base class's buy/par actions.
             track_action(action, corp)
           end
 
-          # The base engine's own action_is_shenanigan? only recognizes
-          # Par/BuyShares/SellShares/TakeLoan. A growth-corp conversion
-          # dispatches via Action::Choose instead, so it fell through to
-          # the generic "Unknown action choose disabling for safety"
-          # catch-all: accurate, but unhelpfully vague about why.
-          # `corporation` here is already the newly-formed corp --
-          # should_stop_applying_program looks it up from @round.
-          # players_history, which process_choose's track_action(action,
-          # corp) call above deliberately files this action under.
+          # Base's action_is_shenanigan? only recognizes Par/BuyShares/
+          # SellShares/TakeLoan, so a growth conversion otherwise falls
+          # through to its vague generic catch-all.
           def action_is_shenanigan?(entity, other_entity, action, corporation, share_to_buy)
             if action.is_a?(Action::Choose) && action.choice.to_s.start_with?(GROW)
               return "#{corporation.name} formed as Growth Corporation"

@@ -6,24 +6,9 @@ module Engine
   module Game
     module G2038
       module Step
-        # Bases, refueling stations, and claims (§7.4) -- the "Purchases"
-        # portion of the OR sequence, alongside G2038::Step::BuyShip.
-        # Reuses the same choose-per-target-hex pattern as Route, since
-        # there's no existing "buy a marker" step compatible with G2038's
-        # non-graph-based (hex-BFS) reachability model.
-        #
-        # The Sequence of Play card enumerates these as three strict,
-        # ordered sub-phases per entity -- all bases before any refueling
-        # stations, all refueling stations before any claims -- not a single
-        # free-for-all choice set. Each entity tracks its own current
-        # sub-phase (:base -> :station -> :claim), auto-advancing past any
-        # sub-phase with nothing to offer (already used, nothing in range,
-        # unaffordable, or -- for minors -- skipped entirely since they may
-        # never buy bases/stations at all). If every sub-phase comes up
-        # empty this way, `choices`/`actions` end up empty too, and the
-        # round engine's generic `skip_steps` (lib/engine/round/base.rb)
-        # auto-passes this entity with its own log entry -- no extra
-        # plumbing needed here for that part.
+        # Bases, refueling stations, and claims (§7.4). The Sequence of
+        # Play card enforces these as three strict, ordered sub-phases per
+        # entity (:base -> :station -> :claim), not a free-for-all set.
         class BuyInfrastructure < Engine::Step::Base
           ACTIONS = %w[choose pass].freeze
 
@@ -40,22 +25,12 @@ module Engine
             'Buy Infrastructure'
           end
 
-          # Distinct from the per-sub-phase SKIP_BASE/SKIP_STATION choices
-          # (which only advance past *one* sub-phase, letting the next one
-          # still proceed): this is the step-wide `pass` action, ending
-          # BuyInfrastructure entirely for this turn -- base, station, AND
-          # claim -- since it's the last step in the OR sequence, that also
-          # ends the entity's whole turn.
           def pass_description
             'Skip Infrastructure'
           end
 
-          # The generic Choose view (assets/app/view/game/choose.rb) calls
-          # this unconditionally, unlike its other optional step hooks (which
-          # are all gated behind `respond_to?`). Doubles as the player-facing
-          # signal for which of the three strict sub-phases (base -> station
-          # -> claim) this entity is currently in -- otherwise nothing on
-          # screen says so.
+          # Called unconditionally by assets/app/view/game/choose.rb, unlike
+          # its other step hooks (all gated behind `respond_to?`).
           def choice_name
             entity = current_entity
             return nil unless entity
@@ -74,11 +49,7 @@ module Engine
             @claims_this_round = Hash.new(0)
           end
 
-          # Opt-in hooks for assets/app/view/game/hex.rb: while this
-          # entity is actively choosing a base/station/claim location,
-          # its own already-placed bases and stations both get
-          # highlighted. A base gets the generic hex-border highlight, a
-          # station a highlight around its own teardrop icon instead.
+          # Opt-in hooks for assets/app/view/game/hex.rb.
           def highlight_base_hexes(entity)
             return [] unless entity&.operator?
             return [] unless %i[base station claim].include?(@sub_phase[entity])
@@ -100,8 +71,6 @@ module Engine
             ACTIONS
           end
 
-          # Only ever returns choices for the entity's *current* sub-phase --
-          # never a mix of base/station/claim options at once.
           def choices(entity = current_entity)
             return {} unless entity&.operator?
 
@@ -122,24 +91,15 @@ module Engine
             alias_unambiguous_hexes!(result)
           end
 
-          # Greys out hexes that aren't a valid target for the entity's
-          # *current* sub-phase, via the same opacity mechanism Route
-          # already uses for reachable hexes during flight (Map#render
-          # checks this per hex). Naturally phase-scoped since it just
-          # reads `choices`.
           def available_hex(entity, hex)
             return false unless entity == current_entity
 
             !choices_for_hex(entity, hex).empty?
           end
 
-          # Only needed to disambiguate a hex with 2+ possible actions (a
-          # double-mine hex during the claim sub-phase, picking which ore).
-          # A hex with exactly one relevant choice is already given a
-          # bare-hex-id alias by `choices` (see `alias_unambiguous_hexes!`),
-          # so hex.rb's existing `step.choices.include?(@hex.id)` dispatch
-          # fires it directly with no popup needed -- same mechanism every
-          # other game's hex clicks already use, no engine/view changes.
+          # A single-match hex is already dispatchable directly via its
+          # bare-hex-id alias (see alias_unambiguous_hexes!); only a 2+
+          # match (a double-mine hex) needs this popup.
           def hex_choices(entity, hex)
             return nil unless entity == current_entity
 
@@ -148,12 +108,7 @@ module Engine
           end
 
           # Opt-in hook Part::CitySlot prefers over the hex-level dispatch
-          # (see assets/app/view/game/part/city_slot.rb): clicking directly
-          # on a specific mine's circle resolves its claim in one click,
-          # rather than needing the popup above to disambiguate. Only
-          # meaningful during the claim sub-phase -- a base/station hex's
-          # single choice is already reachable via the ordinary bare-hex-id
-          # click (hex_choices only ever triggers for 2+ claim matches).
+          # (assets/app/view/game/part/city_slot.rb).
           def city_choice(entity, city)
             return nil unless entity == current_entity && @sub_phase[entity] == :claim
 
@@ -161,18 +116,9 @@ module Engine
             choices(entity)[key] ? key : nil
           end
 
-          # Opt-in hook the generic Choose view prefers for its bottom-panel
-          # button list (see assets/app/view/game/choose.rb). Base/station/
-          # claim choices are all hex-based and fully redundant with
-          # clicking the relevant hex directly (available_hex/
-          # hex_choices above) -- only the phase-skip choices have no
-          # map equivalent, so those are all that's left here.
-          #
-          # assets/app/view/game/round/operating.rb renders `h(Choose)` with
-          # no `entity:` prop (always nil), so the passed-in `entity` here
-          # can't be trusted -- must resolve the real current_entity itself,
-          # or `choices(nil)` always returns {} and SKIP_BASE/SKIP_STATION
-          # never appear.
+          # round/operating.rb renders `h(Choose)` with no `entity:` prop
+          # (always nil) -- the passed-in `entity` here can't be trusted,
+          # or `choices(nil)` always returns {} and nothing ever appears.
           def entity_choices(_entity)
             entity = current_entity
             return {} unless entity
@@ -214,11 +160,6 @@ module Engine
             pass!
           end
 
-          # Public: resolves a (possibly bare-hex-alias) choice back to the
-          # independent minor selling that claim, or nil for any other
-          # choice -- used by Game#consenter_for_choice to determine whose
-          # consent is needed for this cross-player purchase (buying a
-          # claim from an independent owned by a different player).
           def claim_seller_for(entity, choice)
             real_choice = unalias(entity, choice)
             return nil unless real_choice.start_with?(BUY_CLAIM)
@@ -230,9 +171,6 @@ module Engine
 
           private
 
-          # All choices (in the entity's current sub-phase) that resolve to
-          # this specific hex -- 0, 1 (base/station, or a single-mine claim),
-          # or 2 (a double-mine hex's two unclaimed ores).
           def choices_for_hex(entity, hex)
             choices(entity).select do |key, _label|
               key == "#{BASE}#{hex.id}" || key == "#{STATION}#{hex.id}" ||
@@ -240,17 +178,11 @@ module Engine
             end
           end
 
-          # Expose every hex with an applicable base/station/claim choice
-          # keyed by its bare hex id too, so hex.rb's generic dispatch --
-          # gated on `step.choices.include?(@hex.id)` before it even looks
-          # for a popup -- has a key to find. For an unambiguous hex (one
-          # choice) this is the real, directly-dispatchable action. For an
-          # ambiguous hex (2+ choices, e.g. a double-mine's two unclaimed
-          # ores) it's a placeholder that's never actually dispatched --
-          # `hex_choices` always intercepts first when there's more
-          # than one match (see that method) -- but it still has to be
-          # present, or hex.rb's dispatch gate never lets it ask for the
-          # popup at all.
+          # hex.rb's dispatch is gated on `step.choices.include?(@hex.id)`
+          # -- even an ambiguous (2+ choice) hex needs a bare-hex-id entry
+          # here, as a placeholder, purely so that gate lets hex_choices
+          # get asked for its popup at all. It's never itself dispatched
+          # in that case.
           def alias_unambiguous_hexes!(result)
             by_hex = Hash.new { |h, k| h[k] = [] }
             result.each_key { |key| (id = hex_id_for(key)) && (by_hex[id] << key) }
@@ -267,11 +199,6 @@ module Engine
             nil
           end
 
-          # Translate a bare-hex-id alias (see `alias_unambiguous_hexes!`)
-          # back to the real prefixed choice key process_choose dispatches
-          # on. Non-alias choices (skip_base/skip_station, or an already-
-          # prefixed key from a hex_choices submission) pass through
-          # unchanged.
           def unalias(entity, choice)
             return choice if choice == SKIP_BASE || choice == SKIP_STATION ||
               choice.start_with?(BASE, STATION, BUY_CLAIM, CLAIM)
@@ -279,21 +206,13 @@ module Engine
             choices(entity).keys.find { |key| hex_id_for(key) == choice } || choice
           end
 
-          # Skip forward past any sub-phase this entity has nothing to do
-          # in -- already used this round, nothing in range/affordable, or
-          # (for minors) not applicable at all -- without requiring an
-          # explicit "Skip" click when there was never a real choice to make.
           def advance_empty_phases!(entity)
             @sub_phase[entity] = :station if @sub_phase[entity] == :base && base_choices(entity).empty?
             @sub_phase[entity] = :claim if @sub_phase[entity] == :station && station_choices(entity).empty?
           end
 
-          # Bases and refueling stations are only buyable "after Phase I"
-          # (Sequence of Play card) -- reuses the same phase status flag
-          # that already gates private-company purchases and inter-company
-          # ship buying (@game.after_phase_1?), since all unlock at the
-          # same Phase II transition. Claims have no such marker on the
-          # card, so they're available from Phase 1.
+          # Claims have no such gate on the Sequence of Play card -- only
+          # bases/stations unlock after Phase I.
           def after_phase_1?
             @game.after_phase_1?
           end
@@ -347,35 +266,19 @@ module Engine
               state[:mines].each_with_index do |mine, idx|
                 next if mine[:owner]
 
-                # A structured {ore:, value:} label rather than text --
-                # HexChoiceSelector renders this as an ore-colored icon (same
-                # visual language as the charter's claim display,
-                # View::Game::Corporation#render_claim_column) instead of
-                # a text button, so the two mines on a double-mine hex
-                # read at a glance instead of needing to parse an
-                # abbreviation. The claim cost itself is still dropped
-                # here -- it's identical for both mines on the same hex
-                # (one flat per-round tier, not per-mine), so showing it
-                # next to each option would read as if it varied between
-                # them; it's still shown elsewhere (the round's own
-                # claim-cost display) before the player ever opens this
-                # popup.
+                # A {ore:, value:} hash, not text -- HexChoiceSelector
+                # renders this as an ore-colored icon instead of a button.
                 result["#{CLAIM}#{hex.id}_#{idx}"] = { ore: mine[:ore], value: mine[:unclaimed] }
               end
             end
             result
           end
 
-          # Corporations may buy an already-claimed mine directly from the
-          # independent holding it, at a flat price: counts against the
-          # buyer's lifetime claim_limit like any other claim, but is
-          # NOT limited by the per-round escalating schedule
-          # (@claims_this_round) since it's a flat-price transfer, not a
-          # new placement. `minor_by_id` returns nil for a corp-owned
-          # mine, so this naturally only offers independent-held claims.
-          # Gated on can_buy_companies_or_claims? rather than
-          # after_phase_1? -- unlike bases/stations, this stops at Phase
-          # 5 once every independent has merged into the AL.
+          # A flat-price transfer from an independent, not a new placement
+          # -- counts against lifetime claim_limit but not the escalating
+          # per-round @claims_this_round schedule. Gated on
+          # can_buy_companies_or_claims?, not after_phase_1?, since it
+          # stops once every independent has merged into the AL.
           def buy_independent_claim_choices(entity)
             result = {}
             return result unless @game.can_buy_companies_or_claims?
@@ -399,11 +302,7 @@ module Engine
             result
           end
 
-          # Every entity has a lifetime claim cap (§7.4) -- a flat 2 for
-          # independents, a per-corp value from the Company/Corporation
-          # Summary table otherwise (@game.claim_limit). Corporations also
-          # follow the per-round cost tier schedule (§7.43, resets every OR);
-          # independents don't have one of those, just the lifetime cap.
+          # §7.4 lifetime cap; §7.43 per-round cost tier (corporations only).
           def claimable_this_round?(entity)
             return false unless claims_placed_lifetime(entity) < @game.claim_limit(entity)
             return true if entity.minor?
@@ -415,10 +314,6 @@ module Engine
             @game.claims_placed_lifetime(entity)
           end
 
-          # Price is always by this-round claim count and resets every OR
-          # for every entity type -- independents' *eligibility* is capped
-          # separately by lifetime count (claimable_this_round? above), but
-          # that's a distinct rule from pricing.
           def claim_cost(entity)
             schedule = @game.claim_cost_schedule(entity)
             schedule[@claims_this_round[entity]] || schedule.last
