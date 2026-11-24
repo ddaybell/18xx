@@ -110,7 +110,8 @@ module Engine
           # Opt-in hook Part::CitySlot prefers over the hex-level dispatch
           # (assets/app/view/game/part/city_slot.rb).
           def city_choice(entity, city)
-            return nil unless entity == current_entity && @sub_phase[entity] == :claim
+            return nil unless entity == current_entity
+            return nil unless @sub_phase[entity] == :claim
 
             key = "#{CLAIM}#{city.hex.id}_#{city.tile.cities.index(city)}"
             choices(entity)[key] ? key : nil
@@ -123,7 +124,7 @@ module Engine
             entity = current_entity
             return {} unless entity
 
-            choices(entity).select { |key, _label| key == SKIP_BASE || key == SKIP_STATION }
+            choices(entity).select { |key, _label| [SKIP_BASE, SKIP_STATION].include?(key) }
           end
 
           def process_choose(action)

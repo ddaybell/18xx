@@ -71,7 +71,7 @@ module Engine
               bonus = best_case_ore_bonus(entity, ship, mine[:ore], claimed: mine[:owner] == entity.id)
               raw = pickup_value(entity, hex_id, idx)
               slots << CandidateSlot.new(hex_id: hex_id, mine_idx: idx, ore: mine[:ore],
-                                          value: raw + bonus, raw_value: raw)
+                                         value: raw + bonus, raw_value: raw)
             end
           end
 

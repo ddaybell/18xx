@@ -179,7 +179,8 @@ module Engine
           # Returns true (and tears the run down) only in the "should
           # never happen" case; false otherwise.
           def auto_route_all_deadline_exceeded!(entity)
-            return false unless @auto_all_deadline && Time.now > @auto_all_deadline
+            return false unless @auto_all_deadline
+            return false unless Time.now > @auto_all_deadline
 
             @game.log << "#{entity.name}'s Auto route search was stopped after exceeding its own worst-case " \
                          'time budget -- this should never happen; please report it.'
@@ -280,7 +281,8 @@ module Engine
           # run is done -- otherwise a "Finished: 12s" label would
           # silently keep climbing on every later re-render.
           def auto_route_all_elapsed(entity)
-            return nil unless @auto_all_started_at && entity == @auto_all_entity
+            return nil unless @auto_all_started_at
+            return nil unless entity == @auto_all_entity
 
             ((@auto_all_finished_at || Time.now) - @auto_all_started_at).round
           end
@@ -298,8 +300,13 @@ module Engine
               return nil
             end
 
-            { ship: ship, hexes: result.hexes, cargo: result.cargo, revenue: result.revenue,
-              refueled_hex_ids: result.refueled_hex_ids }
+            {
+              ship: ship,
+              hexes: result.hexes,
+              cargo: result.cargo,
+              revenue: result.revenue,
+              refueled_hex_ids: result.refueled_hex_ids,
+            }
           end
         end
       end

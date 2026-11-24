@@ -172,7 +172,8 @@ module Engine
         # fabricated confidence percentage -- shrinks the longer a run
         # goes without improving.
         def found_at_ratio
-          return nil unless @best_found_at_combo && @total_combos&.positive?
+          return nil unless @best_found_at_combo
+          return nil unless @total_combos&.positive?
 
           @best_found_at_combo.to_f / @total_combos
         end
@@ -200,7 +201,7 @@ module Engine
                 "search=#{@prof[:search].round(1)}s " \
                 "(searches=#{@prof_n[:searches]} memo=#{@prof_n[:memo_hits]})"
           if RUBY_ENGINE == 'opal'
-            %x{console.log(#{msg})}
+            `console.log(#{msg})`
           else
             warn msg
           end
@@ -541,7 +542,8 @@ module Engine
               next if mi == ni
 
               cost = row[mi]
-              next unless cost && cost <= mp
+              next unless cost
+              next unless cost <= mp
 
               nmp = mp - cost
               nv = v
@@ -630,12 +632,18 @@ module Engine
           # station-avoiding legs (planned refuel stations are leg
           # endpoints, so they're unaffected).
           hexes = expand_node_path(node_path, avoid_stations: false)
-          hexes = expand_node_path(node_path, avoid_stations: true) unless hexes && flight_within_mp?(hexes, refueled_hex_ids)
-          return nil unless hexes && hexes.size > 1 && flight_within_mp?(hexes, refueled_hex_ids)
+          hexes = expand_node_path(node_path, avoid_stations: true) if !hexes || !flight_within_mp?(hexes, refueled_hex_ids)
+          return nil unless hexes
+          return nil unless hexes.size > 1
+          return nil unless flight_within_mp?(hexes, refueled_hex_ids)
 
           cargo = combo.map { |s| { hex_id: s.hex_id, mine_idx: s.mine_idx, ore: s.ore, value: s.raw_value } }
-          { hexes: hexes, cargo: cargo, revenue: @game.trace_revenue(@entity, @ship, hexes, cargo),
-            refueled_hex_ids: refueled_hex_ids }
+          {
+            hexes: hexes,
+            cargo: cargo,
+            revenue: @game.trace_revenue(@entity, @ship, hexes, cargo),
+            refueled_hex_ids: refueled_hex_ids,
+          }
         end
 
         # Re-runs the same state search as #search_goals, but tracking
@@ -715,7 +723,8 @@ module Engine
               next if mi == ni
 
               cost = row[mi]
-              next unless cost && cost <= mp
+              next unless cost
+              next unless cost <= mp
 
               nmp = mp - cost
               nv = v

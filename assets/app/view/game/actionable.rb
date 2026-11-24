@@ -76,17 +76,20 @@ module View
 
         case action
         when Engine::Action::Choose
-          return false unless step.respond_to?(:local_choose?) && step.local_choose?(action.entity, action.choice)
+          return false unless step.respond_to?(:local_choose?)
+          return false unless step.local_choose?(action.entity, action.choice)
 
           step.local_choose!(action.entity, action.choice)
         when Engine::Action::Pass
-          return false unless step.respond_to?(:local_pass?) && step.local_pass?(action.entity)
+          return false unless step.respond_to?(:local_pass?)
+          return false unless step.local_pass?(action.entity)
 
           step.local_pass!(action.entity)
         when Engine::Action::Undo
           # Without this, Undo/ctrl+z would reach past a hand-built,
           # not-yet-submitted route into the previous entity's last action.
-          return false unless step.respond_to?(:local_undo?) && step.local_undo?(action.entity)
+          return false unless step.respond_to?(:local_undo?)
+          return false unless step.local_undo?(action.entity)
 
           step.local_undo!(action.entity)
         else
